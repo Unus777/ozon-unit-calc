@@ -9,13 +9,13 @@
 <meta name="referrer" content="no-referrer">
 <title>Доставки</title>
 <link rel="manifest" href="manifest.webmanifest">
-<script src="theme.js?v=10"></script>
-<link rel="stylesheet" href="style.css?v=10">
+<script src="theme.js?v=11"></script>
+<link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
 <header><div class="bar">
 <div class="brand">Алмалы <span>доставки курьера</span></div>
-<span><button class="text" id="themeBtn" aria-label="Сменить тему"></button><button class="text" id="reload">Обновить</button></span>
+<span><button class="text" id="themeBtn" aria-label="Сменить тему"></button><button class="text" id="reload"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6.1 7a7 7 0 0 1 11.6-1L20 9M4 15l2.3 3A7 7 0 0 0 18 17"/></svg> Обновить</button></span>
 </div></header>
 <main>
 <div class="card" id="nokey" hidden><h3>Нет доступа</h3><p class="mut">Откройте ссылку, которую прислал владелец магазина.</p></div>
@@ -23,13 +23,13 @@
 <div id="app" hidden>
 <div class="card" id="notif" hidden></div>
 <div class="tabs" role="tablist">
-<button role="tab" aria-selected="true" data-tab="active">Активные</button>
-<button role="tab" aria-selected="false" data-tab="done">Доставленные</button>
+<button role="tab" aria-selected="true" data-tab="active"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m12 3 9 5v9l-9 5-9-5V8l9-5Zm0 9v10M3 8l9 4 9-4M7.5 5.5l9 5"/></svg> Активные</button>
+<button role="tab" aria-selected="false" data-tab="done"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg> Доставленные</button>
 </div>
 <div id="list" class="mut">Загружаю…</div>
 </div>
 
-<script src="config.js?v=10"></script>
+<script src="config.js?v=11"></script>
 <script>
 const $ = id => document.getElementById(id);
 const e = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
@@ -67,21 +67,21 @@ function card(r) {
 <span class="mut num">${e(r.posting)}</span></div>
 <div class="item"><div><b>${e(r.packs || "—")}</b>${r.unload === "" ? "" : `<span class="unload${unloadNone ? " none" : ""}">${unloadNone ? "Без разгрузки" : "Разгрузка: " + e(r.unload)}</span>`}</div>
 <div class="price"><div class="v num">${rub(r.pay)}</div><div class="mut">оплата</div></div></div>
-<div class="addr">📍 ${e(r.address)}</div>
-${r.date || info.time ? `<div class="delivery-plan">🗓 Доставить: ${e([r.date, info.time].filter(Boolean).join(" · "))}</div>` : ""}
-${info.note ? `<div class="delivery-note">💬 ${e(info.note)}</div>` : ""}
+<div class="addr">${icon("pin")} ${e(r.address)}</div>
+${r.date || info.time ? `<div class="delivery-plan">${icon("calendar")} Доставить: ${e([r.date, info.time].filter(Boolean).join(" · "))}</div>` : ""}
+${info.note ? `<div class="delivery-note">${icon("note")} ${e(info.note)}</div>` : ""}
 <div class="actions">
-${tel ? `<a class="btn" href="${e(tel)}">📞 Позвонить</a>` : ""}
-${foreman ? `<a class="btn" href="tel:${e(foreman)}">📞 Позвонить прорабу</a>` : ""}
-<a class="btn ghost" href="${e(yandexMaps(r))}" data-yandex>🧭 Яндекс</a>
-<a class="btn ghost" href="${e(appleMaps(r))}">Apple Карты</a>
+${tel ? `<a class="btn" href="${e(tel)}">${icon("phone")} Позвонить</a>` : ""}
+${foreman ? `<a class="btn" href="tel:${e(foreman)}">${icon("phone")} Позвонить прорабу</a>` : ""}
+<a class="btn ghost" href="${e(yandexMaps(r))}" data-yandex>${icon("route")} Яндекс</a>
+<a class="btn ghost" href="${e(appleMaps(r))}">${icon("route")} Apple Карты</a>
 </div>
 ${r.ext ? `<div class="mut" style="margin-top:4px">Добавочный ${e(r.ext)} наберётся сам после соединения</div>` : ""}
 <div class="field"><label for="d-${e(r.posting)}">Дата доставки</label>
 <input type="date" id="d-${e(r.posting)}" data-date value="${toIso(r.date)}" ${done ? "disabled" : ""}></div>
 <div class="field"><label for="c-${e(r.posting)}">Комментарий</label>
 <input id="c-${e(r.posting)}" data-comment value="${e(r.courier_comment)}" placeholder="для владельца" ${done ? "disabled" : ""}></div>
-${done ? `<p class="mut">Доставлен${r.delivered_at ? " " + e(r.delivered_at) : ""}</p>` : `<div class="actions"><button data-done>✓ Доставлено</button></div>`}
+${done ? `<p class="mut">Доставлен${r.delivered_at ? " " + e(r.delivered_at) : ""}</p>` : `<div class="actions"><button data-done>${icon("check")} Доставлено</button></div>`}
 </div>`;
 }
 
@@ -166,7 +166,7 @@ async function setupNotif() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
     box.hidden = false;
     box.innerHTML = isIOS && !standalone
-      ? `<h3>🔔 Включите уведомления</h3><p class="mut">Нажмите «Поделиться» → «На экран „Домой“», откройте «Доставки» с экрана телефона и включите уведомления там.</p>`
+      ? `<h3>${icon("bell")} Включите уведомления</h3><p class="mut">Нажмите «Поделиться» → «На экран „Домой“», откройте «Доставки» с экрана телефона и включите уведомления там.</p>`
       : `<p class="mut">Этот браузер не умеет показывать уведомления. Откройте ссылку в Safari или Chrome.</p>`;
     return;
   }
@@ -175,7 +175,7 @@ async function setupNotif() {
     return;
   }
   box.hidden = false;
-  box.innerHTML = `<h3>🔔 Уведомления о новых заказах</h3>
+  box.innerHTML = `<h3>${icon("bell")} Уведомления о новых заказах</h3>
 <p class="mut">Включите, чтобы новый заказ сразу приходил на телефон.</p><button id="enable">Включить уведомления</button>`;
   $("enable").onclick = async () => {
     $("enable").disabled = true;

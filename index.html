@@ -7,13 +7,13 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="robots" content="noindex">
 <title>Юнит-экономика</title>
-<script src="theme.js?v=10"></script>
-<link rel="stylesheet" href="style.css?v=10">
+<script src="theme.js?v=11"></script>
+<link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
 <header><div class="bar">
 <div class="brand">Алмалы <span>юнит-экономика заказов Ozon</span></div>
-<button class="text" id="gear" aria-expanded="false" aria-controls="settings">⚙ Настройки</button>
+<button class="text" id="gear" aria-expanded="false" aria-controls="settings"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M5.6 18.4l2.1-2.1m8.6-8.6 2.1-2.1"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> Настройки</button>
 </div></header>
 <main>
 
@@ -47,13 +47,13 @@
 </form>
 <div id="out"></div>
 <div id="report"></div>
-<div class="label">Заказы <button class="text" id="reload">Обновить</button></div>
+<div class="label">Заказы <button class="text" id="reload"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6.1 7a7 7 0 0 1 11.6-1L20 9M4 15l2.3 3A7 7 0 0 0 18 17"/></svg> Обновить</button></div>
 <div id="orders" class="mut"></div>
 </div>
 
-<script src="calc.js?v=10"></script>
-<script src="config.js?v=10"></script>
-<script src="push.js?v=10"></script>
+<script src="calc.js?v=11"></script>
+<script src="config.js?v=11"></script>
+<script src="push.js?v=11"></script>
 <script>
 const API = "https://api-seller.ozon.ru";
 // Статусы Ozon → понятные этапы; неизвестный статус показываем как есть
@@ -236,14 +236,14 @@ function courierBlock(p) {
   const d = DELIV[p.posting_number];
   if (d) {
     const done = d.status === "Доставлен";
-    return `<div class="courier ${done ? "green" : ""}">${done ? "✅ Курьер доставил" : "🚚 У курьера"} · ${e(d.cb)} · ` +
+    return `<div class="courier ${done ? "green" : ""}">${done ? icon("check") + " Курьер доставил" : icon("truck") + " У курьера"} · ${e(d.cb)} · ` +
       `${e(done ? d.delivered_at : d.status + (d.date ? " на " + d.date : ""))}</div>` +
-      (ADMIN() && SCRIPT_URL ? `<details class="delivery-edit"><summary>Пометка, время и прораб</summary>` +
+      (ADMIN() && SCRIPT_URL ? `<details class="delivery-edit"><summary>${icon("note")} Пометка, время и прораб</summary>` +
         `<form data-schedule="${e(p.posting_number)}">${deliveryFields(d)}<button>Сохранить для Рашада</button></form></details>` : "");
   }
   if (!ADMIN() || !SCRIPT_URL || !["ship", "way"].includes(stage(p.status)[0])) return "";
   return `<form class="send" data-send="${e(p.posting_number)}"><input name="cb" placeholder="ЦБ" aria-label="Номер ЦБ" ` +
-    `inputmode="numeric" autocomplete="off" required><details class="delivery-edit"><summary>Пометка, время и прораб</summary>` +
+    `inputmode="numeric" autocomplete="off" required><details class="delivery-edit"><summary>${icon("note")} Пометка, время и прораб</summary>` +
     `${deliveryFields({})}</details><button>Отправить курьеру</button></form>`;
 }
 
@@ -251,10 +251,10 @@ function deliveryFields(d) {
   const info = deliveryDetails(d.comment);
   const date = /^(\d\d)\.(\d\d)\.(\d{4})$/.exec(d.date || "");
   return `<div class="delivery-fields">
-    <label>Дата доставки<input name="date" type="date" value="${date ? `${date[3]}-${date[2]}-${date[1]}` : ""}"></label>
-    <label>Время доставки<input name="time" value="${e(info.time)}" placeholder="Например: с 14:00 до 16:00" maxlength="100"></label>
-    <label>Телефон прораба<input name="foreman" type="tel" value="${e(info.foreman)}" placeholder="+7 900 000-00-00" maxlength="30"></label>
-    <label>Пометка для Рашада<textarea name="note" rows="3" maxlength="2000" placeholder="Например: позвонить прорабу за час">${e(info.note)}</textarea></label>
+    <label><span class="field-caption">${icon("calendar")} Дата доставки</span><input name="date" type="date" value="${date ? `${date[3]}-${date[2]}-${date[1]}` : ""}"></label>
+    <label><span class="field-caption">${icon("clock")} Время доставки</span><input name="time" value="${e(info.time)}" placeholder="Например: с 14:00 до 16:00" maxlength="100"></label>
+    <label><span class="field-caption">${icon("phone")} Телефон прораба</span><input name="foreman" type="tel" value="${e(info.foreman)}" placeholder="+7 900 000-00-00" maxlength="30"></label>
+    <label><span class="field-caption">${icon("note")} Пометка для Рашада</span><textarea name="note" rows="3" maxlength="2000" placeholder="Например: позвонить прорабу за час">${e(info.note)}</textarea></label>
     </div>`;
 }
 

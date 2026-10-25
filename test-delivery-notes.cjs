@@ -33,3 +33,7 @@ assert.ok(card.includes('href="tel:+79001234567"'));
 assert.ok(card.includes('с 14:00 до 16:00'));
 assert.ok(!context.card({posting: 'demo', comment: '', phone: '', unload: ''}).includes('Позвонить прорабу'));
 console.log('Пометки, дата, время и телефон прораба: проверки пройдены');
+
+assert.ok(context.icon("phone").includes('aria-hidden="true"'));
+assert.ok(card.includes('class="icon"'));
+assert.ok(!card.includes("📞"));
