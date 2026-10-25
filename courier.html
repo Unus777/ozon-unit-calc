@@ -9,8 +9,8 @@
 <meta name="referrer" content="no-referrer">
 <title>Доставки</title>
 <link rel="manifest" href="manifest.webmanifest">
-<script src="theme.js?v=5"></script>
-<link rel="stylesheet" href="style.css?v=5">
+<script src="theme.js?v=6"></script>
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 <header><div class="bar">
@@ -29,7 +29,7 @@
 <div id="list" class="mut">Загружаю…</div>
 </div>
 
-<script src="config.js?v=5"></script>
+<script src="config.js?v=6"></script>
 <script>
 const $ = id => document.getElementById(id);
 const e = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
@@ -53,13 +53,13 @@ function mapUrl(r) {
 }
 
 function card(r) {
-  const unloadNone = !r.unload || r.unload === "Нет";
+  const unloadNone = r.unload === "Нет";
   const done = r.status === "Доставлен";
   const tel = r.phone ? `tel:${r.phone}${r.ext ? "," + r.ext : ""}` : "";
   return `<div class="card order${r.posting === FOCUS ? " hl" : ""}" data-posting="${e(r.posting)}">
 <div class="top"><span class="cb">${e(r.cb)}</span><span class="badge ${BADGE[r.status] || ""}">${e(r.status)}</span>
 <span class="mut num">${e(r.posting)}</span></div>
-<div class="item"><div><b>${e(r.packs)}</b><span class="unload${unloadNone ? " none" : ""}">${unloadNone ? "Без разгрузки" : "Разгрузка: " + e(r.unload)}</span></div>
+<div class="item"><div><b>${e(r.packs || "—")}</b>${r.unload === "" ? "" : `<span class="unload${unloadNone ? " none" : ""}">${unloadNone ? "Без разгрузки" : "Разгрузка: " + e(r.unload)}</span>`}</div>
 <div class="price"><div class="v num">${rub(r.pay)}</div><div class="mut">оплата</div></div></div>
 <div class="addr">📍 ${e(r.address)}</div>
 ${r.comment ? `<div class="mut" style="margin-top:4px">💬 ${e(r.comment)}</div>` : ""}
@@ -73,7 +73,7 @@ ${r.ext ? `<div class="mut" style="margin-top:4px">Добавочный ${e(r.ex
 <input type="date" id="d-${e(r.posting)}" data-date value="${toIso(r.date)}" ${done ? "disabled" : ""}></div>
 <div class="field"><label for="c-${e(r.posting)}">Комментарий</label>
 <input id="c-${e(r.posting)}" data-comment value="${e(r.courier_comment)}" placeholder="для владельца" ${done ? "disabled" : ""}></div>
-${done ? `<p class="mut">Доставлен ${e(r.delivered_at)}</p>` : `<div class="actions"><button data-done>✓ Доставлено</button></div>`}
+${done ? `<p class="mut">Доставлен${r.delivered_at ? " " + e(r.delivered_at) : ""}</p>` : `<div class="actions"><button data-done>✓ Доставлено</button></div>`}
 </div>`;
 }
 
