@@ -109,10 +109,3 @@ a.btn.ghost{background:var(--soft);color:var(--fg)}
 .payform{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
 .payform input[name=comment],.payform button{grid-column:1/-1}
 .payform input{padding:10px 12px;font-size:16px}
-
-/* Общие контурные иконки наследуют цвет темы и подписи. */
-.icon{display:inline-block;width:20px;height:20px;flex:none;vertical-align:-4px}
-button .icon,a.btn .icon{width:18px;height:18px}
-.field-caption{display:flex;align-items:center;gap:6px}
-.delivery-edit summary{gap:8px}
-.delivery-plan .icon,.delivery-note .icon{color:var(--acc)}

@@ -34,6 +34,11 @@ assert.ok(card.includes('с 14:00 до 16:00'));
 assert.ok(!context.card({posting: 'demo', comment: '', phone: '', unload: ''}).includes('Позвонить прорабу'));
 console.log('Пометки, дата, время и телефон прораба: проверки пройдены');
 
-assert.ok(context.icon("phone").includes('aria-hidden="true"'));
-assert.ok(card.includes('class="icon"'));
-assert.ok(!card.includes("📞"));
+// Значки подключены к обеим страницам и доступны для установки приложения.
+for (const file of ['manifest.webmanifest', 'owner.webmanifest']) {
+  for (const icon of JSON.parse(read(file)).icons) {
+    const png = fs.readFileSync(path.join(__dirname, icon.src.split('?')[0]));
+    assert.equal(`${png.readUInt32BE(16)}x${png.readUInt32BE(20)}`, icon.sizes);
+  }
+}
+for (const file of ['index.html', 'courier.html']) assert.ok(read(file).includes('rel="apple-touch-icon"'));
