@@ -31,6 +31,9 @@ td:last-child{text-align:right;white-space:nowrap;font-variant-numeric:tabular-n
 button.sm{flex:0 0 auto;font-size:15px;padding:8px 12px}
 button.sec{background:none;color:var(--acc);border:1px solid var(--line)}
 h2 button.link{float:right;padding:0;font-size:14px}
+.badge{display:inline-block;font-size:13px;font-weight:600;padding:2px 8px;border-radius:999px;
+border:1px solid currentColor;color:var(--mut);margin-right:4px}
+.badge.ship{color:var(--yellow)}.badge.way{color:var(--acc)}.badge.done{color:var(--green)}
 </style>
 </head>
 <body><main>
@@ -52,7 +55,7 @@ h2 button.link{float:right;padding:0;font-size:14px}
 <button id="go">Рассчитать</button>
 </form>
 <div id="out"></div>
-<section><h2>Заказы за 90 дней <button class="link" id="reload">Обновить</button></h2>
+<section><h2>Заказы <button class="link" id="reload">Обновить</button></h2>
 <div id="orders" class="mut"></div></section>
 <p style="text-align:right"><button class="link" id="forget">Сменить ключи</button></p>
 </div>
@@ -60,8 +63,17 @@ h2 button.link{float:right;padding:0;font-size:14px}
 <script src="calc.js"></script>
 <script>
 const API = "https://api-seller.ozon.ru";
-const STATUS_RU = {awaiting_packaging: "ожидает сборки", awaiting_deliver: "ожидает отгрузки",
-  delivering: "доставляется", delivered: "доставлено", cancelled: "отменено"};
+// Статусы Ozon → 4 понятных этапа; неизвестный статус показываем как есть
+const STAGES = {
+  ship: ["В отгрузке", ["awaiting_registration", "acceptance_in_progress", "awaiting_approve",
+    "awaiting_packaging", "awaiting_deliver", "not_accepted"]],
+  way: ["В доставке", ["delivering", "driver_pickup", "sent_by_seller"]],
+  done: ["Доставлен", ["delivered"]],
+  cancel: ["Отменён", ["cancelled"]],
+  arb: ["Спор", ["arbitration", "client_arbitration"]],
+};
+const stage = s => Object.entries(STAGES).find(([, [, list]]) => list.includes(s)) || ["", [s]];
+const badge = s => { const [cls, [label]] = stage(s); return `<span class="badge ${cls}">${e(label)}</span>`; };
 const $ = id => document.getElementById(id);
 const e = s => String(s).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
 const rub = x => Math.round(x).toLocaleString("ru-RU").replace(/ /g, " ") + " ₽";
@@ -120,8 +132,8 @@ function orderCard(p, i) {
   } catch (err) {
     body = `<div class="err">${e(err.message)}</div>`;
   }
-  return `<div class="order${p.status === "cancelled" ? " cancelled" : ""}"><div class="mut">${date} · ` +
-    `${e(p.posting_number)} · ${e(STATUS_RU[p.status] || p.status)}</div>${body}</div>`;
+  return `<div class="order${p.status === "cancelled" ? " cancelled" : ""}"><div class="mut">${badge(p.status)} ` +
+    `${date} · ${e(p.posting_number)}</div>${body}</div>`;
 }
 
 async function copy(text) {
@@ -179,7 +191,7 @@ function render([lines, t], posting) {
 <tr><td>Чистая прибыль на 1 м²</td><td><b>${rub(t.profit_m2)}</b></td></tr>
 <tr><td>Чистая прибыль по заказу</td><td><b>${rub(t.profit)}</b></td></tr>
 </table></section>
-<section><h2>Заказ ${e(posting.posting_number)} · ${e(STATUS_RU[posting.status] || posting.status)}${city ? " · " + e(city) : ""}</h2>
+<section><h2>Заказ ${e(posting.posting_number)} ${badge(posting.status)}${city ? " · " + e(city) : ""}</h2>
 <table>${goods}<tr><td>Итого</td><td>${t.packs} уп. · ${t.m2.toFixed(2)} м²</td></tr></table></section>
 <section><h2>Расклад</h2><table>
 <tr><td>Продажи (цена после всех акций)</td><td>${rub(t.sales)}</td></tr>
