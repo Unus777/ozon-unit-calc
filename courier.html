@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Доставки">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<title>Доставки</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="bar">
+<div class="brand">Алмалы <span>доставки курьера</span></div>
+<button class="text" id="reload">Обновить</button>
+</div></header>
+<main>
+<div class="card" id="nokey" hidden><h3>Нет доступа</h3><p class="mut">Откройте ссылку, которую прислал владелец магазина.</p></div>
+
+<div id="app" hidden>
+<div class="card" id="notif" hidden></div>
+<div class="tabs" role="tablist">
+<button role="tab" aria-selected="true" data-tab="active">Активные</button>
+<button role="tab" aria-selected="false" data-tab="done">Доставленные</button>
+</div>
+<div id="list" class="mut">Загружаю…</div>
+</div>
+
+<script src="config.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const e = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
+const KEY = new URLSearchParams(location.search).get("k");
+const FOCUS = new URLSearchParams(location.search).get("o");
+const BADGE = {"Новый": "ship", "Согласован": "way", "Доставлен": "done"};
+let ROWS = [], TAB = "active";
+
+const toIso = d => { const m = /^(\d\d)\.(\d\d)\.(\d{4})$/.exec(d || ""); return m ? `${m[3]}-${m[2]}-${m[1]}` : ""; };
+const fromIso = d => d ? d.split("-").reverse().join(".") : "";
+const rub = x => Math.round(Number(String(x).replace(/\s/g, "")) || 0).toLocaleString("ru-RU").replace(/ /g, " ") + " ₽";
+const api = payload => sheetApi({key: KEY, ...payload});
+
+function navUrl(r) {
+  return r.lat && r.lon ? `yandexnavi://build_route_on_map?lat_to=${r.lat}&lon_to=${r.lon}`
+    : `https://yandex.ru/maps/?rtext=~${encodeURIComponent(r.address)}&rtt=auto`;
+}
+function mapUrl(r) {
+  const to = r.lat && r.lon ? `${r.lat},${r.lon}` : r.address;
+  return `https://yandex.ru/maps/?rtext=~${encodeURIComponent(to)}&rtt=auto`;
+}
+
+function card(r) {
+  const unloadNone = !r.unload || r.unload === "Нет";
+  const done = r.status === "Доставлен";
+  const tel = r.phone ? `tel:${r.phone}${r.ext ? "," + r.ext : ""}` : "";
+  return `<div class="card order${r.posting === FOCUS ? " hl" : ""}" data-posting="${e(r.posting)}">
+<div class="top"><span class="cb">${e(r.cb)}</span><span class="badge ${BADGE[r.status] || ""}">${e(r.status)}</span>
+<span class="mut num">${e(r.posting)}</span></div>
+<div class="item"><div><b>${e(r.packs)}</b><span class="unload${unloadNone ? " none" : ""}">${unloadNone ? "Без разгрузки" : "Разгрузка: " + e(r.unload)}</span></div>
+<div class="price"><div class="v num">${rub(r.pay)}</div><div class="mut">оплата</div></div></div>
+<div class="addr">📍 ${e(r.address)}</div>
+${r.comment ? `<div class="mut" style="margin-top:4px">💬 ${e(r.comment)}</div>` : ""}
+<div class="actions">
+${tel ? `<a class="btn" href="${e(tel)}">📞 Позвонить</a>` : ""}
+<a class="btn ghost" href="${e(navUrl(r))}">🧭 Навигатор</a>
+<a class="btn ghost" href="${e(mapUrl(r))}" target="_blank" rel="noopener">Карты</a>
+</div>
+${r.ext ? `<div class="mut" style="margin-top:4px">Добавочный ${e(r.ext)} наберётся сам после соединения</div>` : ""}
+<div class="field"><label for="d-${e(r.posting)}">Дата доставки</label>
+<input type="date" id="d-${e(r.posting)}" data-date value="${toIso(r.date)}" ${done ? "disabled" : ""}></div>
+<div class="field"><label for="c-${e(r.posting)}">Комментарий</label>
+<input id="c-${e(r.posting)}" data-comment value="${e(r.courier_comment)}" placeholder="для владельца" ${done ? "disabled" : ""}></div>
+${done ? `<p class="mut">Доставлен ${e(r.delivered_at)}</p>` : `<div class="actions"><button data-done>✓ Доставлено</button></div>`}
+</div>`;
+}
+
+function draw() {
+  const rows = ROWS.filter(r => (r.status === "Доставлен" || r.status === "Отменён") === (TAB === "done"));
+  if (TAB === "done") rows.reverse();
+  else rows.sort((a, b) => (toIso(a.date) || "9999").localeCompare(toIso(b.date) || "9999"));
+  $("list").innerHTML = rows.length ? rows.map(card).join("")
+    : `<div class="card mut">${TAB === "done" ? "Пока нет доставленных" : "Новых заказов нет"}</div>`;
+  if (FOCUS) document.querySelector(".order.hl")?.scrollIntoView({block: "center"});
+}
+
+async function load() {
+  try {
+    ROWS = await api({action: "list"});
+    draw();
+  } catch (err) {
+    $("list").innerHTML = `<div class="card err">${e(err.message)}</div>`;
+  }
+}
+
+async function save(posting, data, el) {
+  try {
+    const r = await api({action: "update", posting, data});
+    ROWS = ROWS.map(x => x.posting === posting ? r : x);
+    draw();
+  } catch (err) {
+    alert(err.message);
+    if (el) el.disabled = false;
+  }
+}
+
+$("list").addEventListener("change", ev => {
+  const box = ev.target.closest(".order");
+  if (!box) return;
+  if (ev.target.matches("[data-date]")) save(box.dataset.posting, {date: fromIso(ev.target.value)});
+  if (ev.target.matches("[data-comment]")) save(box.dataset.posting, {courier_comment: ev.target.value.trim()});
+});
+$("list").addEventListener("click", ev => {
+  const b = ev.target.closest("[data-done]");
+  if (!b) return;
+  if (!confirm("Отметить заказ доставленным?")) return;
+  b.disabled = true;
+  save(b.closest(".order").dataset.posting, {status: "Доставлен"}, b);
+});
+document.querySelector(".tabs").onclick = ev => {
+  const b = ev.target.closest("[data-tab]");
+  if (!b) return;
+  TAB = b.dataset.tab;
+  document.querySelectorAll(".tabs button").forEach(x => x.setAttribute("aria-selected", x === b));
+  draw();
+};
+$("reload").onclick = load;
+
+// ---------- пуш-уведомления ----------
+const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+const b64ToBytes = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+
+async function subscribe() {
+  const reg = await navigator.serviceWorker.register(`sw.js?k=${encodeURIComponent(KEY)}`);
+  await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.getSubscription() ||
+    await reg.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: b64ToBytes(VAPID_PUBLIC)});
+  await api({action: "subscribe", endpoint: sub.endpoint});
+}
+
+async function setupNotif() {
+  const box = $("notif");
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    box.hidden = false;
+    box.innerHTML = isIOS && !standalone
+      ? `<h3>🔔 Включите уведомления</h3><p class="mut">Нажмите «Поделиться» → «На экран „Домой“», откройте «Доставки» с экрана телефона и включите уведомления там.</p>`
+      : `<p class="mut">Этот браузер не умеет показывать уведомления. Откройте ссылку в Safari или Chrome.</p>`;
+    return;
+  }
+  if (Notification.permission === "granted") {
+    subscribe().catch(() => {});  // подписка могла обновиться — тихо отправляем заново
+    return;
+  }
+  box.hidden = false;
+  box.innerHTML = `<h3>🔔 Уведомления о новых заказах</h3>
+<p class="mut">Включите, чтобы новый заказ сразу приходил на телефон.</p><button id="enable">Включить уведомления</button>`;
+  $("enable").onclick = async () => {
+    $("enable").disabled = true;
+    try {
+      if (await Notification.requestPermission() !== "granted") throw new Error("Уведомления запрещены в настройках телефона");
+      await subscribe();
+      box.innerHTML = `<p class="green">✓ Уведомления включены</p>`;
+    } catch (err) {
+      box.innerHTML = `<p class="err">${e(err.message)}</p>`;
+    }
+  };
+}
+
+if (KEY) {
+  $("app").hidden = false;
+  load();
+  setupNotif();
+  setInterval(() => { if (!document.hidden) load(); }, 60000);
+} else {
+  $("nokey").hidden = false;
+}
+</script>
+</main></body>
+</html>

@@ -7,71 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="robots" content="noindex">
 <title>Юнит-экономика</title>
-<style>
-:root{--bg:#f2f3f5;--card:#fff;--fg:#14161a;--mut:#6b7079;--line:#e3e5e9;--soft:#f6f7f9;
---acc:#3b5bdb;--acc-fg:#fff;--green:#2b8a3e;--yellow:#b06f00;--red:#c92a2a;
---green-bg:#ebfbee;--yellow-bg:#fff8e6;--red-bg:#fff0f0;--acc-bg:#edf2ff;--shadow:0 1px 2px rgba(20,22,26,.06)}
-@media(prefers-color-scheme:dark){:root{--bg:#0f1012;--card:#1a1c20;--fg:#eceef2;--mut:#9097a3;--line:#2a2d33;
---soft:#212429;--acc:#748ffc;--acc-fg:#0f1012;--green:#69db7c;--yellow:#ffc94d;--red:#ff8787;
---green-bg:#1b2b1f;--yellow-bg:#2e2716;--red-bg:#2f1c1c;--acc-bg:#1e2440;--shadow:none}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
--webkit-font-smoothing:antialiased}
-header{position:sticky;top:0;z-index:2;background:var(--bg);padding:calc(12px + env(safe-area-inset-top)) 16px 12px}
-.bar{max-width:600px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px}
-.brand{font-weight:700;font-size:20px;letter-spacing:-.01em;line-height:1.2}
-.brand span{display:block;color:var(--mut);font-weight:500;font-size:13px;letter-spacing:0}
-header button.text{white-space:nowrap}
-main{max-width:600px;margin:0 auto;padding:0 16px calc(32px + env(safe-area-inset-bottom))}
-.search{display:flex;gap:8px;margin-bottom:16px}
-input{flex:1;min-width:0;font:inherit;font-size:17px;padding:12px 16px;border:1px solid var(--line);border-radius:12px;
-background:var(--card);color:var(--fg);outline:none}
-input:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-bg)}
-button{font:inherit;font-size:16px;font-weight:600;padding:12px 16px;border:0;border-radius:12px;background:var(--acc);
-color:var(--acc-fg);cursor:pointer}
-button:disabled{opacity:.5}
-button.ghost{background:var(--soft);color:var(--fg)}
-button.text{background:none;color:var(--mut);font-weight:500;font-size:14px;padding:8px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:var(--shadow)}
-.label{font-size:13px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;margin:24px 4px 8px;
-display:flex;justify-content:space-between;align-items:center}
-.label button{text-transform:none;letter-spacing:0}
-.mut{color:var(--mut);font-size:14px}
-.num{font-variant-numeric:tabular-nums}
-.green{color:var(--green)}.yellow{color:var(--yellow)}.red{color:var(--red)}
-.err{color:var(--red)}
-[hidden]{display:none!important}
-
-.badge{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--soft);color:var(--mut)}
-.badge.ship{background:var(--yellow-bg);color:var(--yellow)}.badge.way{background:var(--acc-bg);color:var(--acc)}
-.badge.done{background:var(--green-bg);color:var(--green)}
-
-.order.cancelled{opacity:.55}
-.order .top{display:flex;align-items:center;gap:8px;margin-bottom:12px}
-.order .top .mut{margin-left:auto;font-size:13px}
-.item{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
-.item+.item{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
-.item b{display:block;font-size:16px}
-.price{text-align:right;white-space:nowrap}
-.price .v{font-size:22px;font-weight:700;letter-spacing:-.01em}
-.actions{display:flex;gap:8px;margin-top:16px}
-.actions button{flex:1;font-size:15px;padding:10px 12px}
-
-.hero{text-align:center;padding:24px 16px}
-.hero .v{font-size:44px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
-.pill{display:inline-block;margin-top:8px;padding:4px 12px;border-radius:999px;font-size:14px;font-weight:600}
-.pill.green{background:var(--green-bg)}.pill.yellow{background:var(--yellow-bg)}.pill.red{background:var(--red-bg)}
-.kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}
-.kpi{background:var(--soft);border-radius:12px;padding:12px;text-align:left}
-.kpi .v{font-size:18px;font-weight:700}
-table{width:100%;border-collapse:collapse}
-td{padding:8px 0;vertical-align:top;border-top:1px solid var(--line)}
-tr:first-child td{border-top:0}
-td:last-child{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;padding-left:12px}
-tr.total td{font-weight:700}
-.dhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
-h3{margin:0;font-size:15px}
-</style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header><div class="bar">
@@ -101,6 +37,8 @@ h3{margin:0;font-size:15px}
 </div>
 
 <script src="calc.js"></script>
+<script src="config.js"></script>
+<script src="push.js"></script>
 <script>
 const API = "https://api-seller.ozon.ru";
 // Статусы Ozon → понятные этапы; неизвестный статус показываем как есть
@@ -124,6 +62,50 @@ const store = {  // localStorage может быть недоступен (пр�
   set(k, v) { this.mem[k] = v; try { localStorage.setItem(k, v); } catch {} },
   del(k) { delete this.mem[k]; try { localStorage.removeItem(k); } catch {} },
 };
+
+// Ссылка владельца для доставок: #admin=<ключ таблицы>&vk=<VAPID JWK в base64url> — сохраняем и убираем из адреса
+{
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get("admin")) {
+    store.set("dlv_admin", h.get("admin"));
+    if (h.get("vk")) store.set("dlv_vk", h.get("vk"));
+    history.replaceState(null, "", location.pathname);
+  }
+}
+const ADMIN = () => store.get("dlv_admin");
+let DELIV = {};  // номер отправления → строка листа «Доставки»
+
+async function loadDeliveries() {
+  if (!ADMIN() || !SCRIPT_URL) return;
+  try {
+    DELIV = Object.fromEntries((await sheetApi({action: "list", key: ADMIN()})).map(r => [r.posting, r]));
+  } catch { DELIV = {}; }  // таблица недоступна — список заказов всё равно показываем
+}
+
+function unloadText(prr) {
+  const floor = prr && prr.floor ? `, эт. ${prr.floor}` : "";
+  if (!prr || !prr.code) return "Нет";
+  return ({lift: "Лифт", stairs: "Лестница"})[prr.code] ? ({lift: "Лифт", stairs: "Лестница"})[prr.code] + floor : prr.code + floor;
+}
+
+async function sendToCourier(number, cbRaw) {
+  const [posting] = await fetchPosting(number);
+  const c = posting.customer || {}, a = c.address || {}, prr = posting.prr_option || {};
+  const phone = String(c.phone || (posting.addressee || {}).phone || "").replace(/\D/g, "");
+  const data = {
+    posting: posting.posting_number,
+    cb: /^\d+$/.test(cbRaw) ? `ЦБ-${cbRaw}` : cbRaw.toUpperCase().replace(/^ЦБ\s*-?\s*/, "ЦБ-"),
+    address: a.address_tail || "", lat: a.latitude || "", lon: a.longitude || "",
+    phone: phone ? "+" + phone : "", ext: (posting.addressee || {}).pin || "",
+    packs: posting.products.map(p => `${p.quantity} уп ${tileFormat(p.offer_id, p.name) || p.offer_id}`).join(", "),
+    unload: unloadText(prr), delivery: parseFloat(posting.delivery_price) || 0, lift: parseFloat(prr.price) || 0,
+    comment: a.comment || "",
+  };
+  const jwk = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(store.get("dlv_vk").replace(/-/g, "+").replace(/_/g, "/")), ch => ch.charCodeAt(0))));
+  const jwts = {};
+  for (const aud of await sheetApi({action: "push_targets", key: ADMIN()})) jwts[aud] = await vapidJwt(aud, jwk);
+  return sheetApi({action: "create", key: ADMIN(), data, jwts});
+}
 
 function show() {
   const has = store.get("ozon_cid") && store.get("ozon_key");
@@ -169,6 +151,7 @@ async function loadOrders() {
       const r = await ozon("/v5/product/info/prices", {filter: {offer_id: offers.slice(i, i + 100), visibility: "ALL"}, limit: 100});
       for (const it of r.items) prices[it.offer_id] = it;
     }
+    await loadDeliveries();
     ORDERS = postings; PRICES = prices;
     $("orders").innerHTML = postings.length ? postings.map(orderCard).join("") : '<div class="card mut">Заказов нет</div>';
   } catch (err) {
@@ -189,8 +172,21 @@ function orderCard(p, i) {
   } catch (err) {
     body = `<div class="err">${e(err.message)}</div>`;
   }
+  body += courierBlock(p);
   return `<div class="card order${p.status === "cancelled" ? " cancelled" : ""}"><div class="top">${badge(p.status)}` +
     `<span class="mut num">${date} · ${e(p.posting_number)}</span></div>${body}</div>`;
+}
+
+function courierBlock(p) {
+  const d = DELIV[p.posting_number];
+  if (d) {
+    const done = d.status === "Доставлен";
+    return `<div class="courier ${done ? "green" : ""}">${done ? "✅ Курьер доставил" : "🚚 У курьера"} · ${e(d.cb)} · ` +
+      `${e(done ? d.delivered_at : d.status + (d.date ? " на " + d.date : ""))}</div>`;
+  }
+  if (!ADMIN() || !SCRIPT_URL || !["ship", "way"].includes(stage(p.status)[0])) return "";
+  return `<form class="send" data-send="${e(p.posting_number)}"><input placeholder="ЦБ" aria-label="Номер ЦБ" ` +
+    `inputmode="numeric" autocomplete="off" required><button>Отправить курьеру</button></form>`;
 }
 
 function render([lines, t], posting) {
@@ -285,6 +281,22 @@ $("orders").onclick = async ev => {
   }
 };
 $("reload").onclick = loadOrders;
+
+$("orders").addEventListener("submit", async ev => {
+  const f = ev.target.closest("form[data-send]");
+  if (!f) return;
+  ev.preventDefault();
+  const btn = f.querySelector("button"), cb = f.querySelector("input").value.trim();
+  btn.disabled = true; btn.textContent = "Отправляю…";
+  try {
+    const r = await sendToCourier(f.dataset.send, cb);
+    DELIV[r.posting] = r;
+    f.outerHTML = `<div class="courier">🚚 Отправлено курьеру · ${e(r.cb)}${r.pushed ? "" : " · пуш не дошёл: курьер не включил уведомления"}</div>`;
+  } catch (err) {
+    btn.disabled = false; btn.textContent = "Отправить курьеру";
+    alert(err.message);
+  }
+});
 
 show();
 if (location.hash.length > 1) $("n").value = decodeURIComponent(location.hash.slice(1));

@@ -1,0 +1,9 @@
+{
+  "name": "Алмалы · Доставки",
+  "short_name": "Доставки",
+  "display": "standalone",
+  "scope": "./",
+  "background_color": "#f2f3f5",
+  "theme_color": "#3b5bdb",
+  "lang": "ru"
+}
