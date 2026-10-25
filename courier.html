@@ -9,8 +9,8 @@
 <meta name="referrer" content="no-referrer">
 <title>Доставки</title>
 <link rel="manifest" href="manifest.webmanifest">
-<script src="theme.js?v=7"></script>
-<link rel="stylesheet" href="style.css?v=7">
+<script src="theme.js?v=8"></script>
+<link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
 <header><div class="bar">
@@ -29,7 +29,7 @@
 <div id="list" class="mut">Загружаю…</div>
 </div>
 
-<script src="config.js?v=7"></script>
+<script src="config.js?v=8"></script>
 <script>
 const $ = id => document.getElementById(id);
 const e = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
@@ -43,13 +43,14 @@ const fromIso = d => d ? d.split("-").reverse().join(".") : "";
 const rub = x => Math.round(Number(String(x).replace(/\s/g, "")) || 0).toLocaleString("ru-RU").replace(/ /g, " ") + " ₽";
 const api = payload => sheetApi({key: KEY, ...payload});
 
-function navUrl(r) {
-  return r.lat && r.lon ? `yandexnavi://build_route_on_map?lat_to=${r.lat}&lon_to=${r.lon}`
-    : `https://yandex.ru/maps/?rtext=~${encodeURIComponent(r.address)}&rtt=auto`;
-}
-function mapUrl(r) {
-  const to = r.lat && r.lon ? `${r.lat},${r.lon}` : r.address;
-  return `https://yandex.ru/maps/?rtext=~${encodeURIComponent(to)}&rtt=auto`;
+const dest = r => r.lat && r.lon ? `${r.lat},${r.lon}` : r.address;
+const yandexMaps = r => `https://yandex.ru/maps/?rtext=~${encodeURIComponent(dest(r))}&rtt=auto`;
+const appleMaps = r => `https://maps.apple.com/?daddr=${encodeURIComponent(dest(r))}&dirflg=d`;
+// Яндекс Навигатор по координатам; если приложение не открылось за секунду — Яндекс Карты
+function openYandex(r) {
+  if (!(r.lat && r.lon)) { location.href = yandexMaps(r); return; }
+  location.href = `yandexnavi://build_route_on_map?lat_to=${r.lat}&lon_to=${r.lon}`;
+  setTimeout(() => { if (!document.hidden) location.href = yandexMaps(r); }, 1200);
 }
 
 function card(r) {
@@ -67,8 +68,8 @@ function card(r) {
 ${r.comment ? `<div class="mut" style="margin-top:4px">💬 ${e(r.comment)}</div>` : ""}
 <div class="actions">
 ${tel ? `<a class="btn" href="${e(tel)}">📞 Позвонить</a>` : ""}
-<a class="btn ghost" href="${e(navUrl(r))}">🧭 Навигатор</a>
-<a class="btn ghost" href="${e(mapUrl(r))}" target="_blank" rel="noopener">Карты</a>
+<a class="btn ghost" href="${e(yandexMaps(r))}" data-yandex>🧭 Яндекс</a>
+<a class="btn ghost" href="${e(appleMaps(r))}">Apple Карты</a>
 </div>
 ${r.ext ? `<div class="mut" style="margin-top:4px">Добавочный ${e(r.ext)} наберётся сам после соединения</div>` : ""}
 <div class="field"><label for="d-${e(r.posting)}">Дата доставки</label>
@@ -83,8 +84,9 @@ function draw() {
   const rows = ROWS.filter(r => (r.status === "Доставлен" || r.status === "Отменён") === (TAB === "done"));
   if (TAB === "done") rows.reverse();
   else rows.sort((a, b) => (toIso(a.date) || "9999").localeCompare(toIso(b.date) || "9999"));
-  $("list").innerHTML = rows.length ? rows.map(card).join("")
-    : `<div class="card mut">${TAB === "done" ? "Пока нет доставленных" : "Новых заказов нет"}</div>`;
+  const head = TAB === "done" ? reportHtml(deliveryReport(ROWS), "Заработано за всё время") : "";
+  $("list").innerHTML = head + (rows.length ? rows.map(card).join("")
+    : `<div class="card mut">${TAB === "done" ? "Пока нет доставленных" : "Новых заказов нет"}</div>`);
   if (FOCUS) document.querySelector(".order.hl")?.scrollIntoView({block: "center"});
 }
 
@@ -115,6 +117,12 @@ $("list").addEventListener("change", ev => {
   if (ev.target.matches("[data-comment]")) save(box.dataset.posting, {courier_comment: ev.target.value.trim()});
 });
 $("list").addEventListener("click", ev => {
+  const y = ev.target.closest("[data-yandex]");
+  if (y) {
+    ev.preventDefault();
+    openYandex(ROWS.find(x => x.posting === y.closest(".order").dataset.posting));
+    return;
+  }
   const b = ev.target.closest("[data-done]");
   if (!b) return;
   if (!confirm("Отметить заказ доставленным?")) return;

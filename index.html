@@ -7,8 +7,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="robots" content="noindex">
 <title>Юнит-экономика</title>
-<script src="theme.js?v=5"></script>
-<link rel="stylesheet" href="style.css?v=5">
+<script src="theme.js?v=8"></script>
+<link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
 <header><div class="bar">
@@ -46,13 +46,14 @@
 <button id="go">Рассчитать</button>
 </form>
 <div id="out"></div>
+<div id="report"></div>
 <div class="label">Заказы <button class="text" id="reload">Обновить</button></div>
 <div id="orders" class="mut"></div>
 </div>
 
-<script src="calc.js?v=5"></script>
-<script src="config.js?v=5"></script>
-<script src="push.js?v=5"></script>
+<script src="calc.js?v=8"></script>
+<script src="config.js?v=8"></script>
+<script src="push.js?v=8"></script>
 <script>
 const API = "https://api-seller.ozon.ru";
 // Статусы Ozon → понятные этапы; неизвестный статус показываем как есть
@@ -168,6 +169,7 @@ async function loadOrders() {
       for (const it of r.items) prices[it.offer_id] = it;
     }
     await loadDeliveries();
+    $("report").innerHTML = ADMIN() && SCRIPT_URL ? reportHtml(deliveryReport(Object.values(DELIV)), "Курьеру к выплате за всё время") : "";
     ORDERS = postings; PRICES = prices;
     $("orders").innerHTML = postings.length ? postings.map(orderCard).join("") : '<div class="card mut">Заказов нет</div>';
   } catch (err) {

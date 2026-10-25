@@ -90,3 +90,7 @@ a.btn.ghost{background:var(--soft);color:var(--fg)}
 .seg button{flex:1;background:none;color:var(--mut);font-size:14px;padding:8px}
 .seg button[aria-pressed="true"]{background:var(--card);color:var(--fg);box-shadow:var(--shadow)}
 .settings h3{margin:16px 0 8px}.settings h3:first-child{margin-top:0}
+.report summary{list-style:none;cursor:pointer}.report summary::-webkit-details-marker{display:none}
+.report .v{font-size:28px;font-weight:800;letter-spacing:-.02em;margin:4px 0}
+.report .more{margin-top:8px;font-size:14px;font-weight:600;color:var(--acc)}
+.report[open] .more{display:none}.report table{margin-top:12px}
