@@ -100,7 +100,7 @@ async function loadDeliveries() {
 
 function unloadText(prr) {
   const floor = prr && prr.floor ? `, эт. ${prr.floor}` : "";
-  if (!prr || !prr.code) return "Нет";
+  if (!prr || !prr.code || prr.code === "none") return "Нет";  // Ozon шлёт "none", когда подъём не заказан
   return ({lift: "Лифт", stairs: "Лестница"})[prr.code] ? ({lift: "Лифт", stairs: "Лестница"})[prr.code] + floor : prr.code + floor;
 }
 
