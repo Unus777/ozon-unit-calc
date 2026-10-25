@@ -7,14 +7,28 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="robots" content="noindex">
 <title>Юнит-экономика</title>
-<link rel="stylesheet" href="style.css">
+<script src="theme.js?v=5"></script>
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 <header><div class="bar">
 <div class="brand">Алмалы <span>юнит-экономика заказов Ozon</span></div>
-<button class="text" id="forget" hidden>Сменить ключи</button>
+<button class="text" id="gear" aria-expanded="false" aria-controls="settings">⚙ Настройки</button>
 </div></header>
 <main>
+
+<div class="card settings" id="settings" hidden>
+<h3>Тема</h3>
+<div class="seg" id="themeSw"></div>
+<h3>Доставки курьеру</h3>
+<p class="mut" id="dlvState"></p>
+<form id="accessForm" style="display:grid;gap:8px">
+<input id="accessLink" placeholder="Вставьте вашу ссылку доступа" autocomplete="off" aria-label="Ссылка доступа к доставкам">
+<button>Подключить</button>
+</form>
+<div id="forget"><h3>Ozon</h3>
+<button class="ghost" id="forgetBtn">Сменить ключи Ozon</button></div>
+</div>
 
 <div class="card" id="keys" hidden>
 <h3>Ключи Ozon Seller API</h3>
@@ -36,9 +50,9 @@
 <div id="orders" class="mut"></div>
 </div>
 
-<script src="calc.js"></script>
-<script src="config.js"></script>
-<script src="push.js"></script>
+<script src="calc.js?v=5"></script>
+<script src="config.js?v=5"></script>
+<script src="push.js?v=5"></script>
 <script>
 const API = "https://api-seller.ozon.ru";
 // Статусы Ozon → понятные этапы; неизвестный статус показываем как есть
@@ -63,15 +77,17 @@ const store = {  // localStorage может быть недоступен (пр�
   del(k) { delete this.mem[k]; try { localStorage.removeItem(k); } catch {} },
 };
 
-// Ссылка владельца для доставок: #admin=<ключ таблицы>&vk=<VAPID JWK в base64url> — сохраняем и убираем из адреса
-{
-  const h = new URLSearchParams(location.hash.slice(1));
-  if (h.get("admin")) {
-    store.set("dlv_admin", h.get("admin"));
-    if (h.get("vk")) store.set("dlv_vk", h.get("vk"));
-    history.replaceState(null, "", location.pathname);
-  }
+// Ссылка владельца для доставок: …#admin=<ключ таблицы>&vk=<VAPID JWK в base64url>.
+// Приложение с экрана «Домой» на iPhone хранит данные отдельно от Safari, поэтому ссылку
+// можно и открыть, и вставить в настройках.
+function applyAccess(hash) {
+  const h = new URLSearchParams(hash.replace(/^.*?#/, ""));
+  if (!h.get("admin") || !h.get("vk")) return false;
+  store.set("dlv_admin", h.get("admin"));
+  store.set("dlv_vk", h.get("vk"));
+  return true;
 }
+if (applyAccess(location.hash)) history.replaceState(null, "", location.pathname);
 const ADMIN = () => store.get("dlv_admin");
 let DELIV = {};  // номер отправления → строка листа «Доставки»
 
@@ -243,7 +259,27 @@ $("keysForm").onsubmit = ev => {
   show();
 };
 
-$("forget").onclick = () => { store.del("ozon_cid"); store.del("ozon_key"); $("out").innerHTML = ""; show(); };
+$("forgetBtn").onclick = () => {
+  store.del("ozon_cid"); store.del("ozon_key"); $("out").innerHTML = ""; $("settings").hidden = true; show();
+};
+
+function drawDlvState() {
+  $("dlvState").innerHTML = ADMIN() ? '<span class="green">✓ Подключено на этом устройстве</span>'
+    : "Не подключено на этом устройстве — вставьте вашу ссылку доступа.";
+}
+$("gear").onclick = () => {
+  const open = $("settings").hidden;
+  $("settings").hidden = !open;
+  $("gear").setAttribute("aria-expanded", open);
+  if (open) { mountThemeSwitch($("themeSw")); drawDlvState(); }
+};
+$("accessForm").onsubmit = ev => {
+  ev.preventDefault();
+  if (!applyAccess($("accessLink").value.trim())) { alert("Это не ваша ссылка доступа — скопируйте её целиком"); return; }
+  $("accessLink").value = "";
+  drawDlvState();
+  if (store.get("ozon_cid")) loadOrders();
+};
 
 $("calcForm").onsubmit = async ev => {
   ev.preventDefault();

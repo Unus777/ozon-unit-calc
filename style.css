@@ -1,9 +1,13 @@
 :root{--bg:#f2f3f5;--card:#fff;--fg:#14161a;--mut:#6b7079;--line:#e3e5e9;--soft:#f6f7f9;
 --acc:#3b5bdb;--acc-fg:#fff;--green:#2b8a3e;--yellow:#b06f00;--red:#c92a2a;
---green-bg:#ebfbee;--yellow-bg:#fff8e6;--red-bg:#fff0f0;--acc-bg:#edf2ff;--shadow:0 1px 2px rgba(20,22,26,.06)}
-@media(prefers-color-scheme:dark){:root{--bg:#0f1012;--card:#1a1c20;--fg:#eceef2;--mut:#9097a3;--line:#2a2d33;
+--green-bg:#ebfbee;--yellow-bg:#fff8e6;--red-bg:#fff0f0;--acc-bg:#edf2ff;--shadow:0 1px 2px rgba(20,22,26,.06);color-scheme:light}
+/* тема: «Авто» — как в телефоне; data-theme=light|dark на <html> перекрывает (theme.js) */
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1012;--card:#1a1c20;--fg:#eceef2;--mut:#9097a3;--line:#2a2d33;
 --soft:#212429;--acc:#748ffc;--acc-fg:#0f1012;--green:#69db7c;--yellow:#ffc94d;--red:#ff8787;
---green-bg:#1b2b1f;--yellow-bg:#2e2716;--red-bg:#2f1c1c;--acc-bg:#1e2440;--shadow:none}}
+--green-bg:#1b2b1f;--yellow-bg:#2e2716;--red-bg:#2f1c1c;--acc-bg:#1e2440;--shadow:none;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f1012;--card:#1a1c20;--fg:#eceef2;--mut:#9097a3;--line:#2a2d33;
+--soft:#212429;--acc:#748ffc;--acc-fg:#0f1012;--green:#69db7c;--yellow:#ffc94d;--red:#ff8787;
+--green-bg:#1b2b1f;--yellow-bg:#2e2716;--red-bg:#2f1c1c;--acc-bg:#1e2440;--shadow:none;color-scheme:dark}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
 -webkit-font-smoothing:antialiased}
@@ -81,3 +85,8 @@ a.btn.ghost{background:var(--soft);color:var(--fg)}
 .send input{flex:0 0 96px;padding:10px 12px;font-size:16px}
 .send button{flex:1;font-size:15px;padding:10px 12px}
 .courier{margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font-size:14px;font-weight:600}
+
+.seg{display:flex;gap:4px;background:var(--soft);padding:4px;border-radius:12px}
+.seg button{flex:1;background:none;color:var(--mut);font-size:14px;padding:8px}
+.seg button[aria-pressed="true"]{background:var(--card);color:var(--fg);box-shadow:var(--shadow)}
+.settings h3{margin:16px 0 8px}.settings h3:first-child{margin-top:0}

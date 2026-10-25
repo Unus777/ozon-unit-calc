@@ -9,12 +9,13 @@
 <meta name="referrer" content="no-referrer">
 <title>Доставки</title>
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="style.css">
+<script src="theme.js?v=5"></script>
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 <header><div class="bar">
 <div class="brand">Алмалы <span>доставки курьера</span></div>
-<button class="text" id="reload">Обновить</button>
+<span><button class="text" id="themeBtn" aria-label="Сменить тему"></button><button class="text" id="reload">Обновить</button></span>
 </div></header>
 <main>
 <div class="card" id="nokey" hidden><h3>Нет доступа</h3><p class="mut">Откройте ссылку, которую прислал владелец магазина.</p></div>
@@ -28,7 +29,7 @@
 <div id="list" class="mut">Загружаю…</div>
 </div>
 
-<script src="config.js"></script>
+<script src="config.js?v=5"></script>
 <script>
 const $ = id => document.getElementById(id);
 const e = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
@@ -126,6 +127,10 @@ document.querySelector(".tabs").onclick = ev => {
   draw();
 };
 $("reload").onclick = load;
+const themeOrder = ["auto", "light", "dark"];
+const drawThemeBtn = () => { $("themeBtn").textContent = "◐ " + THEMES[getTheme()]; };
+$("themeBtn").onclick = () => { setTheme(themeOrder[(themeOrder.indexOf(getTheme()) + 1) % 3]); drawThemeBtn(); };
+drawThemeBtn();
 
 // ---------- пуш-уведомления ----------
 const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
