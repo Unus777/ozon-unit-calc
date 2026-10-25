@@ -9,8 +9,8 @@
 <meta name="referrer" content="no-referrer">
 <title>Доставки</title>
 <link rel="manifest" href="manifest.webmanifest">
-<script src="theme.js?v=6"></script>
-<link rel="stylesheet" href="style.css?v=6">
+<script src="theme.js?v=7"></script>
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 <header><div class="bar">
@@ -29,7 +29,7 @@
 <div id="list" class="mut">Загружаю…</div>
 </div>
 
-<script src="config.js?v=6"></script>
+<script src="config.js?v=7"></script>
 <script>
 const $ = id => document.getElementById(id);
 const e = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
@@ -55,7 +55,9 @@ function mapUrl(r) {
 function card(r) {
   const unloadNone = r.unload === "Нет";
   const done = r.status === "Доставлен";
-  const tel = r.phone ? `tel:${r.phone}${r.ext ? "," + r.ext : ""}` : "";
+  // Таблица портит «+»: бывает «7980…» или «=+7980…» — оставляем только цифры
+  const digits = String(r.phone || "").replace(/\D/g, "").replace(/^8(?=\d{10}$)/, "7");
+  const tel = digits ? `tel:+${digits}${r.ext ? "," + r.ext : ""}` : "";
   return `<div class="card order${r.posting === FOCUS ? " hl" : ""}" data-posting="${e(r.posting)}">
 <div class="top"><span class="cb">${e(r.cb)}</span><span class="badge ${BADGE[r.status] || ""}">${e(r.status)}</span>
 <span class="mut num">${e(r.posting)}</span></div>
