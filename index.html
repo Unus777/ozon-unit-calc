@@ -26,6 +26,11 @@ td:last-child{text-align:right;white-space:nowrap;font-variant-numeric:tabular-n
 .mut{color:var(--mut);font-size:14px}.big{font-size:32px;font-weight:700}
 .green{color:var(--green)}.yellow{color:var(--yellow)}.red{color:var(--red)}.err{color:var(--red)}
 [hidden]{display:none!important}
+.order{border-top:1px solid var(--line);padding:12px 0}.order:first-child{border-top:0;padding-top:0}
+.order.cancelled{opacity:.5}.order .row{display:flex;gap:8px;margin-top:8px}
+button.sm{flex:0 0 auto;font-size:15px;padding:8px 12px}
+button.sec{background:none;color:var(--acc);border:1px solid var(--line)}
+h2 button.link{float:right;padding:0;font-size:14px}
 </style>
 </head>
 <body><main>
@@ -47,6 +52,8 @@ td:last-child{text-align:right;white-space:nowrap;font-variant-numeric:tabular-n
 <button id="go">Рассчитать</button>
 </form>
 <div id="out"></div>
+<section><h2>Заказы за 90 дней <button class="link" id="reload">Обновить</button></h2>
+<div id="orders" class="mut"></div></section>
 <p style="text-align:right"><button class="link" id="forget">Сменить ключи</button></p>
 </div>
 
@@ -70,7 +77,75 @@ function show() {
   const has = store.get("ozon_cid") && store.get("ozon_key");
   $("keys").hidden = !!has;
   $("app").hidden = !has;
+  if (has) loadOrders();
 }
+
+let ORDERS = [], PRICES = {};
+const iso = d => d.toISOString().slice(0, 19) + "Z";
+
+async function loadOrders() {
+  $("orders").textContent = "Загружаю…";
+  try {
+    const to = new Date(), filter = {since: iso(new Date(to - 90 * 864e5)), to: iso(to)};
+    const postings = [];
+    let cursor = "";
+    do {
+      const r = await ozon("/v4/posting/fbs/list", {filter, limit: 100, sort_dir: "DESC", ...(cursor && {cursor})});
+      postings.push(...r.postings);
+      cursor = r.has_next ? r.cursor : "";
+    } while (cursor);
+    const offers = [...new Set(postings.flatMap(p => p.products.map(x => x.offer_id)))];
+    const prices = {};
+    for (let i = 0; i < offers.length; i += 100) {
+      const r = await ozon("/v5/product/info/prices", {filter: {offer_id: offers.slice(i, i + 100), visibility: "ALL"}, limit: 100});
+      for (const it of r.items) prices[it.offer_id] = it;
+    }
+    ORDERS = postings; PRICES = prices;
+    $("orders").innerHTML = postings.length ? postings.map(orderCard).join("") : "Заказов нет";
+  } catch (err) {
+    $("orders").innerHTML = `<span class="err">${e(err.message)}</span>`;
+  }
+}
+
+function orderCard(p, i) {
+  const date = new Date(p.in_process_at).toLocaleDateString("ru-RU", {day: "numeric", month: "short"});
+  let body;
+  try {
+    body = p.products.map(x => {
+      const [, t] = calc({...p, products: [x]}, PRICES);
+      return `<div>${x.quantity} уп, ${e(x.offer_id)} · <b class="${t.status[0]}">${Math.round(t.payout_m2)} ₽/м²</b>` +
+        `<div class="mut">${e(shortName(x.name))}</div></div>`;
+    }).join("") + `<div class="row"><button class="sm" data-copy="${i}">Скопировать</button>` +
+      `<button class="sm sec" data-open="${e(p.posting_number)}">Подробно</button></div>`;
+  } catch (err) {
+    body = `<div class="err">${e(err.message)}</div>`;
+  }
+  return `<div class="order${p.status === "cancelled" ? " cancelled" : ""}"><div class="mut">${date} · ` +
+    `${e(p.posting_number)} · ${e(STATUS_RU[p.status] || p.status)}</div>${body}</div>`;
+}
+
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); }
+  catch {  // старый Safari без Clipboard API
+    const ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
+  }
+}
+
+$("orders").onclick = async ev => {
+  const b = ev.target.closest("button");
+  if (!b) return;
+  if (b.dataset.copy) {
+    await copy(copyText(ORDERS[b.dataset.copy], PRICES));
+    b.textContent = "Скопировано ✓";
+    setTimeout(() => { b.textContent = "Скопировать"; }, 1500);
+  } else if (b.dataset.open) {
+    $("n").value = b.dataset.open;
+    $("calcForm").requestSubmit();
+    scrollTo({top: 0, behavior: "smooth"});
+  }
+};
+$("reload").onclick = loadOrders;
 
 async function ozon(path, payload) {
   const r = await fetch(API + path, {method: "POST", body: JSON.stringify(payload), headers: {

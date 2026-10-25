@@ -18,7 +18,8 @@ function calc(posting, prices, adRub = 0) {
   for (const p of posting.products) {
     const fmt = tileFormat(p.offer_id, p.name);
     if (!fmt) throw new Error(`Не плитка 60×60/60×120: ${p.offer_id} — расчёт ₽/м² не применим`);
-    const f = FORMATS[fmt], qty = p.quantity, price = parseFloat(p.price);
+    // /v3/posting/fbs/get отдаёт цену строкой, /v4/posting/fbs/list — объектом {amount, currency}
+    const f = FORMATS[fmt], qty = p.quantity, price = parseFloat(p.price?.amount ?? p.price);
     const info = prices[p.offer_id] || {};
     const pct = (info.commissions || {}).sales_percent_rfbs || 51;
     const boost = ((info.marketing_actions || {}).actions || [])
@@ -57,4 +58,19 @@ function calc(posting, prices, adRub = 0) {
   return [lines, t];
 }
 
-if (typeof module !== "undefined") module.exports = { calc, tileFormat };
+// «Керамогранит Джозефина Полиш 60х60 глянцевый…» → «Керамогранит Джозефина Полиш 60х60»
+function shortName(name) {
+  const m = name.match(/^.*?60\s*[xх×]\s*(?:120|60)/i);
+  return m ? m[0] : name;
+}
+
+// Текст для кнопки «Скопировать»: блок на каждый товар отправления.
+// ponytail: товар считается как отдельное отправление (сбор 20 ₽ на каждый) — расхождение копейки на м² в смешанных заказах
+function copyText(posting, prices) {
+  return posting.products.map(p => {
+    const [, t] = calc({ ...posting, products: [p] }, prices);
+    return `${p.quantity} уп, ${p.offer_id}\n${shortName(p.name)}\n${Math.round(t.payout_m2)} руб м2\nпродажа озон`;
+  }).join("\n\n");
+}
+
+if (typeof module !== "undefined") module.exports = { calc, tileFormat, shortName, copyText };
