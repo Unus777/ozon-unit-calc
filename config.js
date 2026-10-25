@@ -12,6 +12,32 @@ async function sheetApi(payload) {
   return out.result;
 }
 
+// Подробности хранятся читаемыми строками в существующем комментарии таблицы.
+function deliveryDetails(comment) {
+  const out = {note: [], time: "", foreman: ""};
+  for (const line of String(comment || "").split("\n")) {
+    if (line.startsWith("Время доставки: ")) out.time = line.slice("Время доставки: ".length).trim();
+    else if (line.startsWith("Телефон прораба: ")) out.foreman = line.slice("Телефон прораба: ".length).trim();
+    else out.note.push(line);
+  }
+  out.note = out.note.join("\n").trim();
+  return out;
+}
+
+function foremanPhone(value) {
+  let phone = String(value || "").replace(/\D/g, "");
+  if (!String(value || "").trim()) return "";
+  if (phone.length === 10) phone = "7" + phone;
+  if (phone.length === 11 && phone[0] === "8") phone = "7" + phone.slice(1);
+  if (!/^\d{11,15}$/.test(phone)) throw new Error("Проверьте телефон прораба: укажите номер с кодом страны");
+  return "+" + phone;
+}
+
+function deliveryComment({note, time, foreman}) {
+  return [String(note || "").trim(), time && "Время доставки: " + String(time).trim(),
+    foreman && "Телефон прораба: " + foremanPhone(foreman)].filter(Boolean).join("\n");
+}
+
 // Расчёт с курьером по строкам листа «Доставки»: доставленные — к выплате, «Новый»/«Согласован» — в работе.
 const num = x => Number(String(x ?? "").replace(/[^\d.-]/g, "")) || 0;
 const MONTHS = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];

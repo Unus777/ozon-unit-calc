@@ -9,8 +9,8 @@
 <meta name="referrer" content="no-referrer">
 <title>Доставки</title>
 <link rel="manifest" href="manifest.webmanifest">
-<script src="theme.js?v=9"></script>
-<link rel="stylesheet" href="style.css?v=9">
+<script src="theme.js?v=10"></script>
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 <header><div class="bar">
@@ -29,7 +29,7 @@
 <div id="list" class="mut">Загружаю…</div>
 </div>
 
-<script src="config.js?v=9"></script>
+<script src="config.js?v=10"></script>
 <script>
 const $ = id => document.getElementById(id);
 const e = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
@@ -56,6 +56,9 @@ function openYandex(r) {
 function card(r) {
   const unloadNone = r.unload === "Нет";
   const done = r.status === "Доставлен";
+  const info = deliveryDetails(r.comment);
+  let foreman = "";
+  try { foreman = foremanPhone(info.foreman); } catch {} // старый некорректный номер не превращаем в ссылку
   // Таблица портит «+»: бывает «7980…» или «=+7980…» — оставляем только цифры
   const digits = String(r.phone || "").replace(/\D/g, "").replace(/^8(?=\d{10}$)/, "7");
   const tel = digits ? `tel:+${digits}${r.ext ? "," + r.ext : ""}` : "";
@@ -65,9 +68,11 @@ function card(r) {
 <div class="item"><div><b>${e(r.packs || "—")}</b>${r.unload === "" ? "" : `<span class="unload${unloadNone ? " none" : ""}">${unloadNone ? "Без разгрузки" : "Разгрузка: " + e(r.unload)}</span>`}</div>
 <div class="price"><div class="v num">${rub(r.pay)}</div><div class="mut">оплата</div></div></div>
 <div class="addr">📍 ${e(r.address)}</div>
-${r.comment ? `<div class="mut" style="margin-top:4px">💬 ${e(r.comment)}</div>` : ""}
+${r.date || info.time ? `<div class="delivery-plan">🗓 Доставить: ${e([r.date, info.time].filter(Boolean).join(" · "))}</div>` : ""}
+${info.note ? `<div class="delivery-note">💬 ${e(info.note)}</div>` : ""}
 <div class="actions">
 ${tel ? `<a class="btn" href="${e(tel)}">📞 Позвонить</a>` : ""}
+${foreman ? `<a class="btn" href="tel:${e(foreman)}">📞 Позвонить прорабу</a>` : ""}
 <a class="btn ghost" href="${e(yandexMaps(r))}" data-yandex>🧭 Яндекс</a>
 <a class="btn ghost" href="${e(appleMaps(r))}">Apple Карты</a>
 </div>

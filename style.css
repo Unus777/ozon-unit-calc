@@ -48,7 +48,7 @@ display:flex;justify-content:space-between;align-items:center}
 .item b{display:block;font-size:16px}
 .price{text-align:right;white-space:nowrap}
 .price .v{font-size:22px;font-weight:700;letter-spacing:-.01em}
-.actions{display:flex;gap:8px;margin-top:16px}
+.actions{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
 .actions button{flex:1;font-size:15px;padding:10px 12px}
 
 .hero{text-align:center;padding:24px 16px}
@@ -85,6 +85,17 @@ a.btn.ghost{background:var(--soft);color:var(--fg)}
 .send input{flex:0 0 96px;padding:10px 12px;font-size:16px}
 .send button{flex:1;font-size:15px;padding:10px 12px}
 .courier{margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font-size:14px;font-weight:600}
+.send{flex-wrap:wrap}
+.send>.delivery-edit{flex:1 0 100%;order:2}
+.delivery-edit{margin-top:12px;font-size:14px}
+.delivery-edit summary{cursor:pointer;min-height:44px;display:flex;align-items:center;color:var(--acc)}
+.delivery-fields{display:grid;gap:12px;margin:12px 0}
+.delivery-fields label{display:grid;gap:6px;color:var(--mut)}
+.delivery-fields input,.delivery-fields textarea{width:100%;min-width:0;padding:12px;font:inherit;font-size:16px;
+  color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:10px;box-sizing:border-box}
+.delivery-fields textarea{font-family:inherit;font-size:16px;resize:vertical}
+.delivery-plan{margin-top:12px;padding:10px;background:var(--acc-bg);border-radius:8px;font-weight:600}
+.delivery-note{margin-top:8px;white-space:pre-wrap;overflow-wrap:anywhere}
 
 .seg{display:flex;gap:4px;background:var(--soft);padding:4px;border-radius:12px}
 .seg button{flex:1;background:none;color:var(--mut);font-size:14px;padding:8px}

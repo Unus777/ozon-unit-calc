@@ -7,8 +7,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="robots" content="noindex">
 <title>Юнит-экономика</title>
-<script src="theme.js?v=9"></script>
-<link rel="stylesheet" href="style.css?v=9">
+<script src="theme.js?v=10"></script>
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 <header><div class="bar">
@@ -51,9 +51,9 @@
 <div id="orders" class="mut"></div>
 </div>
 
-<script src="calc.js?v=9"></script>
-<script src="config.js?v=9"></script>
-<script src="push.js?v=9"></script>
+<script src="calc.js?v=10"></script>
+<script src="config.js?v=10"></script>
+<script src="push.js?v=10"></script>
 <script>
 const API = "https://api-seller.ozon.ru";
 // Статусы Ozon → понятные этапы; неизвестный статус показываем как есть
@@ -105,7 +105,7 @@ function unloadText(prr) {
   return ({lift: "Лифт", stairs: "Лестница"})[prr.code] ? ({lift: "Лифт", stairs: "Лестница"})[prr.code] + floor : prr.code + floor;
 }
 
-async function sendToCourier(number, cbRaw) {
+async function sendToCourier(number, cbRaw, details) {
   const [posting] = await fetchPosting(number);
   const c = posting.customer || {}, a = c.address || {}, prr = posting.prr_option || {};
   const phone = String(c.phone || (posting.addressee || {}).phone || "").replace(/\D/g, "");
@@ -116,7 +116,8 @@ async function sendToCourier(number, cbRaw) {
     phone: phone ? "+" + phone : "", ext: (posting.addressee || {}).pin || "",
     packs: posting.products.map(p => `${p.quantity} уп ${tileFormat(p.offer_id, p.name) || p.offer_id}`).join(", "),
     unload: unloadText(prr), delivery: parseFloat(posting.delivery_price) || 0, lift: parseFloat(prr.price) || 0,
-    comment: a.comment || "",
+    date: details.date,
+    comment: deliveryComment({...details, note: [a.comment, details.note].filter(Boolean).join("\n")}),
   };
   const jwk = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(store.get("dlv_vk").replace(/-/g, "+").replace(/_/g, "/")), ch => ch.charCodeAt(0))));
   const jwts = {};
@@ -236,11 +237,31 @@ function courierBlock(p) {
   if (d) {
     const done = d.status === "Доставлен";
     return `<div class="courier ${done ? "green" : ""}">${done ? "✅ Курьер доставил" : "🚚 У курьера"} · ${e(d.cb)} · ` +
-      `${e(done ? d.delivered_at : d.status + (d.date ? " на " + d.date : ""))}</div>`;
+      `${e(done ? d.delivered_at : d.status + (d.date ? " на " + d.date : ""))}</div>` +
+      (ADMIN() && SCRIPT_URL ? `<details class="delivery-edit"><summary>Пометка, время и прораб</summary>` +
+        `<form data-schedule="${e(p.posting_number)}">${deliveryFields(d)}<button>Сохранить для Рашада</button></form></details>` : "");
   }
   if (!ADMIN() || !SCRIPT_URL || !["ship", "way"].includes(stage(p.status)[0])) return "";
-  return `<form class="send" data-send="${e(p.posting_number)}"><input placeholder="ЦБ" aria-label="Номер ЦБ" ` +
-    `inputmode="numeric" autocomplete="off" required><button>Отправить курьеру</button></form>`;
+  return `<form class="send" data-send="${e(p.posting_number)}"><input name="cb" placeholder="ЦБ" aria-label="Номер ЦБ" ` +
+    `inputmode="numeric" autocomplete="off" required><details class="delivery-edit"><summary>Пометка, время и прораб</summary>` +
+    `${deliveryFields({})}</details><button>Отправить курьеру</button></form>`;
+}
+
+function deliveryFields(d) {
+  const info = deliveryDetails(d.comment);
+  const date = /^(\d\d)\.(\d\d)\.(\d{4})$/.exec(d.date || "");
+  return `<div class="delivery-fields">
+    <label>Дата доставки<input name="date" type="date" value="${date ? `${date[3]}-${date[2]}-${date[1]}` : ""}"></label>
+    <label>Время доставки<input name="time" value="${e(info.time)}" placeholder="Например: с 14:00 до 16:00" maxlength="100"></label>
+    <label>Телефон прораба<input name="foreman" type="tel" value="${e(info.foreman)}" placeholder="+7 900 000-00-00" maxlength="30"></label>
+    <label>Пометка для Рашада<textarea name="note" rows="3" maxlength="2000" placeholder="Например: позвонить прорабу за час">${e(info.note)}</textarea></label>
+    </div>`;
+}
+
+function readDeliveryFields(form) {
+  const f = form.elements;
+  return {date: f.date.value ? f.date.value.split("-").reverse().join(".") : "",
+    time: f.time.value.trim(), foreman: foremanPhone(f.foreman.value), note: f.note.value.trim()};
 }
 
 function render([lines, t], posting) {
@@ -357,17 +378,27 @@ $("orders").onclick = async ev => {
 $("reload").onclick = loadOrders;
 
 $("orders").addEventListener("submit", async ev => {
-  const f = ev.target.closest("form[data-send]");
+  const f = ev.target.closest("form[data-send], form[data-schedule]");
   if (!f) return;
   ev.preventDefault();
-  const btn = f.querySelector("button"), cb = f.querySelector("input").value.trim();
-  btn.disabled = true; btn.textContent = "Отправляю…";
+  const btn = f.querySelector("button"), label = btn.textContent;
+  btn.disabled = true; btn.textContent = "Сохраняю…";
   try {
-    const r = await sendToCourier(f.dataset.send, cb);
+    const details = readDeliveryFields(f);
+    const r = f.dataset.schedule
+      ? await sheetApi({action: "update", key: ADMIN(), posting: f.dataset.schedule,
+          data: {date: details.date, comment: deliveryComment(details)}})
+      : await sendToCourier(f.dataset.send, f.elements.cb.value.trim(), details);
     DELIV[r.posting] = r;
-    f.outerHTML = `<div class="courier">🚚 Отправлено курьеру · ${e(r.cb)}${r.pushed ? "" : " · пуш не дошёл: курьер не включил уведомления"}</div>`;
+    if (f.dataset.schedule) {
+      btn.disabled = false; btn.textContent = "Сохранено ✓";
+      setTimeout(() => { btn.textContent = label; }, 2000);
+    } else {
+      f.outerHTML = courierBlock({posting_number: r.posting}) +
+        (r.pushed ? "" : '<p class="mut">Пуш не дошёл: курьер не включил уведомления. Заказ сохранён.</p>');
+    }
   } catch (err) {
-    btn.disabled = false; btn.textContent = "Отправить курьеру";
+    btn.disabled = false; btn.textContent = label;
     alert(err.message);
   }
 });
