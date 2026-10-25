@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="robots" content="noindex">
+<title>Юнит-экономика</title>
+<style>
+:root{--bg:#f6f6f4;--card:#fff;--fg:#1b1b1b;--mut:#6b6b6b;--line:#e4e4e0;--acc:#1f5fbf;
+--green:#1d7a3e;--yellow:#a36a00;--red:#b3261e}
+@media(prefers-color-scheme:dark){:root{--bg:#141414;--card:#1e1e1e;--fg:#eee;--mut:#9a9a9a;
+--line:#333;--acc:#6ea0ff;--green:#5cc882;--yellow:#e3b341;--red:#ff6b62}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 -apple-system,system-ui,sans-serif}
+main{max-width:560px;margin:0 auto;padding:16px}
+form{display:flex;gap:8px;flex-wrap:wrap}
+input{flex:1 1 100%;min-width:0;font-size:17px;padding:12px;border:1px solid var(--line);border-radius:8px;
+background:var(--card);color:var(--fg)}
+input.ad{flex:1 1 120px}
+button{flex:1 1 120px;font-size:17px;padding:12px 16px;border:0;border-radius:8px;background:var(--acc);color:#fff}
+button.link{background:none;color:var(--mut);font-size:14px;padding:8px;flex:0 0 auto;text-decoration:underline}
+section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:16px}
+h2{font-size:15px;color:var(--mut);margin:0 0 8px;font-weight:600}
+table{width:100%;border-collapse:collapse}td{padding:4px 0;vertical-align:top}
+td:last-child{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.mut{color:var(--mut);font-size:14px}.big{font-size:32px;font-weight:700}
+.green{color:var(--green)}.yellow{color:var(--yellow)}.red{color:var(--red)}.err{color:var(--red)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body><main>
+
+<section id="keys" hidden>
+<h2>Ключи Ozon Seller API (один раз на этом устройстве)</h2>
+<form id="keysForm">
+<input id="cid" placeholder="Client-Id" autocomplete="off" inputmode="numeric" aria-label="Client-Id" required>
+<input id="key" type="password" placeholder="Api-Key" autocomplete="off" aria-label="Api-Key" required>
+<button>Сохранить</button>
+</form>
+<p class="mut">Ключи хранятся только в браузере этого устройства и уходят только на api-seller.ozon.ru.</p>
+</section>
+
+<div id="app" hidden>
+<form id="calcForm">
+<input id="n" placeholder="Номер отправления" autocomplete="off" aria-label="Номер отправления" required>
+<input id="ad" class="ad" placeholder="Реклама, ₽" inputmode="decimal" aria-label="Реклама, рублей">
+<button id="go">Рассчитать</button>
+</form>
+<div id="out"></div>
+<p style="text-align:right"><button class="link" id="forget">Сменить ключи</button></p>
+</div>
+
+<script src="calc.js"></script>
+<script>
+const API = "https://api-seller.ozon.ru";
+const STATUS_RU = {awaiting_packaging: "ожидает сборки", awaiting_deliver: "ожидает отгрузки",
+  delivering: "доставляется", delivered: "доставлено", cancelled: "отменено"};
+const $ = id => document.getElementById(id);
+const e = s => String(s).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
+const rub = x => Math.round(x).toLocaleString("ru-RU").replace(/ /g, " ") + " ₽";
+
+const store = {  // localStorage может быть недоступен (приватный режим) — тогда ключи живут до перезагрузки
+  mem: {},
+  get(k) { try { return localStorage.getItem(k) ?? this.mem[k]; } catch { return this.mem[k]; } },
+  set(k, v) { this.mem[k] = v; try { localStorage.setItem(k, v); } catch {} },
+  del(k) { delete this.mem[k]; try { localStorage.removeItem(k); } catch {} },
+};
+
+function show() {
+  const has = store.get("ozon_cid") && store.get("ozon_key");
+  $("keys").hidden = !!has;
+  $("app").hidden = !has;
+}
+
+async function ozon(path, payload) {
+  const r = await fetch(API + path, {method: "POST", body: JSON.stringify(payload), headers: {
+    "Client-Id": store.get("ozon_cid"), "Api-Key": store.get("ozon_key"), "Content-Type": "application/json"}});
+  const text = await r.text();
+  if (!r.ok) throw new Error(`Ozon ${path}: ${r.status} ${text.slice(0, 200)}`);
+  return JSON.parse(text);
+}
+
+async function fetchPosting(number) {
+  const posting = (await ozon("/v3/posting/fbs/get", {posting_number: number})).result;
+  const offers = posting.products.map(p => p.offer_id);
+  const items = (await ozon("/v5/product/info/prices",
+    {filter: {offer_id: offers, visibility: "ALL"}, limit: 100})).items;
+  return [posting, Object.fromEntries(items.map(i => [i.offer_id, i]))];
+}
+
+function render([lines, t], posting) {
+  const goods = lines.map(l => `<tr><td>${e(l.name)}<div class="mut">${e(l.offer_id)} · ${l.fmt} · ` +
+    `${l.qty} уп. = ${l.m2.toFixed(2)} м²</div></td><td>${rub(l.price)}/уп.<div class="mut">` +
+    `${rub(l.price_m2)}/м²</div></td></tr>`).join("");
+  const pcts = [...new Set(lines.map(l => l.pct + "%"))].sort().join(", ");
+  const boost = lines.some(l => l.boost) ? "бустинг включён" : "без бустинга";
+  const [cls, label] = t.status;
+  const city = ((posting.customer || {}).address || {}).city;
+  return `
+<section><h2>Главный итог</h2>
+<div class="big ${cls}">${rub(t.payout_m2)}/м²</div>
+<div class="${cls}">${label}: порог ${t.floor} ₽/м² (${t.opt ? "опт от 20 уп." : "розница"})</div>
+<table style="margin-top:12px">
+<tr><td>Чистая прибыль на 1 м²</td><td><b>${rub(t.profit_m2)}</b></td></tr>
+<tr><td>Чистая прибыль по заказу</td><td><b>${rub(t.profit)}</b></td></tr>
+</table></section>
+<section><h2>Заказ ${e(posting.posting_number)} · ${e(STATUS_RU[posting.status] || posting.status)}${city ? " · " + e(city) : ""}</h2>
+<table>${goods}<tr><td>Итого</td><td>${t.packs} уп. · ${t.m2.toFixed(2)} м²</td></tr></table></section>
+<section><h2>Расклад</h2><table>
+<tr><td>Продажи (цена после всех акций)</td><td>${rub(t.sales)}</td></tr>
+<tr><td>Комиссия Ozon ${pcts} <span class="mut">(${boost})</span></td><td>−${rub(t.commission)}</td></tr>
+<tr><td>Эквайринг 1%</td><td>−${rub(t.acquiring)}</td></tr>
+<tr><td>Сбор за отправление</td><td>−${rub(t.fee)}</td></tr>
+<tr><td><b>На баланс Ozon</b></td><td><b>${rub(t.balance)}</b></td></tr>
+<tr><td>НДС к уплате<div class="mut">${rub(t.vat_out)} с продажи − ${rub(t.vat_in_commission)} с комиссии − ${rub(t.vat_in_cost)} с закупки</div></td><td>−${rub(t.vat)}</td></tr>
+<tr><td><b>На руки</b> <span class="mut">(${rub(t.vat / t.m2)}/м² НДС)</span></td><td><b>${rub(t.payout)}</b></td></tr>
+<tr><td>Себестоимость закупки</td><td>−${rub(t.cost)}</td></tr>
+${t.ad ? `<tr><td>Реклама</td><td>−${rub(t.ad)}</td></tr>` : ""}
+<tr><td><b>Чистая прибыль</b></td><td><b>${rub(t.profit)}</b></td></tr>
+</table></section>
+<section><h2>Логистика от клиента (в ₽/м² не входит)</h2><table>
+<tr><td>Доставка</td><td>${rub(t.delivery)}</td></tr>
+<tr><td>Подъём ${e(t.lift_note)}</td><td>${rub(t.lift)}</td></tr>
+<tr><td>Итого от клиента на свою доставку</td><td>${rub(t.delivery + t.lift)}</td></tr>
+</table><p class="mut">Логистика Ozon 0 ₽ (RealFBS). Комиссия — прогноз по ставке карточки;
+точное удержание Ozon покажет после доставки.</p></section>`;
+}
+
+$("keysForm").onsubmit = ev => {
+  ev.preventDefault();
+  store.set("ozon_cid", $("cid").value.trim());
+  store.set("ozon_key", $("key").value.trim());
+  $("key").value = "";
+  show();
+};
+
+$("forget").onclick = () => { store.del("ozon_cid"); store.del("ozon_key"); $("out").innerHTML = ""; show(); };
+
+$("calcForm").onsubmit = async ev => {
+  ev.preventDefault();
+  const number = $("n").value.trim();
+  const ad = parseFloat($("ad").value.replace(",", ".")) || 0;
+  $("go").disabled = true;
+  $("out").innerHTML = '<section class="mut">Считаю…</section>';
+  try {
+    const [posting, prices] = await fetchPosting(number);
+    $("out").innerHTML = render(calc(posting, prices, ad), posting);
+    history.replaceState(null, "", "#" + encodeURIComponent(number));
+  } catch (err) {
+    $("out").innerHTML = `<section class="err">${e(err.message)}</section>`;
+  } finally {
+    $("go").disabled = false;
+  }
+};
+
+show();
+if (location.hash.length > 1) $("n").value = decodeURIComponent(location.hash.slice(1));
+</script>
+</main></body>
+</html>
