@@ -94,3 +94,7 @@ a.btn.ghost{background:var(--soft);color:var(--fg)}
 .report .v{font-size:28px;font-weight:800;letter-spacing:-.02em;margin:4px 0}
 .report .more{margin-top:8px;font-size:14px;font-weight:600;color:var(--acc)}
 .report[open] .more{display:none}.report table{margin-top:12px}
+.report h3{margin:16px 0 8px}
+.payform{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.payform input[name=comment],.payform button{grid-column:1/-1}
+.payform input{padding:10px 12px;font-size:16px}

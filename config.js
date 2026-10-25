@@ -16,7 +16,7 @@ async function sheetApi(payload) {
 const num = x => Number(String(x ?? "").replace(/[^\d.-]/g, "")) || 0;
 const MONTHS = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
 
-function deliveryReport(rows) {
+function deliveryReport(rows, payments) {
   const sum = list => ({n: list.length, delivery: list.reduce((a, r) => a + num(r.delivery), 0),
     lift: list.reduce((a, r) => a + num(r.lift), 0), pay: list.reduce((a, r) => a + num(r.pay), 0)});
   const done = rows.filter(r => r.status === "Доставлен");
@@ -26,7 +26,9 @@ function deliveryReport(rows) {
     const key = m ? `${m[2]}-${m[1]}` : "—";
     (byMonth[key] = byMonth[key] || []).push(r);
   }
+  const paid = (payments || []).reduce((acc, p) => acc + num(p.amount), 0);
   return {
+    paid, left: sum(done).pay - paid, payments: payments || [], hasPayments: Array.isArray(payments),
     done: sum(done),
     active: sum(rows.filter(r => r.status === "Новый" || r.status === "Согласован")),
     months: Object.keys(byMonth).sort().reverse().map(k => ({
@@ -37,12 +39,27 @@ function deliveryReport(rows) {
 const plural = (n, one, few, many) =>
   `${n} ${n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? few : many}`;
 
-function reportHtml(rep, title) {
-  const rub = x => Math.round(x).toLocaleString("ru-RU").replace(/ /g, " ") + " ₽";
+// opts: {title, leftLabel, admin} — admin показывает форму записи выплаты и кнопки удаления
+function reportHtml(rep, opts) {
+  const rub = x => Math.round(x).toLocaleString("ru-RU").replace(/\u00a0/g, " ") + " ₽";
+  const esc = x => String(x ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
   const months = rep.months.map(m => `<tr><td>${m.label}<div class="mut">${plural(m.n, "доставка", "доставки", "доставок")} · доставка ${rub(m.delivery)} · разгрузка ${rub(m.lift)}</div></td><td>${rub(m.pay)}</td></tr>`).join("");
-  return `<details class="card report"><summary><span class="mut">${title}</span>
-<div class="v num">${rub(rep.done.pay)}</div>
+  const pays = [...rep.payments].reverse().map(p => `<tr><td>${esc(p.date)}${p.comment ? `<div class="mut">${esc(p.comment)}</div>` : ""}</td>` +
+    `<td>${rub(num(p.amount))}${opts.admin && p.id ? ` <button class="text" data-unpay="${esc(p.id)}" aria-label="Удалить выплату">✕</button>` : ""}</td></tr>`).join("");
+  const today = new Date().toISOString().slice(0, 10);
+  const form = opts.admin && rep.hasPayments ? `<form class="payform" data-pay>
+<input name="amount" inputmode="numeric" placeholder="Сумма, ₽" aria-label="Сумма выплаты" required>
+<input name="date" type="date" value="${today}" aria-label="Дата выплаты">
+<input name="comment" placeholder="Комментарий (необязательно)" aria-label="Комментарий">
+<button>Записать выплату</button></form>` : "";
+  const big = rep.hasPayments ? rep.left : rep.done.pay;
+  return `<details class="card report"><summary><span class="mut">${opts.title}</span>
+<div class="v num ${rep.hasPayments && big <= 0 ? "green" : ""}">${rub(big)}</div>
+<div class="mut">${rep.hasPayments ? `${opts.leftLabel} · начислено ${rub(rep.done.pay)} · выплачено ${rub(rep.paid)}` : "начислено за всё время"}</div>
 <div class="mut">${plural(rep.done.n, "доставка", "доставки", "доставок")} · доставка ${rub(rep.done.delivery)} · разгрузка ${rub(rep.done.lift)}</div>
 ${rep.active.n ? `<div class="mut">В работе: ${plural(rep.active.n, "заказ", "заказа", "заказов")} на ${rub(rep.active.pay)}</div>` : ""}
-<div class="more">По месяцам ▾</div></summary><table>${months}</table></details>`;
+<div class="more">Подробнее ▾</div></summary>
+${rep.hasPayments ? `<h3>Выплаты</h3>${form}${pays ? `<table>${pays}</table>` : '<p class="mut">Выплат пока не записано</p>'}`
+    : opts.admin ? '<p class="mut">Чтобы учитывать выплаты, обновите скрипт таблицы.</p>' : ""}
+<h3>По месяцам</h3><table>${months}</table></details>`;
 }

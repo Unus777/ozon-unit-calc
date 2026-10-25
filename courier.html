@@ -9,8 +9,8 @@
 <meta name="referrer" content="no-referrer">
 <title>Доставки</title>
 <link rel="manifest" href="manifest.webmanifest">
-<script src="theme.js?v=8"></script>
-<link rel="stylesheet" href="style.css?v=8">
+<script src="theme.js?v=9"></script>
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 <header><div class="bar">
@@ -29,14 +29,14 @@
 <div id="list" class="mut">Загружаю…</div>
 </div>
 
-<script src="config.js?v=8"></script>
+<script src="config.js?v=9"></script>
 <script>
 const $ = id => document.getElementById(id);
 const e = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
 const KEY = new URLSearchParams(location.search).get("k");
 const FOCUS = new URLSearchParams(location.search).get("o");
 const BADGE = {"Новый": "ship", "Согласован": "way", "Доставлен": "done"};
-let ROWS = [], TAB = "active";
+let ROWS = [], PAYS = null, TAB = "active";
 
 const toIso = d => { const m = /^(\d\d)\.(\d\d)\.(\d{4})$/.exec(d || ""); return m ? `${m[3]}-${m[2]}-${m[1]}` : ""; };
 const fromIso = d => d ? d.split("-").reverse().join(".") : "";
@@ -84,7 +84,7 @@ function draw() {
   const rows = ROWS.filter(r => (r.status === "Доставлен" || r.status === "Отменён") === (TAB === "done"));
   if (TAB === "done") rows.reverse();
   else rows.sort((a, b) => (toIso(a.date) || "9999").localeCompare(toIso(b.date) || "9999"));
-  const head = TAB === "done" ? reportHtml(deliveryReport(ROWS), "Заработано за всё время") : "";
+  const head = TAB === "done" ? reportHtml(deliveryReport(ROWS, PAYS), {title: "Мои выплаты", leftLabel: "вам должны"}) : "";
   $("list").innerHTML = head + (rows.length ? rows.map(card).join("")
     : `<div class="card mut">${TAB === "done" ? "Пока нет доставленных" : "Новых заказов нет"}</div>`);
   if (FOCUS) document.querySelector(".order.hl")?.scrollIntoView({block: "center"});
@@ -93,6 +93,7 @@ function draw() {
 async function load() {
   try {
     ROWS = await api({action: "list"});
+    PAYS = await api({action: "payments"}).catch(() => null);
     draw();
   } catch (err) {
     $("list").innerHTML = `<div class="card err">${e(err.message)}</div>`;

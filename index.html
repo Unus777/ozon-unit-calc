@@ -7,8 +7,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="robots" content="noindex">
 <title>Юнит-экономика</title>
-<script src="theme.js?v=8"></script>
-<link rel="stylesheet" href="style.css?v=8">
+<script src="theme.js?v=9"></script>
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 <header><div class="bar">
@@ -51,9 +51,9 @@
 <div id="orders" class="mut"></div>
 </div>
 
-<script src="calc.js?v=8"></script>
-<script src="config.js?v=8"></script>
-<script src="push.js?v=8"></script>
+<script src="calc.js?v=9"></script>
+<script src="config.js?v=9"></script>
+<script src="push.js?v=9"></script>
 <script>
 const API = "https://api-seller.ozon.ru";
 // Статусы Ozon → понятные этапы; неизвестный статус показываем как есть
@@ -169,7 +169,8 @@ async function loadOrders() {
       for (const it of r.items) prices[it.offer_id] = it;
     }
     await loadDeliveries();
-    $("report").innerHTML = ADMIN() && SCRIPT_URL ? reportHtml(deliveryReport(Object.values(DELIV)), "Курьеру к выплате за всё время") : "";
+    PAYS = ADMIN() && SCRIPT_URL ? await sheetApi({action: "payments", key: ADMIN()}).catch(() => null) : null;  // null — скрипт ещё без выплат
+    drawReport();
     ORDERS = postings; PRICES = prices;
     $("orders").innerHTML = postings.length ? postings.map(orderCard).join("") : '<div class="card mut">Заказов нет</div>';
   } catch (err) {
@@ -194,6 +195,41 @@ function orderCard(p, i) {
   return `<div class="card order${p.status === "cancelled" ? " cancelled" : ""}"><div class="top">${badge(p.status)}` +
     `<span class="mut num">${date} · ${e(p.posting_number)}</span></div>${body}</div>`;
 }
+
+let PAYS = null;
+function drawReport() {
+  const open = !!document.querySelector("#report details[open]");
+  $("report").innerHTML = ADMIN() && SCRIPT_URL ? reportHtml(deliveryReport(Object.values(DELIV), PAYS),
+    {title: "Расчёт с курьером", leftLabel: "осталось выплатить", admin: true}) : "";
+  if (open) document.querySelector("#report details")?.setAttribute("open", "");
+}
+
+$("report").addEventListener("submit", async ev => {
+  const f = ev.target.closest("form[data-pay]");
+  if (!f) return;
+  ev.preventDefault();
+  const btn = f.querySelector("button");
+  btn.disabled = true;
+  try {
+    const d = f.elements;
+    const p = await sheetApi({action: "pay", key: ADMIN(), data: {amount: d.amount.value,
+      date: d.date.value ? d.date.value.split("-").reverse().join(".") : "", comment: d.comment.value.trim()}});
+    PAYS.push(p);
+    drawReport();
+  } catch (err) {
+    alert(err.message);
+    btn.disabled = false;
+  }
+});
+$("report").addEventListener("click", async ev => {
+  const b = ev.target.closest("[data-unpay]");
+  if (!b || !confirm("Удалить эту выплату?")) return;
+  try {
+    await sheetApi({action: "unpay", key: ADMIN(), id: b.dataset.unpay});
+    PAYS = PAYS.filter(p => p.id !== b.dataset.unpay);
+    drawReport();
+  } catch (err) { alert(err.message); }
+});
 
 function courierBlock(p) {
   const d = DELIV[p.posting_number];
