@@ -2,68 +2,108 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="robots" content="noindex">
 <title>Юнит-экономика</title>
 <style>
-:root{--bg:#f6f6f4;--card:#fff;--fg:#1b1b1b;--mut:#6b6b6b;--line:#e4e4e0;--acc:#1f5fbf;
---green:#1d7a3e;--yellow:#a36a00;--red:#b3261e}
-@media(prefers-color-scheme:dark){:root{--bg:#141414;--card:#1e1e1e;--fg:#eee;--mut:#9a9a9a;
---line:#333;--acc:#6ea0ff;--green:#5cc882;--yellow:#e3b341;--red:#ff6b62}}
-body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 -apple-system,system-ui,sans-serif}
-main{max-width:560px;margin:0 auto;padding:16px}
-form{display:flex;gap:8px;flex-wrap:wrap}
-input{flex:1 1 100%;min-width:0;font-size:17px;padding:12px;border:1px solid var(--line);border-radius:8px;
-background:var(--card);color:var(--fg)}
-input.ad{flex:1 1 120px}
-button{flex:1 1 120px;font-size:17px;padding:12px 16px;border:0;border-radius:8px;background:var(--acc);color:#fff}
-button.link{background:none;color:var(--mut);font-size:14px;padding:8px;flex:0 0 auto;text-decoration:underline}
-section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:16px}
-h2{font-size:15px;color:var(--mut);margin:0 0 8px;font-weight:600}
-table{width:100%;border-collapse:collapse}td{padding:4px 0;vertical-align:top}
-td:last-child{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
-.mut{color:var(--mut);font-size:14px}.big{font-size:32px;font-weight:700}
-.green{color:var(--green)}.yellow{color:var(--yellow)}.red{color:var(--red)}.err{color:var(--red)}
+:root{--bg:#f2f3f5;--card:#fff;--fg:#14161a;--mut:#6b7079;--line:#e3e5e9;--soft:#f6f7f9;
+--acc:#3b5bdb;--acc-fg:#fff;--green:#2b8a3e;--yellow:#b06f00;--red:#c92a2a;
+--green-bg:#ebfbee;--yellow-bg:#fff8e6;--red-bg:#fff0f0;--acc-bg:#edf2ff;--shadow:0 1px 2px rgba(20,22,26,.06)}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1012;--card:#1a1c20;--fg:#eceef2;--mut:#9097a3;--line:#2a2d33;
+--soft:#212429;--acc:#748ffc;--acc-fg:#0f1012;--green:#69db7c;--yellow:#ffc94d;--red:#ff8787;
+--green-bg:#1b2b1f;--yellow-bg:#2e2716;--red-bg:#2f1c1c;--acc-bg:#1e2440;--shadow:none}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+-webkit-font-smoothing:antialiased}
+header{position:sticky;top:0;z-index:2;background:var(--bg);padding:calc(12px + env(safe-area-inset-top)) 16px 12px}
+.bar{max-width:600px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{font-weight:700;font-size:20px;letter-spacing:-.01em;line-height:1.2}
+.brand span{display:block;color:var(--mut);font-weight:500;font-size:13px;letter-spacing:0}
+header button.text{white-space:nowrap}
+main{max-width:600px;margin:0 auto;padding:0 16px calc(32px + env(safe-area-inset-bottom))}
+.search{display:flex;gap:8px;margin-bottom:16px}
+input{flex:1;min-width:0;font:inherit;font-size:17px;padding:12px 16px;border:1px solid var(--line);border-radius:12px;
+background:var(--card);color:var(--fg);outline:none}
+input:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-bg)}
+button{font:inherit;font-size:16px;font-weight:600;padding:12px 16px;border:0;border-radius:12px;background:var(--acc);
+color:var(--acc-fg);cursor:pointer}
+button:disabled{opacity:.5}
+button.ghost{background:var(--soft);color:var(--fg)}
+button.text{background:none;color:var(--mut);font-weight:500;font-size:14px;padding:8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:var(--shadow)}
+.label{font-size:13px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;margin:24px 4px 8px;
+display:flex;justify-content:space-between;align-items:center}
+.label button{text-transform:none;letter-spacing:0}
+.mut{color:var(--mut);font-size:14px}
+.num{font-variant-numeric:tabular-nums}
+.green{color:var(--green)}.yellow{color:var(--yellow)}.red{color:var(--red)}
+.err{color:var(--red)}
 [hidden]{display:none!important}
-.order{border-top:1px solid var(--line);padding:12px 0}.order:first-child{border-top:0;padding-top:0}
-.order.cancelled{opacity:.5}.order .row{display:flex;gap:8px;margin-top:8px}
-button.sm{flex:0 0 auto;font-size:15px;padding:8px 12px}
-button.sec{background:none;color:var(--acc);border:1px solid var(--line)}
-h2 button.link{float:right;padding:0;font-size:14px}
-.badge{display:inline-block;font-size:13px;font-weight:600;padding:2px 8px;border-radius:999px;
-border:1px solid currentColor;color:var(--mut);margin-right:4px}
-.badge.ship{color:var(--yellow)}.badge.way{color:var(--acc)}.badge.done{color:var(--green)}
+
+.badge{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--soft);color:var(--mut)}
+.badge.ship{background:var(--yellow-bg);color:var(--yellow)}.badge.way{background:var(--acc-bg);color:var(--acc)}
+.badge.done{background:var(--green-bg);color:var(--green)}
+
+.order.cancelled{opacity:.55}
+.order .top{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.order .top .mut{margin-left:auto;font-size:13px}
+.item{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.item+.item{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.item b{display:block;font-size:16px}
+.price{text-align:right;white-space:nowrap}
+.price .v{font-size:22px;font-weight:700;letter-spacing:-.01em}
+.actions{display:flex;gap:8px;margin-top:16px}
+.actions button{flex:1;font-size:15px;padding:10px 12px}
+
+.hero{text-align:center;padding:24px 16px}
+.hero .v{font-size:44px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.pill{display:inline-block;margin-top:8px;padding:4px 12px;border-radius:999px;font-size:14px;font-weight:600}
+.pill.green{background:var(--green-bg)}.pill.yellow{background:var(--yellow-bg)}.pill.red{background:var(--red-bg)}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}
+.kpi{background:var(--soft);border-radius:12px;padding:12px;text-align:left}
+.kpi .v{font-size:18px;font-weight:700}
+table{width:100%;border-collapse:collapse}
+td{padding:8px 0;vertical-align:top;border-top:1px solid var(--line)}
+tr:first-child td{border-top:0}
+td:last-child{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;padding-left:12px}
+tr.total td{font-weight:700}
+.dhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+h3{margin:0;font-size:15px}
 </style>
 </head>
-<body><main>
+<body>
+<header><div class="bar">
+<div class="brand">Алмалы <span>юнит-экономика заказов Ozon</span></div>
+<button class="text" id="forget" hidden>Сменить ключи</button>
+</div></header>
+<main>
 
-<section id="keys" hidden>
-<h2>Ключи Ozon Seller API (один раз на этом устройстве)</h2>
-<form id="keysForm">
+<div class="card" id="keys" hidden>
+<h3>Ключи Ozon Seller API</h3>
+<p class="mut">Вводятся один раз на этом устройстве, хранятся только в его браузере и уходят только на api-seller.ozon.ru.</p>
+<form id="keysForm" style="display:grid;gap:8px">
 <input id="cid" placeholder="Client-Id" autocomplete="off" inputmode="numeric" aria-label="Client-Id" required>
 <input id="key" type="password" placeholder="Api-Key" autocomplete="off" aria-label="Api-Key" required>
 <button>Сохранить</button>
 </form>
-<p class="mut">Ключи хранятся только в браузере этого устройства и уходят только на api-seller.ozon.ru.</p>
-</section>
+</div>
 
 <div id="app" hidden>
-<form id="calcForm">
+<form class="search" id="calcForm">
 <input id="n" placeholder="Номер отправления" autocomplete="off" aria-label="Номер отправления" required>
-<input id="ad" class="ad" placeholder="Реклама, ₽" inputmode="decimal" aria-label="Реклама, рублей">
 <button id="go">Рассчитать</button>
 </form>
 <div id="out"></div>
-<section><h2>Заказы <button class="link" id="reload">Обновить</button></h2>
-<div id="orders" class="mut"></div></section>
-<p style="text-align:right"><button class="link" id="forget">Сменить ключи</button></p>
+<div class="label">Заказы <button class="text" id="reload">Обновить</button></div>
+<div id="orders" class="mut"></div>
 </div>
 
 <script src="calc.js"></script>
 <script>
 const API = "https://api-seller.ozon.ru";
-// Статусы Ozon → 4 понятных этапа; неизвестный статус показываем как есть
+// Статусы Ozon → понятные этапы; неизвестный статус показываем как есть
 const STAGES = {
   ship: ["В отгрузке", ["awaiting_registration", "acceptance_in_progress", "awaiting_approve",
     "awaiting_packaging", "awaiting_deliver", "not_accepted"]],
@@ -72,11 +112,11 @@ const STAGES = {
   cancel: ["Отменён", ["cancelled"]],
   arb: ["Спор", ["arbitration", "client_arbitration"]],
 };
-const stage = s => Object.entries(STAGES).find(([, [, list]]) => list.includes(s)) || ["", [s]];
-const badge = s => { const [cls, [label]] = stage(s); return `<span class="badge ${cls}">${e(label)}</span>`; };
 const $ = id => document.getElementById(id);
 const e = s => String(s).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
 const rub = x => Math.round(x).toLocaleString("ru-RU").replace(/ /g, " ") + " ₽";
+const stage = s => Object.entries(STAGES).find(([, [, list]]) => list.includes(s)) || ["", [s]];
+const badge = s => { const [cls, [label]] = stage(s); return `<span class="badge ${cls}">${e(label)}</span>`; };
 
 const store = {  // localStorage может быть недоступен (приватный режим) — тогда ключи живут до перезагрузки
   mem: {},
@@ -89,7 +129,24 @@ function show() {
   const has = store.get("ozon_cid") && store.get("ozon_key");
   $("keys").hidden = !!has;
   $("app").hidden = !has;
+  $("forget").hidden = !has;
   if (has) loadOrders();
+}
+
+async function ozon(path, payload) {
+  const r = await fetch(API + path, {method: "POST", body: JSON.stringify(payload), headers: {
+    "Client-Id": store.get("ozon_cid"), "Api-Key": store.get("ozon_key"), "Content-Type": "application/json"}});
+  const text = await r.text();
+  if (!r.ok) throw new Error(`Ozon ${path}: ${r.status} ${text.slice(0, 200)}`);
+  return JSON.parse(text);
+}
+
+async function fetchPosting(number) {
+  const posting = (await ozon("/v3/posting/fbs/get", {posting_number: number})).result;
+  const offers = posting.products.map(p => p.offer_id);
+  const items = (await ozon("/v5/product/info/prices",
+    {filter: {offer_id: offers, visibility: "ALL"}, limit: 100})).items;
+  return [posting, Object.fromEntries(items.map(i => [i.offer_id, i]))];
 }
 
 let ORDERS = [], PRICES = {};
@@ -113,9 +170,9 @@ async function loadOrders() {
       for (const it of r.items) prices[it.offer_id] = it;
     }
     ORDERS = postings; PRICES = prices;
-    $("orders").innerHTML = postings.length ? postings.map(orderCard).join("") : "Заказов нет";
+    $("orders").innerHTML = postings.length ? postings.map(orderCard).join("") : '<div class="card mut">Заказов нет</div>';
   } catch (err) {
-    $("orders").innerHTML = `<span class="err">${e(err.message)}</span>`;
+    $("orders").innerHTML = `<div class="card err">${e(err.message)}</div>`;
   }
 }
 
@@ -125,15 +182,53 @@ function orderCard(p, i) {
   try {
     body = p.products.map(x => {
       const [, t] = calc({...p, products: [x]}, PRICES);
-      return `<div>${x.quantity} уп, ${e(x.offer_id)} · <b class="${t.status[0]}">${Math.round(t.payout_m2)} ₽/м²</b>` +
-        `<div class="mut">${e(shortName(x.name))}</div></div>`;
-    }).join("") + `<div class="row"><button class="sm" data-copy="${i}">Скопировать</button>` +
-      `<button class="sm sec" data-open="${e(p.posting_number)}">Подробно</button></div>`;
+      return `<div class="item"><div><b>${x.quantity} уп · ${e(x.offer_id)}</b><span class="mut">${e(shortName(x.name))}</span></div>` +
+        `<div class="price"><div class="v num ${t.status[0]}">${Math.round(t.payout_m2)}</div><div class="mut">₽/м² на руки</div></div></div>`;
+    }).join("") + `<div class="actions"><button data-copy="${i}">Скопировать</button>` +
+      `<button class="ghost" data-open="${e(p.posting_number)}">Подробно</button></div>`;
   } catch (err) {
     body = `<div class="err">${e(err.message)}</div>`;
   }
-  return `<div class="order${p.status === "cancelled" ? " cancelled" : ""}"><div class="mut">${badge(p.status)} ` +
-    `${date} · ${e(p.posting_number)}</div>${body}</div>`;
+  return `<div class="card order${p.status === "cancelled" ? " cancelled" : ""}"><div class="top">${badge(p.status)}` +
+    `<span class="mut num">${date} · ${e(p.posting_number)}</span></div>${body}</div>`;
+}
+
+function render([lines, t], posting) {
+  const goods = lines.map(l => `<tr><td>${e(shortName(l.name))}<div class="mut">${e(l.offer_id)} · ${l.qty} уп · ` +
+    `${l.m2.toFixed(2)} м²</div></td><td>${rub(l.price)}<div class="mut">${rub(l.price_m2)}/м²</div></td></tr>`).join("");
+  const pcts = [...new Set(lines.map(l => l.pct + "%"))].sort().join(", ");
+  const boost = lines.some(l => l.boost) ? "с бустингом" : "без бустинга";
+  const [cls, label] = t.status;
+  const city = ((posting.customer || {}).address || {}).city;
+  return `
+<div class="card hero">
+<div class="dhead"><span>${badge(posting.status)} <span class="mut num">${e(posting.posting_number)}${city ? " · " + e(city) : ""}</span></span>
+<button class="text" id="close" aria-label="Закрыть расчёт">Закрыть</button></div>
+<div class="v num ${cls}">${rub(t.payout_m2)}</div>
+<div class="mut">на руки за 1 м²</div>
+<div class="pill ${cls}">${label} · порог ${t.floor} ₽${t.opt ? " (опт)" : ""}</div>
+<div class="kpis">
+<div class="kpi"><div class="mut">Прибыль на 1 м²</div><div class="v num">${rub(t.profit_m2)}</div></div>
+<div class="kpi"><div class="mut">Прибыль по заказу</div><div class="v num">${rub(t.profit)}</div></div>
+</div></div>
+<div class="card"><h3>Товар</h3><table>${goods}
+<tr class="total"><td>Итого</td><td>${t.packs} уп · ${t.m2.toFixed(2)} м²</td></tr></table></div>
+<div class="card"><h3>Расклад</h3><table>
+<tr><td>Продажи</td><td>${rub(t.sales)}</td></tr>
+<tr><td>Комиссия Ozon ${pcts} <span class="mut">${boost}</span></td><td>−${rub(t.commission)}</td></tr>
+<tr><td>Эквайринг 1%</td><td>−${rub(t.acquiring)}</td></tr>
+<tr><td>Сбор за отправление</td><td>−${rub(t.fee)}</td></tr>
+<tr class="total"><td>На баланс Ozon</td><td>${rub(t.balance)}</td></tr>
+<tr><td>НДС к уплате<div class="mut">${rub(t.vat_out)} с продажи − ${rub(t.vat_in_commission)} с комиссии − ${rub(t.vat_in_cost)} с закупки</div></td><td>−${rub(t.vat)}</td></tr>
+<tr class="total"><td>На руки</td><td>${rub(t.payout)}</td></tr>
+<tr><td>Себестоимость закупки</td><td>−${rub(t.cost)}</td></tr>
+<tr class="total"><td>Чистая прибыль</td><td>${rub(t.profit)}</td></tr>
+</table></div>
+<div class="card"><h3>Логистика от клиента</h3><table>
+<tr><td>Доставка</td><td>${rub(t.delivery)}</td></tr>
+<tr><td>Подъём <span class="mut">${e(t.lift_note)}</span></td><td>${rub(t.lift)}</td></tr>
+<tr class="total"><td>Итого на свою доставку</td><td>${rub(t.delivery + t.lift)}</td></tr>
+</table><p class="mut">В ₽/м² не входит. Логистика Ozon 0 ₽ (RealFBS). Комиссия — прогноз по ставке карточки.</p></div>`;
 }
 
 async function copy(text) {
@@ -142,75 +237,6 @@ async function copy(text) {
     const ta = document.createElement("textarea");
     ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
   }
-}
-
-$("orders").onclick = async ev => {
-  const b = ev.target.closest("button");
-  if (!b) return;
-  if (b.dataset.copy) {
-    await copy(copyText(ORDERS[b.dataset.copy], PRICES));
-    b.textContent = "Скопировано ✓";
-    setTimeout(() => { b.textContent = "Скопировать"; }, 1500);
-  } else if (b.dataset.open) {
-    $("n").value = b.dataset.open;
-    $("calcForm").requestSubmit();
-    scrollTo({top: 0, behavior: "smooth"});
-  }
-};
-$("reload").onclick = loadOrders;
-
-async function ozon(path, payload) {
-  const r = await fetch(API + path, {method: "POST", body: JSON.stringify(payload), headers: {
-    "Client-Id": store.get("ozon_cid"), "Api-Key": store.get("ozon_key"), "Content-Type": "application/json"}});
-  const text = await r.text();
-  if (!r.ok) throw new Error(`Ozon ${path}: ${r.status} ${text.slice(0, 200)}`);
-  return JSON.parse(text);
-}
-
-async function fetchPosting(number) {
-  const posting = (await ozon("/v3/posting/fbs/get", {posting_number: number})).result;
-  const offers = posting.products.map(p => p.offer_id);
-  const items = (await ozon("/v5/product/info/prices",
-    {filter: {offer_id: offers, visibility: "ALL"}, limit: 100})).items;
-  return [posting, Object.fromEntries(items.map(i => [i.offer_id, i]))];
-}
-
-function render([lines, t], posting) {
-  const goods = lines.map(l => `<tr><td>${e(l.name)}<div class="mut">${e(l.offer_id)} · ${l.fmt} · ` +
-    `${l.qty} уп. = ${l.m2.toFixed(2)} м²</div></td><td>${rub(l.price)}/уп.<div class="mut">` +
-    `${rub(l.price_m2)}/м²</div></td></tr>`).join("");
-  const pcts = [...new Set(lines.map(l => l.pct + "%"))].sort().join(", ");
-  const boost = lines.some(l => l.boost) ? "бустинг включён" : "без бустинга";
-  const [cls, label] = t.status;
-  const city = ((posting.customer || {}).address || {}).city;
-  return `
-<section><h2>Главный итог</h2>
-<div class="big ${cls}">${rub(t.payout_m2)}/м²</div>
-<div class="${cls}">${label}: порог ${t.floor} ₽/м² (${t.opt ? "опт от 20 уп." : "розница"})</div>
-<table style="margin-top:12px">
-<tr><td>Чистая прибыль на 1 м²</td><td><b>${rub(t.profit_m2)}</b></td></tr>
-<tr><td>Чистая прибыль по заказу</td><td><b>${rub(t.profit)}</b></td></tr>
-</table></section>
-<section><h2>Заказ ${e(posting.posting_number)} ${badge(posting.status)}${city ? " · " + e(city) : ""}</h2>
-<table>${goods}<tr><td>Итого</td><td>${t.packs} уп. · ${t.m2.toFixed(2)} м²</td></tr></table></section>
-<section><h2>Расклад</h2><table>
-<tr><td>Продажи (цена после всех акций)</td><td>${rub(t.sales)}</td></tr>
-<tr><td>Комиссия Ozon ${pcts} <span class="mut">(${boost})</span></td><td>−${rub(t.commission)}</td></tr>
-<tr><td>Эквайринг 1%</td><td>−${rub(t.acquiring)}</td></tr>
-<tr><td>Сбор за отправление</td><td>−${rub(t.fee)}</td></tr>
-<tr><td><b>На баланс Ozon</b></td><td><b>${rub(t.balance)}</b></td></tr>
-<tr><td>НДС к уплате<div class="mut">${rub(t.vat_out)} с продажи − ${rub(t.vat_in_commission)} с комиссии − ${rub(t.vat_in_cost)} с закупки</div></td><td>−${rub(t.vat)}</td></tr>
-<tr><td><b>На руки</b> <span class="mut">(${rub(t.vat / t.m2)}/м² НДС)</span></td><td><b>${rub(t.payout)}</b></td></tr>
-<tr><td>Себестоимость закупки</td><td>−${rub(t.cost)}</td></tr>
-${t.ad ? `<tr><td>Реклама</td><td>−${rub(t.ad)}</td></tr>` : ""}
-<tr><td><b>Чистая прибыль</b></td><td><b>${rub(t.profit)}</b></td></tr>
-</table></section>
-<section><h2>Логистика от клиента (в ₽/м² не входит)</h2><table>
-<tr><td>Доставка</td><td>${rub(t.delivery)}</td></tr>
-<tr><td>Подъём ${e(t.lift_note)}</td><td>${rub(t.lift)}</td></tr>
-<tr><td>Итого от клиента на свою доставку</td><td>${rub(t.delivery + t.lift)}</td></tr>
-</table><p class="mut">Логистика Ozon 0 ₽ (RealFBS). Комиссия — прогноз по ставке карточки;
-точное удержание Ozon покажет после доставки.</p></section>`;
 }
 
 $("keysForm").onsubmit = ev => {
@@ -226,19 +252,39 @@ $("forget").onclick = () => { store.del("ozon_cid"); store.del("ozon_key"); $("o
 $("calcForm").onsubmit = async ev => {
   ev.preventDefault();
   const number = $("n").value.trim();
-  const ad = parseFloat($("ad").value.replace(",", ".")) || 0;
   $("go").disabled = true;
-  $("out").innerHTML = '<section class="mut">Считаю…</section>';
+  $("out").innerHTML = '<div class="card mut">Считаю…</div>';
   try {
     const [posting, prices] = await fetchPosting(number);
-    $("out").innerHTML = render(calc(posting, prices, ad), posting);
+    $("out").innerHTML = render(calc(posting, prices), posting);
     history.replaceState(null, "", "#" + encodeURIComponent(number));
   } catch (err) {
-    $("out").innerHTML = `<section class="err">${e(err.message)}</section>`;
+    $("out").innerHTML = `<div class="card err">${e(err.message)}</div>`;
   } finally {
     $("go").disabled = false;
   }
 };
+
+$("out").onclick = ev => {
+  if (ev.target.id !== "close") return;
+  $("out").innerHTML = "";
+  history.replaceState(null, "", location.pathname);
+};
+
+$("orders").onclick = async ev => {
+  const b = ev.target.closest("button");
+  if (!b) return;
+  if (b.dataset.copy) {
+    await copy(copyText(ORDERS[b.dataset.copy], PRICES));
+    b.textContent = "Скопировано ✓";
+    setTimeout(() => { b.textContent = "Скопировать"; }, 1500);
+  } else if (b.dataset.open) {
+    $("n").value = b.dataset.open;
+    $("calcForm").requestSubmit();
+    scrollTo({top: 0, behavior: "smooth"});
+  }
+};
+$("reload").onclick = loadOrders;
 
 show();
 if (location.hash.length > 1) $("n").value = decodeURIComponent(location.hash.slice(1));
