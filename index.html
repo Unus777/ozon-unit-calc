@@ -10,7 +10,7 @@
 <link rel="manifest" href="owner.webmanifest?v=13">
 <meta name="apple-mobile-web-app-title" content="Алмалы">
 <script src="theme.js?v=12"></script>
-<link rel="stylesheet" href="style.css?v=12">
+<link rel="stylesheet" href="style.css?v=14">
 <link rel="icon" href="icons/owner.svg?v=13" type="image/svg+xml">
 <link rel="icon" href="icons/owner-32.png?v=13" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/owner-180.png?v=13" sizes="180x180">
@@ -51,6 +51,7 @@
 <button id="go">Рассчитать</button>
 </form>
 <div id="out"></div>
+<a class="btn ghost dlvlink" id="dlvLink" href="courier.html?admin=1" hidden>🚚 Доставки: правка, напоминания, карта</a>
 <div id="report"></div>
 <div class="label">Заказы <button class="text" id="reload">Обновить</button></div>
 <div id="orders" class="mut"></div>
@@ -205,6 +206,7 @@ function orderCard(p, i) {
 let PAYS = null;
 function drawReport() {
   const open = !!document.querySelector("#report details[open]");
+  $("dlvLink").hidden = !(ADMIN() && SCRIPT_URL);
   $("report").innerHTML = ADMIN() && SCRIPT_URL ? reportHtml(deliveryReport(Object.values(DELIV), PAYS),
     {title: "Расчёт с курьером", leftLabel: "осталось выплатить", admin: true}) : "";
   if (open) document.querySelector("#report details")?.setAttribute("open", "");

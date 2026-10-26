@@ -9,8 +9,8 @@
 <meta name="referrer" content="no-referrer">
 <title>Доставки</title>
 <link rel="manifest" href="manifest.webmanifest?v=13">
-<script src="theme.js?v=12"></script>
-<link rel="stylesheet" href="style.css?v=12">
+<script src="theme.js?v=14"></script>
+<link rel="stylesheet" href="style.css?v=14">
 <link rel="icon" href="icons/courier.svg?v=13" type="image/svg+xml">
 <link rel="icon" href="icons/courier-32.png?v=13" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/courier-180.png?v=13" sizes="180x180">
@@ -27,16 +27,23 @@
 <div class="card" id="notif" hidden></div>
 <div class="tabs" role="tablist">
 <button role="tab" aria-selected="true" data-tab="active">Активные</button>
+<button role="tab" aria-selected="false" data-tab="map">Карта</button>
 <button role="tab" aria-selected="false" data-tab="done">Доставленные</button>
 </div>
+<div id="mapbox" hidden><div id="map" role="region" aria-label="Карта доставок"></div><div id="route"></div></div>
 <div id="list" class="mut">Загружаю…</div>
 </div>
 
-<script src="config.js?v=12"></script>
+<script src="config.js?v=14"></script>
+<script src="push.js?v=14"></script>
 <script>
 const $ = id => document.getElementById(id);
 const e = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
-const KEY = new URLSearchParams(location.search).get("k");
+// ?admin — режим владельца: тот же список, но с правкой всех полей и напоминаниями (ключ владельца из этого браузера)
+const ADMIN_KEY = (() => { try { return localStorage.getItem("dlv_admin"); } catch { return null; } })();
+const IS_ADMIN = new URLSearchParams(location.search).has("admin") && !!ADMIN_KEY;
+const KEY = IS_ADMIN ? ADMIN_KEY : new URLSearchParams(location.search).get("k");
+const STATUSES = ["Новый", "Согласован", "Доставлен", "Отменён"];
 const FOCUS = new URLSearchParams(location.search).get("o");
 const BADGE = {"Новый": "ship", "Согласован": "way", "Доставлен": "done"};
 let ROWS = [], PAYS = null, TAB = "active";
@@ -47,14 +54,10 @@ const rub = x => Math.round(Number(String(x).replace(/\s/g, "")) || 0).toLocaleS
 const api = payload => sheetApi({key: KEY, ...payload});
 
 const dest = r => r.lat && r.lon ? `${r.lat},${r.lon}` : r.address;
+// Навигатор по ссылке строит маршрут только с подписью Яндекса, иначе просто открывается — поэтому Яндекс Карты:
+// маршрут от текущего места сразу построен, «Поехали» включает ведение
 const yandexMaps = r => `https://yandex.ru/maps/?rtext=~${encodeURIComponent(dest(r))}&rtt=auto`;
 const appleMaps = r => `https://maps.apple.com/?daddr=${encodeURIComponent(dest(r))}&dirflg=d`;
-// Яндекс Навигатор по координатам; если приложение не открылось за секунду — Яндекс Карты
-function openYandex(r) {
-  if (!(r.lat && r.lon)) { location.href = yandexMaps(r); return; }
-  location.href = `yandexnavi://build_route_on_map?lat_to=${r.lat}&lon_to=${r.lon}`;
-  setTimeout(() => { if (!document.hidden) location.href = yandexMaps(r); }, 1200);
-}
 
 function card(r) {
   const unloadNone = r.unload === "Нет";
@@ -64,7 +67,8 @@ function card(r) {
   try { foreman = foremanPhone(info.foreman); } catch {} // старый некорректный номер не превращаем в ссылку
   // Таблица портит «+»: бывает «7980…» или «=+7980…» — оставляем только цифры
   const digits = String(r.phone || "").replace(/\D/g, "").replace(/^8(?=\d{10}$)/, "7");
-  const tel = digits ? `tel:+${digits}${r.ext ? "," + r.ext : ""}` : "";
+  const ext = r.ext ? String(r.ext).replace(/\D/g, "").padStart(4, "0") : "";  // добавочный Ozon — 4 цифры, таблица теряла ведущий ноль
+  const tel = digits ? `tel:+${digits}${ext ? "," + ext : ""}` : "";
   return `<div class="card order${r.posting === FOCUS ? " hl" : ""}" data-posting="${e(r.posting)}">
 <div class="top"><span class="cb">${e(r.cb)}</span><span class="badge ${BADGE[r.status] || ""}">${e(r.status)}</span>
 <span class="mut num">${e(r.posting)}</span></div>
@@ -76,26 +80,149 @@ ${info.note ? `<div class="delivery-note">💬 ${e(info.note)}</div>` : ""}
 <div class="actions">
 ${tel ? `<a class="btn" href="${e(tel)}">📞 Позвонить</a>` : ""}
 ${foreman ? `<a class="btn" href="tel:${e(foreman)}">📞 Позвонить прорабу</a>` : ""}
-<a class="btn ghost" href="${e(yandexMaps(r))}" data-yandex>🧭 Яндекс</a>
-<a class="btn ghost" href="${e(appleMaps(r))}">Apple Карты</a>
+<a class="btn ghost" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">🧭 Яндекс Карты</a>
+<a class="btn ghost" href="${e(appleMaps(r))}" target="_blank" rel="noopener">Apple Карты</a>
 </div>
-${r.ext ? `<div class="mut" style="margin-top:4px">Добавочный ${e(r.ext)} наберётся сам после соединения</div>` : ""}
+${ext ? `<div class="mut" style="margin-top:4px">Добавочный ${e(ext)} наберётся сам после соединения</div>` : ""}
 <div class="field"><label for="d-${e(r.posting)}">Дата доставки</label>
 <input type="date" id="d-${e(r.posting)}" data-date value="${toIso(r.date)}" ${done ? "disabled" : ""}></div>
 <div class="field"><label for="c-${e(r.posting)}">Комментарий</label>
 <input id="c-${e(r.posting)}" data-comment value="${e(r.courier_comment)}" placeholder="для владельца" ${done ? "disabled" : ""}></div>
 ${done ? `<p class="mut">Доставлен${r.delivered_at ? " " + e(r.delivered_at) : ""}</p>` : `<div class="actions"><button data-done>✓ Доставлено</button></div>`}
+${IS_ADMIN ? `<div class="actions"><button class="ghost" data-edit>✏️ Изменить</button>${done ? "" : `<button class="ghost" data-remind>🔔 Напомнить</button>`}</div>${editForm(r)}` : ""}
 </div>`;
 }
 
+function editForm(r) {
+  const info = deliveryDetails(r.comment);
+  const f = (name, label, value, attrs = "") => `<label class="ef"><span>${label}</span><input name="${name}" value="${e(value)}" ${attrs}></label>`;
+  return `<form class="editform" data-editform hidden>
+${f("cb", "ЦБ", r.cb)}
+<label class="ef"><span>Статус</span><select name="status">${STATUSES.map(s => `<option${s === r.status ? " selected" : ""}>${s}</option>`).join("")}</select></label>
+${f("courier", "Курьер", r.courier)}
+${f("date", "Дата доставки", toIso(r.date), 'type="date"')}
+${f("time", "Время доставки", info.time, 'placeholder="например, 14:00–16:00"')}
+<label class="ef wide"><span>Адрес</span><textarea name="address" rows="2">${e(r.address)}</textarea></label>
+${f("phone", "Телефон", String(r.phone || "").replace(/^=/, ""), 'inputmode="tel"')}
+${f("ext", "Добавочный", r.ext ? String(r.ext).padStart(4, "0") : "", 'inputmode="numeric"')}
+${f("foreman", "Телефон прораба", info.foreman, 'inputmode="tel"')}
+${f("packs", "Упаковки", r.packs)}
+${f("unload", "Разгрузка", r.unload, 'placeholder="Нет / Лифт, эт. 5 / Лестница, эт. 2"')}
+${f("delivery", "Доставка, ₽", r.delivery, 'inputmode="numeric"')}
+${f("lift", "Подъём, ₽", r.lift, 'inputmode="numeric"')}
+<label class="ef wide"><span>Пометка для курьера</span><textarea name="note" rows="2">${e(info.note)}</textarea></label>
+<label class="ef wide"><span>Комментарий курьера</span><input name="courier_comment" value="${e(r.courier_comment)}"></label>
+<p class="mut wide">${r.lat && r.lon ? "📍 Точка на карте есть" : "📍 Нет точки на карте"} — при смене адреса координаты найдутся заново</p>
+<div class="actions wide"><button>Сохранить</button><button type="button" class="ghost" data-cancel>Отмена</button></div>
+</form>`;
+}
+
+// Координаты по адресу (OpenStreetMap) — чтобы точка на карте и маршрут совпадали с исправленным адресом
+async function geocode(address) {
+  const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ru&q=" + encodeURIComponent(address),
+    {headers: {"Accept-Language": "ru"}});
+  const [hit] = await r.json();
+  return hit ? {lat: (+hit.lat).toFixed(6), lon: (+hit.lon).toFixed(6)} : {lat: "", lon: ""};
+}
+
+async function saveEdit(form) {
+  const r = ROWS.find(x => x.posting === form.closest(".order").dataset.posting);
+  const v = Object.fromEntries(new FormData(form));
+  const data = {cb: v.cb.trim(), status: v.status, courier: v.courier.trim(), date: fromIso(v.date), address: v.address.trim(),
+    phone: v.phone.trim() ? "+" + v.phone.replace(/\D/g, "").replace(/^8(?=\d{10}$)/, "7") : "", ext: v.ext.replace(/\D/g, ""),
+    packs: v.packs.trim(), unload: v.unload.trim(), delivery: v.delivery.replace(/\D/g, "") || "0", lift: v.lift.replace(/\D/g, "") || "0",
+    comment: deliveryComment({note: v.note, time: v.time, foreman: v.foreman}), courier_comment: v.courier_comment.trim()};
+  if (data.address !== r.address || !(r.lat && r.lon)) Object.assign(data, await geocode(data.address).catch(() => ({lat: "", lon: ""})));
+  await save(r.posting, data);
+}
+
+async function remind(posting) {
+  const text = prompt("Текст напоминания курьеру (можно оставить пустым):", "");
+  if (text === null) return;
+  const raw = (() => { try { return localStorage.getItem("dlv_vk"); } catch { return null; } })();
+  if (!raw) throw new Error("На этом устройстве нет ключа уведомлений — откройте вашу ссылку доступа");
+  const jwk = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(raw.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0))));
+  const jwts = {};
+  for (const aud of await api({action: "push_targets"})) jwts[aud] = await vapidJwt(aud, jwk);
+  const res = await api({action: "remind", posting, text, jwts});
+  alert(res.pushed ? "Напоминание отправлено курьеру" : "Курьер не включил уведомления — напоминание не дошло");
+}
+
 function draw() {
+  $("mapbox").hidden = TAB !== "map";
+  $("list").hidden = TAB === "map";
+  if (TAB === "map") { drawMap(); return; }
   const rows = ROWS.filter(r => (r.status === "Доставлен" || r.status === "Отменён") === (TAB === "done"));
   if (TAB === "done") rows.reverse();
   else rows.sort((a, b) => (toIso(a.date) || "9999").localeCompare(toIso(b.date) || "9999"));
-  const head = TAB === "done" ? reportHtml(deliveryReport(ROWS, PAYS), {title: "Мои выплаты", leftLabel: "вам должны"}) : "";
+  const head = TAB === "done" ? reportHtml(deliveryReport(ROWS, PAYS), IS_ADMIN ? {title: "Расчёт с курьером", leftLabel: "осталось выплатить"} : {title: "Мои выплаты", leftLabel: "вам должны"})
+    : IS_ADMIN ? '<div class="card mut">Режим владельца: здесь можно исправить любые данные заказа и отправить курьеру напоминание.</div>' : "";
   $("list").innerHTML = head + (rows.length ? rows.map(card).join("")
     : `<div class="card mut">${TAB === "done" ? "Пока нет доставленных" : "Новых заказов нет"}</div>`);
   if (FOCUS) document.querySelector(".order.hl")?.scrollIntoView({block: "center"});
+}
+
+// ---------- карта доставок (OpenStreetMap + Leaflet, загружается при первом открытии вкладки) ----------
+let MAP, LAYER, ME = null;
+const loadLeaflet = () => window.L ? Promise.resolve() : new Promise((ok, fail) => {
+  const css = document.createElement("link");
+  css.rel = "stylesheet"; css.href = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
+  document.head.appendChild(css);
+  const js = document.createElement("script");
+  js.src = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
+  js.onload = ok; js.onerror = () => fail(new Error("Карта не загрузилась — проверьте интернет"));
+  document.head.appendChild(js);
+});
+const km = (a, b) => {  // расстояние по прямой, км
+  const R = 6371, rad = x => x * Math.PI / 180, dLat = rad(b[0] - a[0]), dLon = rad(b[1] - a[1]);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+};
+// ponytail: порядок объезда «ближайший следующий» по прямой — не учитывает пробки и дороги, для 5–15 точек достаточно
+function routeOrder(points, start) {
+  const left = [...points], out = [];
+  let cur = start || left[0].ll;
+  while (left.length) {
+    left.sort((a, b) => km(cur, a.ll) - km(cur, b.ll));
+    const next = left.shift();
+    out.push(next); cur = next.ll;
+  }
+  return out;
+}
+
+async function drawMap() {
+  const active = ROWS.filter(r => r.status === "Новый" || r.status === "Согласован");
+  const pts = active.filter(r => r.lat && r.lon).map(r => ({r, ll: [+r.lat, +r.lon]}));
+  const noCoords = active.filter(r => !(r.lat && r.lon));
+  try { await loadLeaflet(); } catch (err) { $("route").innerHTML = `<div class="card err">${e(err.message)}</div>`; return; }
+  if (!MAP) {
+    MAP = L.map("map", {zoomControl: true}).setView([55.75, 37.62], 9);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      {maxZoom: 19, attribution: "© участники OpenStreetMap"}).addTo(MAP);
+    LAYER = L.layerGroup().addTo(MAP);
+    navigator.geolocation?.getCurrentPosition(p => { ME = [p.coords.latitude, p.coords.longitude]; drawMap(); },
+      () => {}, {enableHighAccuracy: true, timeout: 10000});
+  }
+  setTimeout(() => MAP.invalidateSize(), 0);
+  LAYER.clearLayers();
+  const order = pts.length ? routeOrder(pts, ME) : [];
+  order.forEach(({r, ll}, i) => {
+    const icon = L.divIcon({className: "pin", html: `<span>${i + 1}</span>`, iconSize: [32, 32], iconAnchor: [16, 16]});
+    L.marker(ll, {icon}).addTo(LAYER).bindPopup(`<b>${i + 1}. ${e(r.cb)}</b> · ${rub(r.pay)}<br>${e(r.packs)}` +
+      `${r.unload && r.unload !== "Нет" ? "<br>Разгрузка: " + e(r.unload) : ""}<br>${e(r.address)}<br>` +
+      `<a href="${e(yandexMaps(r))}" target="_blank" rel="noopener">Маршрут в Яндекс Картах</a>`);
+  });
+  if (ME) L.circleMarker(ME, {radius: 8, color: "#fff", weight: 3, fillColor: "#3b5bdb", fillOpacity: 1}).addTo(LAYER).bindPopup("Вы здесь");
+  const bounds = order.map(p => p.ll).concat(ME ? [ME] : []);
+  if (bounds.length) MAP.fitBounds(bounds, {padding: [32, 32], maxZoom: 14});
+  // весь маршрут одной ссылкой: от текущего места через все точки по порядку
+  const all = `https://yandex.ru/maps/?rtext=~${order.map(p => p.ll.join(",")).join("~")}&rtt=auto`;
+  $("route").innerHTML = !order.length ? `<div class="card mut">Нет активных заказов с точкой на карте</div>` : `
+<div class="card"><h3>Порядок объезда${ME ? " от вас" : ""}</h3>
+<ol class="stops">${order.map(({r, ll}, i) => `<li><b>${e(r.cb)}</b> · ${e(r.packs)} · ${rub(r.pay)}<div class="mut">${e(r.address)}${ME && i === 0 ? ` · ${km(ME, ll).toFixed(1)} км` : ""}</div></li>`).join("")}</ol>
+<div class="actions"><a class="btn" href="${e(all)}" target="_blank" rel="noopener">🧭 Весь маршрут в Яндекс Картах</a></div>
+${ME ? "" : '<p class="mut">Разрешите доступ к геопозиции, чтобы порядок считался от того места, где вы сейчас.</p>'}</div>
+${noCoords.length ? `<div class="card mut">Без точки на карте: ${noCoords.map(r => e(r.cb)).join(", ")}</div>` : ""}`;
 }
 
 async function load() {
@@ -125,13 +252,19 @@ $("list").addEventListener("change", ev => {
   if (ev.target.matches("[data-date]")) save(box.dataset.posting, {date: fromIso(ev.target.value)});
   if (ev.target.matches("[data-comment]")) save(box.dataset.posting, {courier_comment: ev.target.value.trim()});
 });
+$("list").addEventListener("submit", async ev => {
+  const form = ev.target.closest("[data-editform]");
+  if (!form) return;
+  ev.preventDefault();
+  const btn = form.querySelector("button");
+  btn.disabled = true; btn.textContent = "Сохраняю…";
+  try { await saveEdit(form); } catch (err) { alert(err.message); btn.disabled = false; btn.textContent = "Сохранить"; }
+});
 $("list").addEventListener("click", ev => {
-  const y = ev.target.closest("[data-yandex]");
-  if (y) {
-    ev.preventDefault();
-    openYandex(ROWS.find(x => x.posting === y.closest(".order").dataset.posting));
-    return;
-  }
+  const ed = ev.target.closest("[data-edit], [data-cancel]");
+  if (ed) { const f = ed.closest(".order").querySelector("[data-editform]"); f.hidden = !f.hidden; return; }
+  const rm = ev.target.closest("[data-remind]");
+  if (rm) { remind(rm.closest(".order").dataset.posting).catch(err => alert(err.message)); return; }
   const b = ev.target.closest("[data-done]");
   if (!b) return;
   if (!confirm("Отметить заказ доставленным?")) return;
@@ -195,7 +328,8 @@ async function setupNotif() {
 if (KEY) {
   $("app").hidden = false;
   load();
-  setupNotif();
+  if (IS_ADMIN) document.querySelector(".brand span").textContent = "режим владельца";
+  else setupNotif();
   setInterval(() => { if (!document.hidden) load(); }, 60000);
 } else {
   $("nokey").hidden = false;
