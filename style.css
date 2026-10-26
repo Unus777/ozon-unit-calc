@@ -121,3 +121,6 @@ a.btn.ghost{background:var(--soft);color:var(--fg)}
 .ef{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mut)}
 .ef input,.ef select,.ef textarea{font:inherit;font-size:16px;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
 .dlvlink{display:flex;margin-bottom:12px}
+.stop{cursor:pointer;border-radius:10px;padding:8px!important;margin:0 -8px}
+.stop.on{background:var(--acc-bg);border-top-color:transparent!important}
+.stop .actions{margin-top:8px}

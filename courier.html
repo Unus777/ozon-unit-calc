@@ -10,7 +10,7 @@
 <title>Доставки</title>
 <link rel="manifest" href="manifest.webmanifest?v=13">
 <script src="theme.js?v=14"></script>
-<link rel="stylesheet" href="style.css?v=16">
+<link rel="stylesheet" href="style.css?v=17">
 <link rel="icon" href="icons/courier.svg?v=13" type="image/svg+xml">
 <link rel="icon" href="icons/courier-32.png?v=13" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/courier-180.png?v=13" sizes="180x180">
@@ -176,6 +176,8 @@ function mapView(lls) {  // центр и масштаб, чтобы влезл�
   return {c, z: Math.max(4, Math.min(15, Math.floor(Math.log2(360 / span)) - 1))};
 }
 
+let SEL = null;  // выбранный на карте заказ: маршрут строится только до него
+
 function drawMap() {
   const active = ROWS.filter(r => r.status === "Новый" || r.status === "Согласован");
   const pts = active.filter(r => r.lat && r.lon).map(r => ({r, ll: [+r.lat, +r.lon]}));
@@ -185,34 +187,53 @@ function drawMap() {
     navigator.geolocation.getCurrentPosition(p => { ME = [p.coords.latitude, p.coords.longitude]; if (TAB === "map") drawMap(); },
       () => {}, {enableHighAccuracy: true, timeout: 10000});
   }
+  if (SEL && !pts.some(p => p.r.posting === SEL)) SEL = null;
+  // список: ближайшие к курьеру сверху (без геопозиции — в порядке «ближайший следующий» от первой точки)
   const order = pts.length ? routeOrder(pts, ME) : [];
-  const lls = order.map(p => p.ll).concat(ME ? [ME] : []);
-  if (lls.length) {
-    // Виджет Яндекс Карт с маршрутом по дорогам (с пробками): от курьера (если разрешил геопозицию) через все точки по порядку.
-    // Метки с номерами виджет не рисует, поэтому одна точка — меткой, несколько — маршрутом
-    const seq = (ME ? [ME] : []).concat(order.map(p => p.ll));
+  const sel = order.find(p => p.r.posting === SEL);
+  let src = "";
+  if (sel) {  // маршрут только до выбранного заказа
+    src = ME ? `https://yandex.ru/map-widget/v1/?rtext=${ME.join(",")}~${sel.ll.join(",")}&rtt=auto`
+      : `https://yandex.ru/map-widget/v1/?ll=${sel.ll[1]},${sel.ll[0]}&z=14&pt=${sel.ll[1]},${sel.ll[0]},pm2rdl`;
+  } else if (order.length) {  // все точки без маршрута; «вы здесь» — отдельной меткой
+    const lls = order.map(p => p.ll).concat(ME ? [ME] : []);
     const v = mapView(lls);
-    const src = `https://yandex.ru/map-widget/v1/?ll=${v.c[1]},${v.c[0]}&z=${v.z}` +
-      (seq.length > 1 ? `&rtext=${seq.map(ll => ll.join(",")).join("~")}&rtt=auto` : `&pt=${seq[0][1]},${seq[0][0]},pm2rdl`);
-    if ($("map").dataset.src !== src) {
-      $("map").dataset.src = src;
-      $("map").innerHTML = `<iframe src="${e(src)}" title="Карта доставок" allowfullscreen></iframe>`;
-    }
-  } else {
-    $("map").innerHTML = "";
+    const marks = order.map(({ll}) => `${ll[1]},${ll[0]},pm2blm`).concat(ME ? [`${ME[1]},${ME[0]},ya_ru`] : []);
+    src = `https://yandex.ru/map-widget/v1/?ll=${v.c[1]},${v.c[0]}&z=${v.z}&pt=${marks.join("~")}`;
+  }
+  if ($("map").dataset.src !== src) {
+    $("map").dataset.src = src;
+    $("map").innerHTML = src ? `<iframe src="${e(src)}" title="Карта доставок" allowfullscreen></iframe>` : "";
   }
   const all = `https://yandex.ru/maps/?rtext=~${order.map(p => p.ll.join(",")).join("~")}&rtt=auto`;
   $("route").innerHTML = !order.length ? `<div class="card mut">Нет активных заказов с точкой на карте</div>` : `
-<div class="card"><h3>Порядок объезда${ME ? " от вас" : ""}</h3>
-<p class="mut">На карте: красная точка — ${ME ? "вы" : "первая доставка"}, дальше остановки по порядку, чёрная метка — последняя.</p>
-<ol class="stops">${order.map(({r, ll}, i) => `<li><b>${e(r.cb)}</b> · ${e(r.packs)} · ${rub(r.pay)}` +
-    `${r.unload && r.unload !== "Нет" ? `<div class="mut">Разгрузка: ${e(r.unload)}</div>` : ""}` +
-    `<div class="mut">${e(r.address)}${ME && i === 0 ? ` · ${km(ME, ll).toFixed(1)} км` : ""}</div>` +
-    `<a class="stop-link" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">Маршрут сюда</a></li>`).join("")}</ol>
-<div class="actions"><a class="btn" href="${e(all)}" target="_blank" rel="noopener">🧭 Весь маршрут в Яндекс Картах</a></div>
-${ME ? "" : '<p class="mut">Разрешите доступ к геопозиции, чтобы порядок считался от того места, где вы сейчас.</p>'}</div>
+<div class="card"><h3>${sel ? "Маршрут до " + e(sel.r.cb) : "Выберите заказ"}</h3>
+<p class="mut">${sel ? "" : "Нажмите на заказ — карта покажет маршрут до него. "}${ME ? "Ближайшие к вам — сверху." : "Разрешите геопозицию, чтобы видеть ближайшие и маршрут от вас."}</p>
+${sel ? '<div class="actions"><button class="ghost" data-mapall>Показать все точки</button></div>' : ""}
+<ol class="stops">${order.map(({r, ll}) => {
+    const on = r.posting === SEL;
+    return `<li class="stop${on ? " on" : ""}" data-pick="${e(r.posting)}" role="button" tabindex="0" aria-pressed="${on}">` +
+      `<b>${e(r.cb)}</b> · ${e(r.packs)} · ${rub(r.pay)}${ME ? ` · ${km(ME, ll).toFixed(1)} км` : ""}` +
+      `${r.unload && r.unload !== "Нет" ? `<div class="mut">Разгрузка: ${e(r.unload)}</div>` : ""}<div class="mut">${e(r.address)}</div>` +
+      (on ? `<div class="actions"><a class="btn" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">🧭 Поехать</a>` +
+        `<a class="btn ghost" href="${e(appleMaps(r))}" target="_blank" rel="noopener">Apple Карты</a></div>` : "") + `</li>`;
+  }).join("")}</ol>
+${order.length > 1 ? `<div class="actions"><a class="btn ghost" href="${e(all)}" target="_blank" rel="noopener">Маршрут через все точки</a></div>` : ""}</div>
 ${noCoords.length ? `<div class="card mut">Без точки на карте: ${noCoords.map(r => e(r.cb)).join(", ")}</div>` : ""}`;
 }
+
+$("route").addEventListener("click", ev => {
+  if (ev.target.closest("a")) return;  // ссылки «Поехать» работают как обычно
+  if (ev.target.closest("[data-mapall]")) { SEL = null; drawMap(); return; }
+  const li = ev.target.closest("[data-pick]");
+  if (!li) return;
+  SEL = li.dataset.pick === SEL ? null : li.dataset.pick;
+  drawMap();
+  $("map").scrollIntoView({behavior: "smooth", block: "start"});
+});
+$("route").addEventListener("keydown", ev => {
+  if ((ev.key === "Enter" || ev.key === " ") && ev.target.matches("[data-pick]")) { ev.preventDefault(); ev.target.click(); }
+});
 
 async function load() {
   try {
