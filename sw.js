@@ -10,7 +10,9 @@ async function notify() {
   let title = "Новый заказ", body = "Откройте, чтобы посмотреть", url = PAGE;
   try {
     const n = await sheetApi({action: "notice", key: KEY});  // что именно случилось: новый заказ или напоминание
-    if (n) {
+    if (n && n.role === "owner") {  // для владельца: что сделал курьер
+      title = n.title; body = n.text || ""; url = "./";
+    } else if (n) {
       const info = [n.packs, n.unload && n.unload !== "Нет" ? `разгрузка: ${n.unload}` : "", n.address].filter(Boolean).join(" · ");
       title = n.type === "remind" ? `🔔 Напоминание: ${n.cb}` : `Новый заказ ${n.cb}`;
       body = n.type === "remind" && n.text ? `${n.text}\n${info}` : info;

@@ -31,6 +31,9 @@
 <input id="accessLink" placeholder="Вставьте вашу ссылку доступа" autocomplete="off" aria-label="Ссылка доступа к доставкам">
 <button>Подключить</button>
 </form>
+<div id="ownerNotif"><h3>Уведомления о курьере</h3>
+<p class="mut" id="ownerNotifState">Придут, когда курьер поставит дату, напишет комментарий или нажмёт «Доставлено».</p>
+<button class="ghost" id="ownerNotifBtn">🔔 Включить уведомления</button></div>
 <div id="forget"><h3>Ozon</h3>
 <button class="ghost" id="forgetBtn">Сменить ключи Ozon</button></div>
 </div>
@@ -239,13 +242,36 @@ $("report").addEventListener("click", async ev => {
   } catch (err) { alert(err.message); }
 });
 
+// «Доставлено» владельцем: Ozon (если там ещё не доставлен) + лист «Доставки» (если курьер ещё не отметил)
+function deliveredActions(p, d) {
+  const needOzon = !["delivered", "cancelled"].includes(p.status), needSheet = d.status !== "Доставлен";
+  const label = needOzon && needSheet ? "✅ Доставлено" : needOzon ? "✅ Отметить доставленным в Ozon" : "✅ Отметить в таблице";
+  const btns = (needSheet ? `<button class="ghost" data-remind="${e(p.posting_number)}">🔔 Напомнить курьеру</button>` : "") +
+    (needOzon || needSheet ? `<button data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">${label}</button>` : "");
+  return btns ? `<div class="actions">${btns}</div>` : "";
+}
+
+async function markDelivered(posting, needOzon) {
+  const d = DELIV[posting];
+  const where = [needOzon && "в Ozon", d.status !== "Доставлен" && "в таблице"].filter(Boolean).join(" и ");
+  if (!confirm(`Отметить ${d.cb} доставленным ${where}?`)) return false;
+  if (needOzon) {
+    const r = await ozon("/v2/fbs/posting/delivered", {posting_number: [posting]});
+    const res = (r.result || []).find(x => x.posting_number === posting) || {};
+    if (!res.result) throw new Error("Ozon не принял: " + (res.error || JSON.stringify(r).slice(0, 200)));
+  }
+  if (d.status !== "Доставлен") DELIV[posting] = await sheetApi({action: "update", key: ADMIN(), posting, data: {status: "Доставлен"}});
+  alert(needOzon ? "Готово. В Ozon статус сменится в течение нескольких минут." : "Готово");
+  return true;
+}
+
 function courierBlock(p) {
   const d = DELIV[p.posting_number];
   if (d) {
     const done = d.status === "Доставлен";
-    return `<div class="courier ${done ? "green" : ""}">${done ? "✅ Курьер доставил" : "🚚 У курьера"} · ${e(d.cb)} · ` +
+    return `<div class="courier ${done ? "green" : ""}">${done ? "✅ Доставлен" : "🚚 У курьера"} · ${e(d.cb)} · ` +
       `${e(done ? d.delivered_at : d.status + (d.date ? " на " + d.date : ""))}</div>` +
-      (!done && ADMIN() && SCRIPT_URL ? `<div class="actions"><button class="ghost" data-remind="${e(p.posting_number)}">🔔 Напомнить курьеру</button></div>` : "") +
+      (ADMIN() && SCRIPT_URL ? deliveredActions(p, d) : "") +
       (ADMIN() && SCRIPT_URL ? `<details class="delivery-edit"><summary>Пометка, время и прораб</summary>` +
         `<form data-schedule="${e(p.posting_number)}">${deliveryFields(d)}<button>Сохранить для Рашада</button></form></details>` : "");
   }
@@ -331,6 +357,7 @@ $("forgetBtn").onclick = () => {
 };
 
 function drawDlvState() {
+  drawOwnerNotif();
   $("dlvState").innerHTML = ADMIN() ? '<span class="green">✓ Подключено на этом устройстве</span>'
     : "Не подключено на этом устройстве — вставьте вашу ссылку доступа.";
 }
@@ -384,10 +411,44 @@ $("orders").onclick = async ev => {
   }
 };
 $("reload").onclick = loadOrders;
-$("orders").addEventListener("click", ev => {
+$("orders").addEventListener("click", async ev => {
   const b = ev.target.closest("[data-remind]");
   if (b) sendReminder(b.dataset.remind, ADMIN()).catch(err => alert(err.message));
+  const dv = ev.target.closest("[data-delivered]");
+  if (!dv) return;
+  dv.disabled = true;
+  try { if (await markDelivered(dv.dataset.delivered, dv.dataset.ozon === "1")) loadOrders(); }
+  catch (err) { alert(err.message); }
+  dv.disabled = false;
 });
+
+// ---------- уведомления владельцу о действиях курьера ----------
+const pushReady = () => "serviceWorker" in navigator && "PushManager" in window;
+async function ownerSubscribe() {
+  const reg = await navigator.serviceWorker.register(`sw.js?k=${encodeURIComponent(ADMIN())}`);
+  await navigator.serviceWorker.ready;
+  const raw = Uint8Array.from(atob(VAPID_PUBLIC.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+  const sub = await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: raw});
+  await sheetApi({action: "subscribe", key: ADMIN(), endpoint: sub.endpoint});
+}
+function drawOwnerNotif() {
+  $("ownerNotif").hidden = !(ADMIN() && SCRIPT_URL);
+  const on = pushReady() && Notification.permission === "granted";
+  $("ownerNotifBtn").hidden = on || !pushReady();
+  $("ownerNotifState").innerHTML = on ? '<span class="green">✓ Включены на этом устройстве</span>'
+    : pushReady() ? "Придут, когда курьер поставит дату, напишет комментарий или нажмёт «Доставлено»."
+    : "На iPhone откройте сайт с экрана «Домой» (Поделиться → На экран «Домой»), тогда уведомления можно будет включить.";
+}
+$("ownerNotifBtn").onclick = async () => {
+  $("ownerNotifBtn").disabled = true;
+  try {
+    if (await Notification.requestPermission() !== "granted") throw new Error("Уведомления запрещены в настройках телефона");
+    await ownerSubscribe();
+  } catch (err) { alert(err.message); }
+  $("ownerNotifBtn").disabled = false;
+  drawOwnerNotif();
+};
+if (ADMIN() && SCRIPT_URL && pushReady() && Notification.permission === "granted") ownerSubscribe().catch(() => {});  // подписка могла обновиться
 
 $("orders").addEventListener("submit", async ev => {
   const f = ev.target.closest("form[data-send], form[data-schedule]");
