@@ -10,7 +10,7 @@
 <title>Доставки</title>
 <link rel="manifest" href="manifest.webmanifest?v=13">
 <script src="theme.js?v=14"></script>
-<link rel="stylesheet" href="style.css?v=14">
+<link rel="stylesheet" href="style.css?v=16">
 <link rel="icon" href="icons/courier.svg?v=13" type="image/svg+xml">
 <link rel="icon" href="icons/courier-32.png?v=13" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/courier-180.png?v=13" sizes="180x180">
@@ -34,7 +34,7 @@
 <div id="list" class="mut">Загружаю…</div>
 </div>
 
-<script src="config.js?v=14"></script>
+<script src="config.js?v=16"></script>
 <script src="push.js?v=15"></script>
 <script>
 const $ = id => document.getElementById(id);
@@ -150,17 +150,8 @@ function draw() {
   if (FOCUS) document.querySelector(".order.hl")?.scrollIntoView({block: "center"});
 }
 
-// ---------- карта доставок (OpenStreetMap + Leaflet, загружается при первом открытии вкладки) ----------
-let MAP, LAYER, ME = null;
-const loadLeaflet = () => window.L ? Promise.resolve() : new Promise((ok, fail) => {
-  const css = document.createElement("link");
-  css.rel = "stylesheet"; css.href = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
-  document.head.appendChild(css);
-  const js = document.createElement("script");
-  js.src = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
-  js.onload = ok; js.onerror = () => fail(new Error("Карта не загрузилась — проверьте интернет"));
-  document.head.appendChild(js);
-});
+// ---------- карта доставок: виджет Яндекс Карт (без ключа), метки с номерами в порядке объезда ----------
+let ME = null, GEO_ASKED = false;
 const km = (a, b) => {  // расстояние по прямой, км
   const R = 6371, rad = x => x * Math.PI / 180, dLat = rad(b[0] - a[0]), dLon = rad(b[1] - a[1]);
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(dLon / 2) ** 2;
@@ -178,36 +169,46 @@ function routeOrder(points, start) {
   return out;
 }
 
-async function drawMap() {
+function mapView(lls) {  // центр и масштаб, чтобы влезли все точки
+  const lats = lls.map(p => p[0]), lons = lls.map(p => p[1]);
+  const c = [(Math.min(...lats) + Math.max(...lats)) / 2, (Math.min(...lons) + Math.max(...lons)) / 2];
+  const span = Math.max(Math.max(...lons) - Math.min(...lons), (Math.max(...lats) - Math.min(...lats)) * 1.8, 0.01);
+  return {c, z: Math.max(4, Math.min(15, Math.floor(Math.log2(360 / span)) - 1))};
+}
+
+function drawMap() {
   const active = ROWS.filter(r => r.status === "Новый" || r.status === "Согласован");
   const pts = active.filter(r => r.lat && r.lon).map(r => ({r, ll: [+r.lat, +r.lon]}));
   const noCoords = active.filter(r => !(r.lat && r.lon));
-  try { await loadLeaflet(); } catch (err) { $("route").innerHTML = `<div class="card err">${e(err.message)}</div>`; return; }
-  if (!MAP) {
-    MAP = L.map("map", {zoomControl: true}).setView([55.75, 37.62], 9);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-      {maxZoom: 19, attribution: "© участники OpenStreetMap"}).addTo(MAP);
-    LAYER = L.layerGroup().addTo(MAP);
-    navigator.geolocation?.getCurrentPosition(p => { ME = [p.coords.latitude, p.coords.longitude]; drawMap(); },
+  if (!GEO_ASKED && navigator.geolocation) {
+    GEO_ASKED = true;
+    navigator.geolocation.getCurrentPosition(p => { ME = [p.coords.latitude, p.coords.longitude]; if (TAB === "map") drawMap(); },
       () => {}, {enableHighAccuracy: true, timeout: 10000});
   }
-  setTimeout(() => MAP.invalidateSize(), 0);
-  LAYER.clearLayers();
   const order = pts.length ? routeOrder(pts, ME) : [];
-  order.forEach(({r, ll}, i) => {
-    const icon = L.divIcon({className: "pin", html: `<span>${i + 1}</span>`, iconSize: [32, 32], iconAnchor: [16, 16]});
-    L.marker(ll, {icon}).addTo(LAYER).bindPopup(`<b>${i + 1}. ${e(r.cb)}</b> · ${rub(r.pay)}<br>${e(r.packs)}` +
-      `${r.unload && r.unload !== "Нет" ? "<br>Разгрузка: " + e(r.unload) : ""}<br>${e(r.address)}<br>` +
-      `<a href="${e(yandexMaps(r))}" target="_blank" rel="noopener">Маршрут в Яндекс Картах</a>`);
-  });
-  if (ME) L.circleMarker(ME, {radius: 8, color: "#fff", weight: 3, fillColor: "#3b5bdb", fillOpacity: 1}).addTo(LAYER).bindPopup("Вы здесь");
-  const bounds = order.map(p => p.ll).concat(ME ? [ME] : []);
-  if (bounds.length) MAP.fitBounds(bounds, {padding: [32, 32], maxZoom: 14});
-  // весь маршрут одной ссылкой: от текущего места через все точки по порядку
+  const lls = order.map(p => p.ll).concat(ME ? [ME] : []);
+  if (lls.length) {
+    // Виджет Яндекс Карт с маршрутом по дорогам (с пробками): от курьера (если разрешил геопозицию) через все точки по порядку.
+    // Метки с номерами виджет не рисует, поэтому одна точка — меткой, несколько — маршрутом
+    const seq = (ME ? [ME] : []).concat(order.map(p => p.ll));
+    const v = mapView(lls);
+    const src = `https://yandex.ru/map-widget/v1/?ll=${v.c[1]},${v.c[0]}&z=${v.z}` +
+      (seq.length > 1 ? `&rtext=${seq.map(ll => ll.join(",")).join("~")}&rtt=auto` : `&pt=${seq[0][1]},${seq[0][0]},pm2rdl`);
+    if ($("map").dataset.src !== src) {
+      $("map").dataset.src = src;
+      $("map").innerHTML = `<iframe src="${e(src)}" title="Карта доставок" allowfullscreen></iframe>`;
+    }
+  } else {
+    $("map").innerHTML = "";
+  }
   const all = `https://yandex.ru/maps/?rtext=~${order.map(p => p.ll.join(",")).join("~")}&rtt=auto`;
   $("route").innerHTML = !order.length ? `<div class="card mut">Нет активных заказов с точкой на карте</div>` : `
 <div class="card"><h3>Порядок объезда${ME ? " от вас" : ""}</h3>
-<ol class="stops">${order.map(({r, ll}, i) => `<li><b>${e(r.cb)}</b> · ${e(r.packs)} · ${rub(r.pay)}<div class="mut">${e(r.address)}${ME && i === 0 ? ` · ${km(ME, ll).toFixed(1)} км` : ""}</div></li>`).join("")}</ol>
+<p class="mut">На карте: красная точка — ${ME ? "вы" : "первая доставка"}, дальше остановки по порядку, чёрная метка — последняя.</p>
+<ol class="stops">${order.map(({r, ll}, i) => `<li><b>${e(r.cb)}</b> · ${e(r.packs)} · ${rub(r.pay)}` +
+    `${r.unload && r.unload !== "Нет" ? `<div class="mut">Разгрузка: ${e(r.unload)}</div>` : ""}` +
+    `<div class="mut">${e(r.address)}${ME && i === 0 ? ` · ${km(ME, ll).toFixed(1)} км` : ""}</div>` +
+    `<a class="stop-link" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">Маршрут сюда</a></li>`).join("")}</ol>
 <div class="actions"><a class="btn" href="${e(all)}" target="_blank" rel="noopener">🧭 Весь маршрут в Яндекс Картах</a></div>
 ${ME ? "" : '<p class="mut">Разрешите доступ к геопозиции, чтобы порядок считался от того места, где вы сейчас.</p>'}</div>
 ${noCoords.length ? `<div class="card mut">Без точки на карте: ${noCoords.map(r => e(r.cb)).join(", ")}</div>` : ""}`;
