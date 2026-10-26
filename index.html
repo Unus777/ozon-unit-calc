@@ -243,10 +243,19 @@ $("report").addEventListener("click", async ev => {
 });
 
 // «Доставлено» владельцем: Ozon (если там ещё не доставлен) + лист «Доставки» (если курьер ещё не отметил)
+// tel: с добавочным (Ozon даёт 4 цифры, таблица теряла ведущий ноль) — «,» = пауза, затем добавочный
+function telHref(phone, ext) {
+  const digits = String(phone || "").replace(/\D/g, "").replace(/^8(?=\d{10}$)/, "7");
+  const x = ext ? String(ext).replace(/\D/g, "").padStart(4, "0") : "";
+  return digits ? `tel:+${digits}${x ? "," + x : ""}` : "";
+}
+
 function deliveredActions(p, d) {
   const needOzon = !["delivered", "cancelled"].includes(p.status), needSheet = d.status !== "Доставлен";
   const label = needOzon && needSheet ? "✅ Доставлено" : needOzon ? "✅ Отметить доставленным в Ozon" : "✅ Отметить в таблице";
-  const btns = (needSheet ? `<button class="ghost" data-remind="${e(p.posting_number)}">🔔 Напомнить курьеру</button>` : "") +
+  const tel = telHref(d.phone, d.ext);
+  const btns = (tel ? `<a class="btn ghost" href="${e(tel)}">📞 Позвонить клиенту</a>` : "") +
+    (needSheet ? `<button class="ghost" data-remind="${e(p.posting_number)}">🔔 Напомнить курьеру</button>` : "") +
     (needOzon || needSheet ? `<button data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">${label}</button>` : "");
   return btns ? `<div class="actions">${btns}</div>` : "";
 }
@@ -275,8 +284,10 @@ function courierBlock(p) {
       (ADMIN() && SCRIPT_URL ? `<details class="delivery-edit"><summary>Пометка, время и прораб</summary>` +
         `<form data-schedule="${e(p.posting_number)}">${deliveryFields(d)}<button>Сохранить для Рашада</button></form></details>` : "");
   }
-  if (!ADMIN() || !SCRIPT_URL || !["ship", "way"].includes(stage(p.status)[0])) return "";
-  return `<form class="send" data-send="${e(p.posting_number)}"><input name="cb" placeholder="ЦБ" aria-label="Номер ЦБ" ` +
+  const call = ["ship", "way"].includes(stage(p.status)[0])
+    ? `<div class="actions"><button class="ghost" data-call="${e(p.posting_number)}">📞 Позвонить клиенту</button></div>` : "";
+  if (!ADMIN() || !SCRIPT_URL || !call) return call;
+  return call + `<form class="send" data-send="${e(p.posting_number)}"><input name="cb" placeholder="ЦБ" aria-label="Номер ЦБ" ` +
     `inputmode="numeric" autocomplete="off" required><details class="delivery-edit"><summary>Пометка, время и прораб</summary>` +
     `${deliveryFields({})}</details><button>Отправить курьеру</button></form>`;
 }
@@ -414,6 +425,18 @@ $("reload").onclick = loadOrders;
 $("orders").addEventListener("click", async ev => {
   const b = ev.target.closest("[data-remind]");
   if (b) sendReminder(b.dataset.remind, ADMIN()).catch(err => alert(err.message));
+  const cl = ev.target.closest("[data-call]");
+  if (cl) {  // заказа ещё нет у курьера: номер берём из Ozon в момент звонка
+    cl.disabled = true;
+    try {
+      const posting = (await ozon("/v3/posting/fbs/get", {posting_number: cl.dataset.call})).result;
+      const tel = telHref((posting.customer || {}).phone || (posting.addressee || {}).phone, (posting.addressee || {}).pin);
+      if (!tel) throw new Error("Ozon не отдал телефон клиента по этому заказу");
+      location.href = tel;
+    } catch (err) { alert(err.message); }
+    cl.disabled = false;
+    return;
+  }
   const dv = ev.target.closest("[data-delivered]");
   if (!dv) return;
   dv.disabled = true;
