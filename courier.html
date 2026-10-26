@@ -35,7 +35,7 @@
 </div>
 
 <script src="config.js?v=14"></script>
-<script src="push.js?v=14"></script>
+<script src="push.js?v=15"></script>
 <script>
 const $ = id => document.getElementById(id);
 const e = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
@@ -134,18 +134,6 @@ async function saveEdit(form) {
     comment: deliveryComment({note: v.note, time: v.time, foreman: v.foreman}), courier_comment: v.courier_comment.trim()};
   if (data.address !== r.address || !(r.lat && r.lon)) Object.assign(data, await geocode(data.address).catch(() => ({lat: "", lon: ""})));
   await save(r.posting, data);
-}
-
-async function remind(posting) {
-  const text = prompt("Текст напоминания курьеру (можно оставить пустым):", "");
-  if (text === null) return;
-  const raw = (() => { try { return localStorage.getItem("dlv_vk"); } catch { return null; } })();
-  if (!raw) throw new Error("На этом устройстве нет ключа уведомлений — откройте вашу ссылку доступа");
-  const jwk = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(raw.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0))));
-  const jwts = {};
-  for (const aud of await api({action: "push_targets"})) jwts[aud] = await vapidJwt(aud, jwk);
-  const res = await api({action: "remind", posting, text, jwts});
-  alert(res.pushed ? "Напоминание отправлено курьеру" : "Курьер не включил уведомления — напоминание не дошло");
 }
 
 function draw() {
@@ -264,7 +252,7 @@ $("list").addEventListener("click", ev => {
   const ed = ev.target.closest("[data-edit], [data-cancel]");
   if (ed) { const f = ed.closest(".order").querySelector("[data-editform]"); f.hidden = !f.hidden; return; }
   const rm = ev.target.closest("[data-remind]");
-  if (rm) { remind(rm.closest(".order").dataset.posting).catch(err => alert(err.message)); return; }
+  if (rm) { sendReminder(rm.closest(".order").dataset.posting, KEY).catch(err => alert(err.message)); return; }
   const b = ev.target.closest("[data-done]");
   if (!b) return;
   if (!confirm("Отметить заказ доставленным?")) return;

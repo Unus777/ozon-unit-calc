@@ -59,7 +59,7 @@
 
 <script src="calc.js?v=12"></script>
 <script src="config.js?v=12"></script>
-<script src="push.js?v=12"></script>
+<script src="push.js?v=15"></script>
 <script>
 const API = "https://api-seller.ozon.ru";
 // Статусы Ozon → понятные этапы; неизвестный статус показываем как есть
@@ -245,6 +245,7 @@ function courierBlock(p) {
     const done = d.status === "Доставлен";
     return `<div class="courier ${done ? "green" : ""}">${done ? "✅ Курьер доставил" : "🚚 У курьера"} · ${e(d.cb)} · ` +
       `${e(done ? d.delivered_at : d.status + (d.date ? " на " + d.date : ""))}</div>` +
+      (!done && ADMIN() && SCRIPT_URL ? `<div class="actions"><button class="ghost" data-remind="${e(p.posting_number)}">🔔 Напомнить курьеру</button></div>` : "") +
       (ADMIN() && SCRIPT_URL ? `<details class="delivery-edit"><summary>Пометка, время и прораб</summary>` +
         `<form data-schedule="${e(p.posting_number)}">${deliveryFields(d)}<button>Сохранить для Рашада</button></form></details>` : "");
   }
@@ -383,6 +384,10 @@ $("orders").onclick = async ev => {
   }
 };
 $("reload").onclick = loadOrders;
+$("orders").addEventListener("click", ev => {
+  const b = ev.target.closest("[data-remind]");
+  if (b) sendReminder(b.dataset.remind, ADMIN()).catch(err => alert(err.message));
+});
 
 $("orders").addEventListener("submit", async ev => {
   const f = ev.target.closest("form[data-send], form[data-schedule]");
