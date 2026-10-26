@@ -34,7 +34,7 @@
 <div id="list" class="mut">Загружаю…</div>
 </div>
 
-<script src="config.js?v=16"></script>
+<script src="config.js?v=18"></script>
 <script src="push.js?v=15"></script>
 <script>
 const $ = id => document.getElementById(id);
@@ -178,6 +178,45 @@ function mapView(lls) {  // центр и масштаб, чтобы влезл�
 
 let SEL = null;  // выбранный на карте заказ: маршрут строится только до него
 
+// ---------- официальный JavaScript API Яндекс Карт (с ключом): номера на метках, выбор нажатием, маршрут ----------
+let YMAP = null, YROUTE = null;
+const loadYmaps = () => window.ymaps ? new Promise(ok => ymaps.ready(ok)) : new Promise((ok, fail) => {
+  const js = document.createElement("script");
+  js.src = `https://api-maps.yandex.ru/2.1/?lang=ru_RU${YANDEX_MAPS_KEY ? "&apikey=" + encodeURIComponent(YANDEX_MAPS_KEY) : ""}`;
+  js.onload = () => ymaps.ready(ok);
+  js.onerror = () => fail(new Error("Яндекс Карты не загрузились — проверьте интернет"));
+  document.head.appendChild(js);
+});
+
+async function drawYmap(order, sel) {
+  try { await loadYmaps(); } catch (err) { $("map").innerHTML = `<div class="mut" style="padding:16px">${e(err.message)}</div>`; return; }
+  if (!YMAP) {
+    $("map").innerHTML = "";
+    YMAP = new ymaps.Map("map", {center: [55.75, 37.62], zoom: 9, controls: ["zoomControl", "geolocationControl"]});
+  }
+  YMAP.geoObjects.removeAll();
+  YROUTE = null;
+  order.forEach(({r, ll}, i) => {
+    const pm = new ymaps.Placemark(ll, {iconContent: String(i + 1), hintContent: `${r.cb} · ${r.packs}`},
+      {preset: r.posting === SEL ? "islands#redStretchyIcon" : "islands#blueStretchyIcon"});
+    pm.events.add("click", () => { SEL = r.posting === SEL ? null : r.posting; drawMap(); });  // выбор заказа нажатием на метку
+    YMAP.geoObjects.add(pm);
+  });
+  if (ME) YMAP.geoObjects.add(new ymaps.Placemark(ME, {hintContent: "Вы здесь"}, {preset: "islands#geolocationIcon"}));
+  if (sel && ME) {  // маршрут по дорогам от курьера до выбранного заказа
+    YROUTE = new ymaps.multiRouter.MultiRoute({referencePoints: [ME, sel.ll], params: {routingMode: "auto"}},
+      {boundsAutoApply: true, wayPointVisible: false});
+    YMAP.geoObjects.add(YROUTE);
+    YMAP.setBounds(ymaps.util.bounds.fromPoints([ME, sel.ll]), {checkZoomRange: true, zoomMargin: 40});  // пока маршрут считается
+  } else if (sel) {
+    YMAP.setCenter(sel.ll, 14, {duration: 300});
+  } else if (order.length) {
+    const lls = order.map(p => p.ll).concat(ME ? [ME] : []);
+    if (lls.length === 1) YMAP.setCenter(lls[0], 13);
+    else YMAP.setBounds(ymaps.util.bounds.fromPoints(lls), {checkZoomRange: true, zoomMargin: 40});
+  }
+}
+
 function drawMap() {
   const active = ROWS.filter(r => r.status === "Новый" || r.status === "Согласован");
   const pts = active.filter(r => r.lat && r.lon).map(r => ({r, ll: [+r.lat, +r.lon]}));
@@ -191,8 +230,11 @@ function drawMap() {
   // список: ближайшие к курьеру сверху (без геопозиции — в порядке «ближайший следующий» от первой точки)
   const order = pts.length ? routeOrder(pts, ME) : [];
   const sel = order.find(p => p.r.posting === SEL);
+  const useApi = !!(YANDEX_MAPS_KEY || window.FORCE_YMAPS);  // с ключом — полноценная карта, без ключа — виджет
+  if (useApi) drawYmap(order, sel);
   let src = "";
-  if (sel) {  // маршрут только до выбранного заказа
+  if (useApi) { /* карта нарисована через API */ }
+  else if (sel) {  // маршрут только до выбранного заказа
     src = ME ? `https://yandex.ru/map-widget/v1/?rtext=${ME.join(",")}~${sel.ll.join(",")}&rtt=auto`
       : `https://yandex.ru/map-widget/v1/?ll=${sel.ll[1]},${sel.ll[0]}&z=14&pt=${sel.ll[1]},${sel.ll[0]},pm2rdl`;
   } else if (order.length) {  // все точки без маршрута; «вы здесь» — отдельной меткой
@@ -201,14 +243,14 @@ function drawMap() {
     const marks = order.map(({ll}) => `${ll[1]},${ll[0]},pm2blm`).concat(ME ? [`${ME[1]},${ME[0]},ya_ru`] : []);
     src = `https://yandex.ru/map-widget/v1/?ll=${v.c[1]},${v.c[0]}&z=${v.z}&pt=${marks.join("~")}`;
   }
-  if ($("map").dataset.src !== src) {
+  if (!useApi && $("map").dataset.src !== src) {
     $("map").dataset.src = src;
     $("map").innerHTML = src ? `<iframe src="${e(src)}" title="Карта доставок" allowfullscreen></iframe>` : "";
   }
   const all = `https://yandex.ru/maps/?rtext=~${order.map(p => p.ll.join(",")).join("~")}&rtt=auto`;
   $("route").innerHTML = !order.length ? `<div class="card mut">Нет активных заказов с точкой на карте</div>` : `
 <div class="card"><h3>${sel ? "Маршрут до " + e(sel.r.cb) : "Выберите заказ"}</h3>
-<p class="mut">${sel ? "" : "Нажмите на заказ — карта покажет маршрут до него. "}${ME ? "Ближайшие к вам — сверху." : "Разрешите геопозицию, чтобы видеть ближайшие и маршрут от вас."}</p>
+<p class="mut">${sel ? "" : (YANDEX_MAPS_KEY ? "Нажмите на метку или на заказ — карта покажет маршрут до него. " : "Нажмите на заказ — карта покажет маршрут до него. ")}${ME ? "Ближайшие к вам — сверху." : "Разрешите геопозицию, чтобы видеть ближайшие и маршрут от вас."}</p>
 ${sel ? '<div class="actions"><button class="ghost" data-mapall>Показать все точки</button></div>' : ""}
 <ol class="stops">${order.map(({r, ll}) => {
     const on = r.posting === SEL;
