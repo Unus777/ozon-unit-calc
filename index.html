@@ -33,7 +33,9 @@
 </form>
 <div id="ownerNotif"><h3>Уведомления о курьере</h3>
 <p class="mut" id="ownerNotifState">Придут, когда курьер поставит дату, напишет комментарий или нажмёт «Доставлено».</p>
-<button class="ghost" id="ownerNotifBtn"><span data-ic="bell"></span>Включить уведомления</button></div>
+<button class="ghost" id="ownerNotifBtn"><span data-ic="bell"></span>Включить уведомления</button>
+<button class="ghost" id="ownerTestBtn">Проверить уведомление</button>
+<p class="mut" id="ownerTestState" aria-live="polite"></p></div>
 <div id="forget"><h3>Ozon</h3>
 <button class="ghost" id="forgetBtn">Сменить ключи Ozon</button></div>
 </div>
@@ -594,6 +596,26 @@ function drawOwnerNotif() {
     : pushReady() ? "Придут, когда курьер поставит дату, напишет комментарий или нажмёт «Доставлено»."
     : "На iPhone откройте сайт с экрана «Домой» (Поделиться → На экран «Домой»), тогда уведомления можно будет включить.";
 }
+// Пробный пуш: показывает, сколько телефонов подписано и что ответила служба уведомлений
+function pushTestText(r) {
+  const why = c => c.code === 403 || c.code === 401 ? "служба отклонила подпись" : c.code === "нет подписи" ? "скрипт не подписал пуш" : `код ${c.code}`;
+  const last = r.last ? `<br>Последнее о курьере (${e(r.last.ts)}): ${r.last.codes.length ? r.last.codes.map(c => typeof c.code === "number" && c.code < 300 ? "отправлено" : e(why(c))).join(", ") : "некому отправить"}.` : "";
+  if (!r.subs) return '<span class="red">Ни один телефон не подписан.</span> Нажмите «Включить уведомления» (на iPhone — в приложении с экрана «Домой»).' + last;
+  if (r.ok) return `<span class="green">Отправлено на ${r.ok} из ${r.subs} устр.</span> Через несколько секунд придёт «Проверка уведомлений». Не пришло — уведомления для сайта выключены в настройках телефона.` + last;
+  return `<span class="red">Не доставлено:</span> ${r.codes.map(c => e(c.host + " — " + why(c))).join("; ")}.` + last;
+}
+$("ownerTestBtn").onclick = async () => {
+  const b = $("ownerTestBtn");
+  b.disabled = true;
+  $("ownerTestState").textContent = "Отправляю…";
+  try {
+    if (pushReady() && Notification.permission === "granted") await ownerSubscribe();  // заодно обновим подписку этого телефона
+    $("ownerTestState").innerHTML = pushTestText(await sheetApi({action: "push_test", key: ADMIN()}));
+  } catch (err) {
+    $("ownerTestState").textContent = /Неизвестное действие/.test(err.message) ? "Сначала обновите скрипт таблицы (новая версия с проверкой уведомлений)." : err.message;
+  }
+  b.disabled = false;
+};
 $("ownerNotifBtn").onclick = async () => {
   $("ownerNotifBtn").disabled = true;
   try {
