@@ -10,7 +10,7 @@
 <link rel="manifest" href="owner.webmanifest?v=13">
 <meta name="apple-mobile-web-app-title" content="Алмалы">
 <script src="theme.js?v=12"></script>
-<link rel="stylesheet" href="style.css?v=20">
+<link rel="stylesheet" href="style.css?v=22">
 <link rel="icon" href="icons/owner.svg?v=13" type="image/svg+xml">
 <link rel="icon" href="icons/owner-32.png?v=13" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/owner-180.png?v=13" sizes="180x180">
@@ -192,7 +192,8 @@ async function loadOrders() {
 // Этап заказа для вкладок: новые (ещё не у курьера) → у курьера → доставлены
 function ostate(p) {
   const d = DELIV[p.posting_number], closed = ["delivered", "cancelled"].includes(p.status);
-  if (d) return d.status === "Доставлен" && closed ? "done" : "courier";
+  // доставлен курьером и отмечен (или уже отправлен) в Ozon — сразу во «Доставлены»
+  if (d) return d.status === "Доставлен" && (closed || ozState(p) === "wait") ? "done" : "courier";
   return closed ? "done" : "new";
 }
 const OTABS = {new: "Новые", courier: "У курьера", done: "Доставлены"};
@@ -205,7 +206,7 @@ function ozState(p) {  // "ok" — Ozon провёл; "wait" — ждём; "late
   const t = pendingGet()[p.posting_number];
   return !t ? "" : Date.now() - t < PENDING_TTL ? "wait" : "late";
 }
-const OZ_LINE = {ok: "✅ Проведено в Ozon", wait: "⏳ Отправлено в Ozon — ждём подтверждения", late: "⚠️ Ozon не подтвердил доставку за 2 часа — проверьте в кабинете"};
+const OZ_LINE = {ok: "✅ Отмечено в Ozon",wait: "⏳ Отправлено в Ozon — ждём подтверждения", late: "⚠️ Ozon не подтвердил доставку за 2 часа — проверьте в кабинете"};
 
 async function checkPending() {
   const pend = pendingGet(), nums = Object.keys(pend);
@@ -251,12 +252,20 @@ function orderCard(p, i) {
     items = `<div class="err">${e(err.message)}</div>`;
   }
   return `<div class="card order${p.status === "cancelled" ? " cancelled" : ""}"><div class="top">` +
-    `${d ? `<span class="badge ${d.status === "Доставлен" ? "done" : "way"}">${d.status === "Доставлен" ? "Доставлен" : "У курьера"}</span>` : badge(p.status)}` +
+    `${d ? courierBadge(p, d) : badge(p.status)}` +
     `<span class="mut num">${meta}</span>` +
     `<button class="more" data-more="${i}" aria-label="Ещё действия">⋯</button></div>${items}${primaryActions(p)}</div>`;
 }
 
-// Главная кнопка по этапу: новый → ЦБ + «Отправить курьеру»; у курьера → «Клиенту» + «Доставлено»
+// Значок заказа у курьера: у курьера → курьер доставил (ждёт отметки в Ozon) → доставлен
+function courierBadge(p, d) {
+  if (d.status !== "Доставлен") return '<span class="badge way">У курьера</span>';
+  if (p.status === "delivered" || ozState(p) === "wait") return '<span class="badge done">Доставлен</span>';
+  return '<span class="badge ship">Курьер доставил</span>';
+}
+
+// Главная кнопка по этапу: новый → ЦБ + «Отправить курьеру»; у курьера → «Клиенту» + «Доставлено»;
+// курьер доставил → синяя «Отметить доставленным в Ozon»
 function primaryActions(p) {
   const d = DELIV[p.posting_number];
   if (!ADMIN() || !SCRIPT_URL) return "";
@@ -271,7 +280,7 @@ function primaryActions(p) {
   if (!needOzon && !needSheet) return line;
   const tel = telHref(d.phone, d.ext);
   return `<div class="actions">${tel && needSheet ? `<a class="btn ghost" href="${e(tel)}">📞 Клиенту</a>` : ""}` +
-    `<button class="ok" data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">` +
+    `<button class="${needSheet ? "ok" : ""}" data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">` +
     `${needSheet ? "Доставлено" : oz === "late" ? "Повторить в Ozon" : "Отметить доставленным в Ozon"}</button></div>` + line;
 }
 
