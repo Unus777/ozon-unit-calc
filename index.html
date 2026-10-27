@@ -10,15 +10,15 @@
 <link rel="manifest" href="owner.webmanifest?v=13">
 <meta name="apple-mobile-web-app-title" content="Алмалы">
 <script src="theme.js?v=12"></script>
-<link rel="stylesheet" href="style.css?v=14">
+<link rel="stylesheet" href="style.css?v=20">
 <link rel="icon" href="icons/owner.svg?v=13" type="image/svg+xml">
 <link rel="icon" href="icons/owner-32.png?v=13" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/owner-180.png?v=13" sizes="180x180">
 </head>
 <body>
 <header><div class="bar">
-<div class="brand">Алмалы <span>юнит-экономика заказов Ozon</span></div>
-<button class="text" id="gear" aria-expanded="false" aria-controls="settings">⚙ Настройки</button>
+<div class="brand">Алмалы <span>заказы Ozon</span></div>
+<span class="hbtns"><a class="text" id="dlvLink" href="courier.html?admin=1" hidden>🚚 Доставки</a><button class="text" id="gear" aria-expanded="false" aria-controls="settings">⚙ Настройки</button></span>
 </div></header>
 <main>
 
@@ -54,14 +54,15 @@
 <button id="go">Рассчитать</button>
 </form>
 <div id="out"></div>
-<a class="btn ghost dlvlink" id="dlvLink" href="courier.html?admin=1" hidden>🚚 Доставки: правка, напоминания, карта</a>
 <div id="report"></div>
-<div class="label">Заказы <button class="text" id="reload">Обновить</button></div>
+<div class="otabs" role="tablist" aria-label="Заказы" id="otabs"></div>
 <div id="orders" class="mut"></div>
+<p style="text-align:center"><button class="text" id="reload">Обновить список</button></p>
+<div id="sheet" class="sheet" hidden><div class="sheet-bg" data-close></div><section class="sheet-panel" role="dialog" aria-modal="true" aria-label="Действия с заказом" id="sheetPanel"></section></div>
 </div>
 
 <script src="calc.js?v=12"></script>
-<script src="config.js?v=12"></script>
+<script src="config.js?v=20"></script>
 <script src="push.js?v=15"></script>
 <script>
 const API = "https://api-seller.ozon.ru";
@@ -182,36 +183,100 @@ async function loadOrders() {
     PAYS = ADMIN() && SCRIPT_URL ? await sheetApi({action: "payments", key: ADMIN()}).catch(() => null) : null;  // null — скрипт ещё без выплат
     drawReport();
     ORDERS = postings; PRICES = prices;
-    $("orders").innerHTML = postings.length ? postings.map(orderCard).join("") : '<div class="card mut">Заказов нет</div>';
+    drawOrders();
   } catch (err) {
     $("orders").innerHTML = `<div class="card err">${e(err.message)}</div>`;
   }
 }
 
+// Этап заказа для вкладок: новые (ещё не у курьера) → у курьера → доставлены
+function ostate(p) {
+  const d = DELIV[p.posting_number], closed = ["delivered", "cancelled"].includes(p.status);
+  if (d) return d.status === "Доставлен" && closed ? "done" : "courier";
+  return closed ? "done" : "new";
+}
+const OTABS = {new: "Новые", courier: "У курьера", done: "Доставлены"};
+let OTAB = "new";
+
+function drawOrders() {
+  const counts = {new: 0, courier: 0, done: 0};
+  ORDERS.forEach(p => counts[ostate(p)]++);
+  $("otabs").innerHTML = Object.entries(OTABS).map(([k, v]) =>
+    `<button role="tab" data-otab="${k}" aria-selected="${OTAB === k}">${v}${k !== "done" && counts[k] ? " · " + counts[k] : ""}</button>`).join("");
+  const list = ORDERS.map((p, i) => [p, i]).filter(([p]) => ostate(p) === OTAB);
+  $("orders").innerHTML = list.length ? list.map(([p, i]) => orderCard(p, i)).join("")
+    : `<div class="card mut">${OTAB === "new" ? "Новых заказов нет" : OTAB === "courier" ? "У курьера сейчас ничего нет" : "Пока пусто"}</div>`;
+}
+
 function orderCard(p, i) {
   const date = new Date(p.in_process_at).toLocaleDateString("ru-RU", {day: "numeric", month: "short"});
-  let body;
+  const d = DELIV[p.posting_number];
+  const meta = d ? `${e(d.cb)}${d.date ? " · на " + e(d.date) : ""}` : `${date} · ${e(p.posting_number)}`;
+  let items;
   try {
-    body = p.products.map(x => {
+    items = p.products.map(x => {
       const [, t] = calc({...p, products: [x]}, PRICES);
-      return `<div class="item"><div><b>${x.quantity} уп · ${e(x.offer_id)}</b><span class="mut">${e(shortName(x.name))}</span></div>` +
+      return `<div class="item"><div><b>${x.quantity} уп · ${tileFormat(x.offer_id, x.name) || e(x.offer_id)}</b>` +
+        `<span class="mut">${e(shortName(x.name).replace(/^Керамогранит\s+/i, "").replace(/\s*60\s*[xх×]\s*(60|120)$/i, ""))}</span></div>` +
         `<div class="price"><div class="v num ${t.status[0]}">${Math.round(t.payout_m2)}</div><div class="mut">₽/м² на руки</div></div></div>`;
-    }).join("") + `<div class="actions"><button data-copy="${i}">Скопировать</button>` +
-      `<button class="ghost" data-open="${e(p.posting_number)}">Подробно</button></div>`;
+    }).join("");
   } catch (err) {
-    body = `<div class="err">${e(err.message)}</div>`;
+    items = `<div class="err">${e(err.message)}</div>`;
   }
-  body += courierBlock(p);
-  return `<div class="card order${p.status === "cancelled" ? " cancelled" : ""}"><div class="top">${badge(p.status)}` +
-    `<span class="mut num">${date} · ${e(p.posting_number)}</span></div>${body}</div>`;
+  return `<div class="card order${p.status === "cancelled" ? " cancelled" : ""}"><div class="top">` +
+    `${d ? `<span class="badge ${d.status === "Доставлен" ? "done" : "way"}">${d.status === "Доставлен" ? "Доставлен" : "У курьера"}</span>` : badge(p.status)}` +
+    `<span class="mut num">${meta}</span>` +
+    `<button class="more" data-more="${i}" aria-label="Ещё действия">⋯</button></div>${items}${primaryActions(p)}</div>`;
 }
+
+// Главная кнопка по этапу: новый → ЦБ + «Отправить курьеру»; у курьера → «Клиенту» + «Доставлено»
+function primaryActions(p) {
+  const d = DELIV[p.posting_number];
+  if (!ADMIN() || !SCRIPT_URL) return "";
+  if (!d) {
+    if (!["ship", "way"].includes(stage(p.status)[0])) return "";
+    return `<form class="send" data-send="${e(p.posting_number)}"><label class="cbfield">ЦБ-<input name="cb" placeholder="970" ` +
+      `aria-label="Номер ЦБ" inputmode="numeric" autocomplete="off" required></label><button>Отправить курьеру</button>` +
+      `<details class="delivery-edit"><summary>Пометка, время и прораб</summary>${deliveryFields({})}</details></form>`;
+  }
+  const needOzon = !["delivered", "cancelled"].includes(p.status), needSheet = d.status !== "Доставлен";
+  if (!needOzon && !needSheet) return "";
+  const tel = telHref(d.phone, d.ext);
+  return `<div class="actions">${tel && needSheet ? `<a class="btn ghost" href="${e(tel)}">📞 Клиенту</a>` : ""}` +
+    `<button class="ok" data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">` +
+    `${needSheet ? "Доставлено" : "Отметить доставленным в Ozon"}</button></div>`;
+}
+
+// Меню «⋯»: все остальные действия, по группам
+function openSheet(i) {
+  const p = ORDERS[i], d = DELIV[p.posting_number];
+  const done = d && d.status === "Доставлен";
+  const tel = d ? telHref(d.phone, d.ext) : "";
+  const row = (inner) => `<div class="srow">${inner}</div>`;
+  const callRow = tel ? `<a class="sitem" href="${e(tel)}">📞 Позвонить клиенту${d.ext ? `<span class="mut">доб. ${e(String(d.ext).padStart(4, "0"))}</span>` : ""}</a>`
+    : ["ship", "way"].includes(stage(p.status)[0]) ? `<button class="sitem" data-call="${e(p.posting_number)}">📞 Позвонить клиенту</button>` : "";
+  const needOzon = d && !["delivered", "cancelled"].includes(p.status);
+  $("sheetPanel").innerHTML = `<div class="grab"></div>
+<div class="shead"><div><b>${d ? e(d.cb) + " · " : ""}${p.products.map(x => x.quantity + " уп").join(" + ")}</b>
+<div class="mut">${e(p.posting_number)}${d && d.address ? " · " + e(d.address) : ""}</div></div>${badge(p.status)}</div>
+${callRow || (d && !done) ? `<div class="sgroup">Связь</div>${callRow}${d && !done ? `<button class="sitem" data-remind="${e(p.posting_number)}">🔔 Напомнить курьеру</button>` : ""}` : ""}
+<div class="sgroup">Заказ</div>
+${d && ADMIN() && SCRIPT_URL ? `<details class="sitem-details"><summary class="sitem">✏️ Пометка, время, прораб</summary>` +
+  `<form data-schedule="${e(p.posting_number)}">${deliveryFields(d)}<button>Сохранить для Рашада</button></form></details>` : ""}
+<button class="sitem" data-open="${e(p.posting_number)}">📊 Расчёт ₽/м²</button>
+<button class="sitem" data-copy="${i}">📋 Скопировать для отчёта</button>
+${d && (needOzon || !done) && ADMIN() && SCRIPT_URL ? `<button class="ok wide" data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">${done ? "Отметить доставленным в Ozon" : "Доставлено"}</button>` : ""}
+<button class="text wide" data-close>Закрыть</button>`;
+  $("sheet").hidden = false;
+}
+const closeSheet = () => { $("sheet").hidden = true; };
 
 let PAYS = null;
 function drawReport() {
   const open = !!document.querySelector("#report details[open]");
   $("dlvLink").hidden = !(ADMIN() && SCRIPT_URL);
   $("report").innerHTML = ADMIN() && SCRIPT_URL ? reportHtml(deliveryReport(Object.values(DELIV), PAYS),
-    {title: "Расчёт с курьером", leftLabel: "осталось выплатить", admin: true}) : "";
+    {title: "Курьеру осталось выплатить", leftLabel: "", admin: true}) : "";
   if (open) document.querySelector("#report details")?.setAttribute("open", "");
 }
 
@@ -242,7 +307,6 @@ $("report").addEventListener("click", async ev => {
   } catch (err) { alert(err.message); }
 });
 
-// «Доставлено» владельцем: Ozon (если там ещё не доставлен) + лист «Доставки» (если курьер ещё не отметил)
 // tel: с добавочным (Ozon даёт 4 цифры, таблица теряла ведущий ноль) — «,» = пауза, затем добавочный
 function telHref(phone, ext) {
   const digits = String(phone || "").replace(/\D/g, "").replace(/^8(?=\d{10}$)/, "7");
@@ -250,16 +314,7 @@ function telHref(phone, ext) {
   return digits ? `tel:+${digits}${x ? "," + x : ""}` : "";
 }
 
-function deliveredActions(p, d) {
-  const needOzon = !["delivered", "cancelled"].includes(p.status), needSheet = d.status !== "Доставлен";
-  const label = needOzon && needSheet ? "✅ Доставлено" : needOzon ? "✅ Отметить доставленным в Ozon" : "✅ Отметить в таблице";
-  const tel = telHref(d.phone, d.ext);
-  const btns = (tel ? `<a class="btn ghost" href="${e(tel)}">📞 Позвонить клиенту</a>` : "") +
-    (needSheet ? `<button class="ghost" data-remind="${e(p.posting_number)}">🔔 Напомнить курьеру</button>` : "") +
-    (needOzon || needSheet ? `<button data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">${label}</button>` : "");
-  return btns ? `<div class="actions">${btns}</div>` : "";
-}
-
+// «Доставлено» владельцем: Ozon (если там ещё не доставлен) + лист «Доставки» (если курьер ещё не отметил)
 async function markDelivered(posting, needOzon) {
   const d = DELIV[posting];
   const where = [needOzon && "в Ozon", d.status !== "Доставлен" && "в таблице"].filter(Boolean).join(" и ");
@@ -272,24 +327,6 @@ async function markDelivered(posting, needOzon) {
   if (d.status !== "Доставлен") DELIV[posting] = await sheetApi({action: "update", key: ADMIN(), posting, data: {status: "Доставлен"}});
   alert(needOzon ? "Готово. В Ozon статус сменится в течение нескольких минут." : "Готово");
   return true;
-}
-
-function courierBlock(p) {
-  const d = DELIV[p.posting_number];
-  if (d) {
-    const done = d.status === "Доставлен";
-    return `<div class="courier ${done ? "green" : ""}">${done ? "✅ Доставлен" : "🚚 У курьера"} · ${e(d.cb)} · ` +
-      `${e(done ? d.delivered_at : d.status + (d.date ? " на " + d.date : ""))}</div>` +
-      (ADMIN() && SCRIPT_URL ? deliveredActions(p, d) : "") +
-      (ADMIN() && SCRIPT_URL ? `<details class="delivery-edit"><summary>Пометка, время и прораб</summary>` +
-        `<form data-schedule="${e(p.posting_number)}">${deliveryFields(d)}<button>Сохранить для Рашада</button></form></details>` : "");
-  }
-  const call = ["ship", "way"].includes(stage(p.status)[0])
-    ? `<div class="actions"><button class="ghost" data-call="${e(p.posting_number)}">📞 Позвонить клиенту</button></div>` : "";
-  if (!ADMIN() || !SCRIPT_URL || !call) return call;
-  return call + `<form class="send" data-send="${e(p.posting_number)}"><input name="cb" placeholder="ЦБ" aria-label="Номер ЦБ" ` +
-    `inputmode="numeric" autocomplete="off" required><details class="delivery-edit"><summary>Пометка, время и прораб</summary>` +
-    `${deliveryFields({})}</details><button>Отправить курьеру</button></form>`;
 }
 
 function deliveryFields(d) {
@@ -408,21 +445,30 @@ $("out").onclick = ev => {
   history.replaceState(null, "", location.pathname);
 };
 
-$("orders").onclick = async ev => {
-  const b = ev.target.closest("button");
+$("app").addEventListener("click", ev => {
+  const t = ev.target.closest("[data-otab]");
+  if (t) { OTAB = t.dataset.otab; drawOrders(); return; }
+  const m = ev.target.closest("[data-more]");
+  if (m) { openSheet(+m.dataset.more); return; }
+  if (ev.target.closest("[data-close]")) closeSheet();
+});
+$("app").addEventListener("click", async ev => {
+  const b = ev.target.closest("button[data-copy], button[data-open]");
   if (!b) return;
   if (b.dataset.copy) {
     await copy(copyText(ORDERS[b.dataset.copy], PRICES));
+    const label = b.textContent;
     b.textContent = "Скопировано ✓";
-    setTimeout(() => { b.textContent = "Скопировать"; }, 1500);
+    setTimeout(() => { b.textContent = label; }, 1500);
   } else if (b.dataset.open) {
+    closeSheet();
     $("n").value = b.dataset.open;
     $("calcForm").requestSubmit();
     scrollTo({top: 0, behavior: "smooth"});
   }
-};
+});
 $("reload").onclick = loadOrders;
-$("orders").addEventListener("click", async ev => {
+$("app").addEventListener("click", async ev => {
   const b = ev.target.closest("[data-remind]");
   if (b) sendReminder(b.dataset.remind, ADMIN()).catch(err => alert(err.message));
   const cl = ev.target.closest("[data-call]");
@@ -440,7 +486,7 @@ $("orders").addEventListener("click", async ev => {
   const dv = ev.target.closest("[data-delivered]");
   if (!dv) return;
   dv.disabled = true;
-  try { if (await markDelivered(dv.dataset.delivered, dv.dataset.ozon === "1")) loadOrders(); }
+  try { if (await markDelivered(dv.dataset.delivered, dv.dataset.ozon === "1")) { closeSheet(); loadOrders(); } }
   catch (err) { alert(err.message); }
   dv.disabled = false;
 });
@@ -473,7 +519,7 @@ $("ownerNotifBtn").onclick = async () => {
 };
 if (ADMIN() && SCRIPT_URL && pushReady() && Notification.permission === "granted") ownerSubscribe().catch(() => {});  // подписка могла обновиться
 
-$("orders").addEventListener("submit", async ev => {
+$("app").addEventListener("submit", async ev => {
   const f = ev.target.closest("form[data-send], form[data-schedule]");
   if (!f) return;
   ev.preventDefault();
@@ -490,8 +536,8 @@ $("orders").addEventListener("submit", async ev => {
       btn.disabled = false; btn.textContent = "Сохранено ✓";
       setTimeout(() => { btn.textContent = label; }, 2000);
     } else {
-      f.outerHTML = courierBlock({posting_number: r.posting}) +
-        (r.pushed ? "" : '<p class="mut">Пуш не дошёл: курьер не включил уведомления. Заказ сохранён.</p>');
+      if (!r.pushed) alert("Заказ у курьера, но пуш не дошёл: курьер не включил уведомления.");
+      drawOrders();
     }
   } catch (err) {
     btn.disabled = false; btn.textContent = label;

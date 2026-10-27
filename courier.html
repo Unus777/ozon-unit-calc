@@ -10,14 +10,14 @@
 <title>Доставки</title>
 <link rel="manifest" href="manifest.webmanifest?v=13">
 <script src="theme.js?v=14"></script>
-<link rel="stylesheet" href="style.css?v=19">
+<link rel="stylesheet" href="style.css?v=20">
 <link rel="icon" href="icons/courier.svg?v=13" type="image/svg+xml">
 <link rel="icon" href="icons/courier-32.png?v=13" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/courier-180.png?v=13" sizes="180x180">
 </head>
 <body>
 <header><div class="bar">
-<div class="brand">Алмалы <span>доставки курьера</span></div>
+<div class="brand">Доставки <span id="subtitle">Алмалы</span></div>
 <span><button class="text" id="themeBtn" aria-label="Сменить тему"></button><button class="text" id="reload">Обновить</button></span>
 </div></header>
 <main>
@@ -25,16 +25,19 @@
 
 <div id="app" hidden>
 <div class="card" id="notif" hidden></div>
+<div id="owed"></div>
 <div class="tabs" role="tablist">
-<button role="tab" aria-selected="true" data-tab="active">Активные</button>
+<button role="tab" aria-selected="true" data-tab="today">Сегодня</button>
+<button role="tab" aria-selected="false" data-tab="active">Все</button>
 <button role="tab" aria-selected="false" data-tab="map">Карта</button>
-<button role="tab" aria-selected="false" data-tab="done">Доставленные</button>
+<button role="tab" aria-selected="false" data-tab="done">Готово</button>
 </div>
 <div id="mapbox" hidden><div id="map" role="region" aria-label="Карта доставок"></div><div id="route"></div></div>
 <div id="list" class="mut">Загружаю…</div>
+<div id="sheet" class="sheet" hidden><div class="sheet-bg" data-close></div><section class="sheet-panel" role="dialog" aria-modal="true" aria-label="Действия с заказом" id="sheetPanel"></section></div>
 </div>
 
-<script src="config.js?v=18"></script>
+<script src="config.js?v=20"></script>
 <script src="push.js?v=15"></script>
 <script>
 const $ = id => document.getElementById(id);
@@ -46,7 +49,8 @@ const KEY = IS_ADMIN ? ADMIN_KEY : new URLSearchParams(location.search).get("k")
 const STATUSES = ["Новый", "Согласован", "Доставлен", "Отменён"];
 const FOCUS = new URLSearchParams(location.search).get("o");
 const BADGE = {"Новый": "ship", "Согласован": "way", "Доставлен": "done"};
-let ROWS = [], PAYS = null, TAB = "active";
+let ROWS = [], PAYS = null, TAB = "today", OPEN = null, SHEET = null;
+const todayStr = () => new Date().toLocaleDateString("ru-RU", {day: "2-digit", month: "2-digit", year: "numeric"});
 
 const toIso = d => { const m = /^(\d\d)\.(\d\d)\.(\d{4})$/.exec(d || ""); return m ? `${m[3]}-${m[2]}-${m[1]}` : ""; };
 const fromIso = d => d ? d.split("-").reverse().join(".") : "";
@@ -59,39 +63,65 @@ const dest = r => r.lat && r.lon ? `${r.lat},${r.lon}` : r.address;
 const yandexMaps = r => `https://yandex.ru/maps/?rtext=~${encodeURIComponent(dest(r))}&rtt=auto`;
 const appleMaps = r => `https://maps.apple.com/?daddr=${encodeURIComponent(dest(r))}&dirflg=d`;
 
-function card(r) {
-  const unloadNone = r.unload === "Нет";
-  const done = r.status === "Доставлен";
-  const info = deliveryDetails(r.comment);
-  let foreman = "";
-  try { foreman = foremanPhone(info.foreman); } catch {} // старый некорректный номер не превращаем в ссылку
+function telOf(r) {
   // Таблица портит «+»: бывает «7980…» или «=+7980…» — оставляем только цифры
   const digits = String(r.phone || "").replace(/\D/g, "").replace(/^8(?=\d{10}$)/, "7");
   const ext = r.ext ? String(r.ext).replace(/\D/g, "").padStart(4, "0") : "";  // добавочный Ozon — 4 цифры, таблица теряла ведущий ноль
-  const tel = digits ? `tel:+${digits}${ext ? "," + ext : ""}` : "";
-  return `<div class="card order${r.posting === FOCUS ? " hl" : ""}" data-posting="${e(r.posting)}">
-<div class="top"><span class="cb">${e(r.cb)}</span><span class="badge ${BADGE[r.status] || ""}">${e(r.status)}</span>
-<span class="mut num">${e(r.posting)}</span></div>
-<div class="item"><div><b>${e(r.packs || "—")}</b>${r.unload === "" ? "" : `<span class="unload${unloadNone ? " none" : ""}">${unloadNone ? "Без разгрузки" : "Разгрузка: " + e(r.unload)}</span>`}</div>
-<div class="price"><div class="v num">${rub(r.pay)}</div><div class="mut">оплата</div></div></div>
-<div class="addr">📍 ${e(r.address)}</div>
-${r.date || info.time ? `<div class="delivery-plan">🗓 Доставить: ${e([r.date, info.time].filter(Boolean).join(" · "))}</div>` : ""}
-${info.note ? `<div class="delivery-note">💬 ${e(info.note)}</div>` : ""}
-<div class="actions">
-${tel ? `<a class="btn" href="${e(tel)}">📞 Позвонить</a>` : ""}
-${foreman ? `<a class="btn" href="tel:${e(foreman)}">📞 Позвонить прорабу</a>` : ""}
-<a class="btn ghost" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">🧭 Яндекс Карты</a>
-<a class="btn ghost" href="${e(appleMaps(r))}" target="_blank" rel="noopener">Apple Карты</a>
+  return {tel: digits ? `tel:+${digits}${ext ? "," + ext : ""}` : "", ext};
+}
+const unloadText = r => r.unload === "Нет" ? "Без разгрузки" : r.unload ? r.unload : "—";
+const whenText = r => { const t = deliveryDetails(r.comment).time; return [r.date === todayStr() ? "Сегодня" : r.date, t].filter(Boolean).join(" ") || r.status; };
+
+function card(r) {
+  const done = r.status === "Доставлен" || r.status === "Отменён";
+  if (r.posting !== OPEN) {  // свёрнутая строка: нажатие раскрывает
+    return `<button class="card crow${r.posting === FOCUS ? " hl" : ""}" data-row="${e(r.posting)}">` +
+      `<span class="crow-main"><b>${e(r.cb)} · ${e(r.packs || "—")}</b><span class="mut">${e(r.address)} · ${e(unloadText(r).toLowerCase())}</span></span>` +
+      `<span class="crow-pay num">${rub(r.pay)}</span></button>`;
+  }
+  const info = deliveryDetails(r.comment), {tel} = telOf(r);
+  return `<div class="card order open${r.posting === FOCUS ? " hl" : ""}" data-posting="${e(r.posting)}">
+<div class="top"><span class="cb">${e(r.cb)}</span><span class="badge ${done ? "done" : "way"}">${e(done ? r.status : whenText(r))}</span>
+<button class="more" data-sheet aria-label="Ещё действия">⋯</button></div>
+<div class="addr big">${e(r.address)}</div>
+${info.note || r.comment && !info.note && !info.time && !info.foreman ? `<div class="mut">${e(info.note || r.comment)}</div>` : ""}
+<div class="tiles">
+<div class="tile"><span>Везти</span><b>${e(r.packs || "—")}</b></div>
+<div class="tile ${r.unload && r.unload !== "Нет" ? "warn" : ""}"><span>Разгрузка</span><b>${e(unloadText(r))}</b></div>
+<div class="tile pay"><span>Оплата</span><b class="num">${rub(r.pay)}</b></div>
 </div>
-${ext ? `<div class="mut" style="margin-top:4px">Добавочный ${e(ext)} наберётся сам после соединения</div>` : ""}
-<div class="field"><label for="d-${e(r.posting)}">Дата доставки</label>
-<input type="date" id="d-${e(r.posting)}" data-date value="${toIso(r.date)}" ${done ? "disabled" : ""}></div>
-<div class="field"><label for="c-${e(r.posting)}">Комментарий</label>
-<input id="c-${e(r.posting)}" data-comment value="${e(r.courier_comment)}" placeholder="для владельца" ${done ? "disabled" : ""}></div>
-${done ? `<p class="mut">Доставлен${r.delivered_at ? " " + e(r.delivered_at) : ""}</p>` : `<div class="actions"><button data-done>✓ Доставлено</button></div>`}
-${IS_ADMIN ? `<div class="actions"><button class="ghost" data-edit>✏️ Изменить</button>${done ? "" : `<button class="ghost" data-remind>🔔 Напомнить</button>`}</div>${editForm(r)}` : ""}
+${done ? `<p class="mut">Доставлен${r.delivered_at ? " " + e(r.delivered_at) : ""}</p>` : `<div class="actions two">
+${tel ? `<a class="btn ghost" href="${e(tel)}">📞 Позвонить</a>` : ""}
+<a class="btn ghost" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">🧭 Маршрут</a></div>
+<button class="ok wide big" data-done>Доставлено</button>`}
 </div>`;
 }
+
+// «⋯» курьера: дата, комментарий, прораб, другие карты; владельцу ещё правка и напоминание
+function openCSheet(posting) {
+  const r = ROWS.find(x => x.posting === posting);
+  if (!r) return;
+  SHEET = posting;
+  const done = r.status === "Доставлен" || r.status === "Отменён";
+  const info = deliveryDetails(r.comment), {tel, ext} = telOf(r);
+  let foreman = "";
+  try { foreman = foremanPhone(info.foreman); } catch {}  // старый некорректный номер не превращаем в ссылку
+  $("sheetPanel").innerHTML = `<div class="order" data-posting="${e(r.posting)}"><div class="grab"></div>
+<div class="shead"><div><b>${e(r.cb)} · ${e(r.packs)}</b><div class="mut">${e(r.posting)} · ${e(r.address)}</div></div></div>
+<div class="sgroup">Доставка</div>
+<div class="field"><label for="sd">Дата доставки</label><input type="date" id="sd" data-date value="${toIso(r.date)}" ${done ? "disabled" : ""}></div>
+${info.time ? `<div class="sitem">🕑 Время: ${e(info.time)}</div>` : ""}
+<div class="field"><label for="sc">Комментарий</label><input id="sc" data-comment value="${e(r.courier_comment)}" placeholder="для владельца" ${done ? "disabled" : ""}></div>
+<div class="sgroup">Связь и маршрут</div>
+${tel ? `<a class="sitem" href="${e(tel)}">📞 Позвонить клиенту${ext ? `<span class="mut">доб. ${e(ext)} — наберётся сам</span>` : ""}</a>` : ""}
+${foreman ? `<a class="sitem" href="tel:${e(foreman)}">👷 Позвонить прорабу</a>` : ""}
+<a class="sitem" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">🧭 Яндекс Карты</a>
+<a class="sitem" href="${e(appleMaps(r))}" target="_blank" rel="noopener">🗺 Apple Карты</a>
+${IS_ADMIN ? `<div class="sgroup">Владелец</div><button class="sitem" data-edit>✏️ Изменить данные заказа</button>${done ? "" : `<button class="sitem" data-remind>🔔 Напомнить курьеру</button>`}${editForm(r)}` : ""}
+<button class="text wide" data-close>Закрыть</button></div>`;
+  $("sheet").hidden = false;
+}
+const closeCSheet = () => { $("sheet").hidden = true; SHEET = null; };
 
 function editForm(r) {
   const info = deliveryDetails(r.comment);
@@ -140,13 +170,18 @@ function draw() {
   $("mapbox").hidden = TAB !== "map";
   $("list").hidden = TAB === "map";
   if (TAB === "map") { drawMap(); return; }
-  const rows = ROWS.filter(r => (r.status === "Доставлен" || r.status === "Отменён") === (TAB === "done"));
-  if (TAB === "done") rows.reverse();
-  else rows.sort((a, b) => (toIso(a.date) || "9999").localeCompare(toIso(b.date) || "9999"));
-  const head = TAB === "done" ? reportHtml(deliveryReport(ROWS, PAYS), IS_ADMIN ? {title: "Расчёт с курьером", leftLabel: "осталось выплатить"} : {title: "Мои выплаты", leftLabel: "вам должны"})
-    : IS_ADMIN ? '<div class="card mut">Режим владельца: здесь можно исправить любые данные заказа и отправить курьеру напоминание.</div>' : "";
+  const isDone = r => r.status === "Доставлен" || r.status === "Отменён";
+  const active = ROWS.filter(r => !isDone(r));
+  $("subtitle").textContent = `${IS_ADMIN ? "режим владельца · " : ""}${plural(active.length, "заказ", "заказа", "заказов")} в работе`;
+  const rep = deliveryReport(ROWS, PAYS);
+  $("owed").innerHTML = rep.hasPayments && TAB !== "done" ? `<div class="owed">${IS_ADMIN ? "Курьеру осталось" : "Вам должны"} <b class="num">${rub(rep.left)}</b></div>` : "";
+  let rows = TAB === "done" ? ROWS.filter(isDone).reverse()
+    : active.filter(r => TAB === "active" || !r.date || r.date === todayStr());
+  if (TAB !== "done") rows.sort((a, b) => (toIso(a.date) || "9999").localeCompare(toIso(b.date) || "9999"));
+  if (TAB !== "done" && !rows.some(r => r.posting === OPEN)) OPEN = (rows.find(r => r.posting === FOCUS) || rows[0] || {}).posting || null;
+  const head = TAB === "done" ? reportHtml(rep, IS_ADMIN ? {title: "Курьеру осталось выплатить", leftLabel: ""} : {title: "Вам должны", leftLabel: ""}) : "";
   $("list").innerHTML = head + (rows.length ? rows.map(card).join("")
-    : `<div class="card mut">${TAB === "done" ? "Пока нет доставленных" : "Новых заказов нет"}</div>`);
+    : `<div class="card mut">${TAB === "done" ? "Пока нет доставленных" : TAB === "today" ? "На сегодня заказов нет — смотрите вкладку «Все»" : "Заказов в работе нет"}</div>`);
   if (FOCUS) document.querySelector(".order.hl")?.scrollIntoView({block: "center"});
 }
 
@@ -292,19 +327,20 @@ async function save(posting, data, el) {
     const r = await api({action: "update", posting, data});
     ROWS = ROWS.map(x => x.posting === posting ? r : x);
     draw();
+    if (SHEET === posting) data.status ? closeCSheet() : openCSheet(posting);  // меню «⋯» показывает свежие данные
   } catch (err) {
     alert(err.message);
     if (el) el.disabled = false;
   }
 }
 
-$("list").addEventListener("change", ev => {
+$("app").addEventListener("change", ev => {
   const box = ev.target.closest(".order");
   if (!box) return;
   if (ev.target.matches("[data-date]")) save(box.dataset.posting, {date: fromIso(ev.target.value)});
   if (ev.target.matches("[data-comment]")) save(box.dataset.posting, {courier_comment: ev.target.value.trim()});
 });
-$("list").addEventListener("submit", async ev => {
+$("app").addEventListener("submit", async ev => {
   const form = ev.target.closest("[data-editform]");
   if (!form) return;
   ev.preventDefault();
@@ -312,7 +348,11 @@ $("list").addEventListener("submit", async ev => {
   btn.disabled = true; btn.textContent = "Сохраняю…";
   try { await saveEdit(form); } catch (err) { alert(err.message); btn.disabled = false; btn.textContent = "Сохранить"; }
 });
-$("list").addEventListener("click", ev => {
+$("app").addEventListener("click", ev => {
+  const row = ev.target.closest("[data-row]");
+  if (row) { OPEN = row.dataset.row; draw(); return; }
+  if (ev.target.closest("[data-sheet]")) { openCSheet(ev.target.closest(".order").dataset.posting); return; }
+  if (ev.target.closest("[data-close]")) { closeCSheet(); return; }
   const ed = ev.target.closest("[data-edit], [data-cancel]");
   if (ed) { const f = ed.closest(".order").querySelector("[data-editform]"); f.hidden = !f.hidden; return; }
   const rm = ev.target.closest("[data-remind]");

@@ -124,3 +124,65 @@ a.btn.ghost{background:var(--soft);color:var(--fg)}
 .stop{cursor:pointer;border-radius:10px;padding:8px!important;margin:0 -8px}
 .stop.on{background:var(--acc-bg);border-top-color:transparent!important}
 .stop .actions{margin-top:8px}
+
+/* --- новый дизайн: вкладки, компактные карточки, меню «⋯» --- */
+.hbtns{display:flex;align-items:center;gap:4px}
+.hbtns a.text{color:var(--mut);font-weight:500;font-size:14px;padding:8px;text-decoration:none;white-space:nowrap}
+.otabs{display:flex;gap:4px;background:var(--soft);padding:4px;border-radius:12px;margin:16px 0 12px}
+.otabs button{flex:1;background:none;color:var(--mut);font-size:14px;font-weight:500;padding:8px 4px}
+.otabs button[aria-selected="true"]{background:var(--card);color:var(--fg);font-weight:600;box-shadow:var(--shadow)}
+.order .top{margin-bottom:8px}
+.order .top .mut{margin-left:0;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+button.more{margin-left:auto;flex:0 0 36px;height:36px;padding:0;border-radius:10px;background:var(--soft);color:var(--fg);font-size:18px;line-height:1}
+.order .actions{margin-top:12px}
+button.ok{background:var(--green);color:#fff}
+:root[data-theme="dark"] button.ok{color:#0f1012}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) button.ok{color:#0f1012}}
+form.send{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;padding-top:0;border-top:0}
+form.send button{flex:1;font-size:15px;padding:10px 12px}
+.cbfield{flex:0 0 104px;display:flex;align-items:center;gap:2px;border:1px solid var(--line);border-radius:12px;padding:0 12px;color:var(--mut);font-size:15px;background:var(--card)}
+.cbfield input{border:0;padding:10px 0;width:100%;font-size:16px;box-shadow:none!important;background:transparent}
+form.send details{flex-basis:100%}
+.delivery-edit summary{font-size:13px;color:var(--mut);cursor:pointer;padding:4px 0}
+/* нижнее меню */
+.sheet{position:fixed;inset:0;z-index:10}
+.sheet-bg{position:absolute;inset:0;background:rgba(20,22,26,.38)}
+.sheet-panel{position:absolute;left:0;right:0;bottom:0;max-height:88vh;overflow:auto;background:var(--card);border-radius:20px 20px 0 0;
+padding:8px 16px calc(20px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:2px;max-width:600px;margin:0 auto}
+.grab{width:40px;height:5px;border-radius:3px;background:var(--line);align-self:center;margin-bottom:8px}
+.shead{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:0 4px 12px;border-bottom:1px solid var(--line)}
+.shead b{font-size:17px}
+.sgroup{font-size:12px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;padding:12px 4px 4px}
+.sitem{display:flex;align-items:center;gap:10px;width:100%;min-height:48px;padding:0 4px;background:none;border:0;border-radius:10px;
+color:var(--fg);font:inherit;font-size:16px;font-weight:400;text-align:left;text-decoration:none;cursor:pointer}
+.sitem .mut{margin-left:auto;font-size:13px}
+.sitem-details summary{list-style:none}.sitem-details summary::-webkit-details-marker{display:none}
+.sitem-details form{display:grid;gap:8px;padding:4px 4px 12px}
+button.wide{width:100%;margin-top:8px}
+button.text.wide{margin-top:0}
+.report summary{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.report .rsum{display:flex;flex-direction:column;gap:2px}
+.report .rsum .v{font-size:22px;font-weight:700;margin:0}
+.report .more{margin:0;font-size:14px;font-weight:600;color:var(--acc);white-space:nowrap}
+.report[open] .more{display:inline}
+.report .rdet{margin-top:12px;line-height:1.5}
+.report{padding:12px 16px}
+/* курьер: раскрытая карточка и свёрнутые строки */
+.owed{display:inline-block;margin:0 0 4px;font-size:14px;font-weight:600;padding:6px 12px;border-radius:999px;background:var(--green-bg);color:var(--green)}
+button.crow{width:100%;display:flex;align-items:center;gap:12px;text-align:left;font:inherit;color:var(--fg);cursor:pointer;padding:14px 16px}
+.crow-main{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.crow-main b{font-size:16px}
+.crow-main .mut{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.crow-pay{font-size:16px;font-weight:700}
+.order.open .top{margin-bottom:10px}
+.addr.big{margin:0 0 4px;font-size:17px;font-weight:600;line-height:1.3}
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}
+.tile{background:var(--soft);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.tile span{font-size:12px;color:var(--mut)}
+.tile b{font-size:15px;overflow-wrap:break-word;hyphens:auto}
+.tile.warn{background:var(--yellow-bg)}.tile.warn span,.tile.warn b{color:var(--yellow)}
+.tile.pay{background:var(--green-bg)}.tile.pay span,.tile.pay b{color:var(--green)}
+.actions.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+button.big{min-height:50px;font-size:16px}
+.sheet .field{padding:0 4px}
+.shead .badge{white-space:nowrap;flex:0 0 auto}

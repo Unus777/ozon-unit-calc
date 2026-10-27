@@ -81,12 +81,12 @@ function reportHtml(rep, opts) {
 <input name="comment" placeholder="Комментарий (необязательно)" aria-label="Комментарий">
 <button>Записать выплату</button></form>` : "";
   const big = rep.hasPayments ? rep.left : rep.done.pay;
-  return `<details class="card report"><summary><span class="mut">${opts.title}</span>
-<div class="v num ${rep.hasPayments && big <= 0 ? "green" : ""}">${rub(big)}</div>
-<div class="mut">${rep.hasPayments ? `${opts.leftLabel} · начислено ${rub(rep.done.pay)} · выплачено ${rub(rep.paid)}` : "начислено за всё время"}</div>
-<div class="mut">${plural(rep.done.n, "доставка", "доставки", "доставок")} · доставка ${rub(rep.done.delivery)} · разгрузка ${rub(rep.done.lift)}</div>
-${rep.active.n ? `<div class="mut">В работе: ${plural(rep.active.n, "заказ", "заказа", "заказов")} на ${rub(rep.active.pay)}</div>` : ""}
-<div class="more">Подробнее ▾</div></summary>
+  // свёрнуто — одна строка: сколько осталось + «Расчёт ›»; всё остальное — по нажатию
+  return `<details class="card report"><summary><span class="rsum"><span class="mut">${opts.title}</span>
+<span class="v num ${rep.hasPayments && big <= 0 ? "green" : ""}">${rub(big)}</span></span><span class="more">Расчёт ›</span></summary>
+<div class="mut rdet">${rep.hasPayments ? `Начислено ${rub(rep.done.pay)} · выплачено ${rub(rep.paid)}<br>` : ""}` +
+`${plural(rep.done.n, "доставка", "доставки", "доставок")}: доставка ${rub(rep.done.delivery)} · разгрузка ${rub(rep.done.lift)}` +
+`${rep.active.n ? `<br>В работе: ${plural(rep.active.n, "заказ", "заказа", "заказов")} на ${rub(rep.active.pay)}` : ""}</div>
 ${rep.hasPayments ? `<h3>Выплаты</h3>${form}${pays ? `<table>${pays}</table>` : '<p class="mut">Выплат пока не записано</p>'}`
     : opts.admin ? '<p class="mut">Чтобы учитывать выплаты, обновите скрипт таблицы.</p>' : ""}
 <h3>По месяцам</h3><table>${months}</table></details>`;
