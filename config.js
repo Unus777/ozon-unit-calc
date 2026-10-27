@@ -111,6 +111,8 @@ function sheetHide() {
   setTimeout(() => { if (!s.classList.contains("show")) s.hidden = true; }, 300);
 }
 (() => {
+  // config.js подключает и sw.js: там нет страницы, и ошибка здесь сломала бы пуши
+  if (typeof document === "undefined") return;
   const p = document.querySelector("#sheet .sheet-panel");
   if (!p) return;
   let y0 = null, dy = 0;
