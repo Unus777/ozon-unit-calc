@@ -228,3 +228,26 @@ opacity:0;transform:translateY(-48px);transition:transform .25s cubic-bezier(.2,
 .ptr.ready span{transform:rotate(180deg)}
 .ptr.spin span{width:18px;height:18px;border:2.5px solid var(--acc);border-right-color:transparent;border-radius:50%;font-size:0;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+/* --- линейные иконки и история заказа --- */
+.ic{width:20px;height:20px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.sitem .ic{color:var(--mut)}
+a.btn .ic,button .ic{width:18px;height:18px}
+.hbtns .ic,#themeBtn .ic{width:16px;height:16px;margin-right:4px;vertical-align:-3px}
+#ownerNotifBtn .ic,h3 .ic{width:18px;height:18px;margin-right:6px;vertical-align:-3px}
+a.btn{gap:8px}
+.ozstate{display:flex;align-items:center;gap:8px}
+.ozstate .ic{width:18px;height:18px}
+.wide .ic{vertical-align:-4px;margin-right:4px}
+.tl{list-style:none;margin:14px 4px 6px;padding:0}
+.tl li{position:relative;display:flex;justify-content:space-between;gap:12px;padding:0 0 14px 26px;font-size:14px;line-height:20px;color:var(--mut)}
+.tl li::before{content:"";position:absolute;left:2px;top:5px;width:10px;height:10px;border-radius:50%;border:2px solid var(--line);background:var(--card);box-sizing:content-box;margin:-2px 0 0 -2px}
+.tl li::after{content:"";position:absolute;left:6px;top:17px;bottom:-1px;width:2px;background:var(--line)}
+.tl li:last-child{padding-bottom:0}.tl li:last-child::after{display:none}
+.tl b{font-weight:500}
+.tl .mut{font-size:13px;white-space:nowrap}
+.tl li.done{color:var(--fg)}
+.tl li.done::before{background:var(--green);border-color:var(--green)}
+.tl li.done::after{background:var(--green)}
+.tl li.now b{color:var(--acc);font-weight:600}
+.tl li.now::before{border-color:var(--acc);box-shadow:0 0 0 4px var(--acc-bg)}
+.tl li.warn b{color:var(--yellow)}.tl li.warn::before{border-color:var(--yellow);box-shadow:0 0 0 4px var(--yellow-bg)}

@@ -10,7 +10,7 @@
 <title>Доставки</title>
 <link rel="manifest" href="manifest.webmanifest?v=13">
 <script src="theme.js?v=14"></script>
-<link rel="stylesheet" href="style.css?v=24">
+<link rel="stylesheet" href="style.css?v=25">
 <link rel="icon" href="icons/courier.svg?v=13" type="image/svg+xml">
 <link rel="icon" href="icons/courier-32.png?v=13" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/courier-180.png?v=13" sizes="180x180">
@@ -37,7 +37,7 @@
 <div id="sheet" class="sheet" hidden><div class="sheet-bg" data-close></div><section class="sheet-panel" role="dialog" aria-modal="true" aria-label="Действия с заказом" id="sheetPanel"></section></div>
 </div>
 
-<script src="config.js?v=22"></script>
+<script src="config.js?v=23"></script>
 <script src="push.js?v=15"></script>
 <script>
 const $ = id => document.getElementById(id);
@@ -91,8 +91,8 @@ ${info.note || r.comment && !info.note && !info.time && !info.foreman ? `<div cl
 <div class="tile pay"><span>Оплата</span><b class="num">${rub(r.pay)}</b></div>
 </div>
 ${done ? `<p class="mut">Доставлен${r.delivered_at ? " " + e(r.delivered_at) : ""}</p>` : `<div class="actions two">
-${tel ? `<a class="btn ghost" href="${e(tel)}">📞 Позвонить</a>` : ""}
-<a class="btn ghost" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">🧭 Маршрут</a></div>
+${tel ? `<a class="btn ghost" href="${e(tel)}">${ic("phone")}Позвонить</a>` : ""}
+<a class="btn ghost" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">${ic("nav")}Маршрут</a></div>
 <button class="ok wide big" data-done>Доставлено</button>`}
 </div>`;
 }
@@ -108,16 +108,20 @@ function openCSheet(posting) {
   try { foreman = foremanPhone(info.foreman); } catch {}  // старый некорректный номер не превращаем в ссылку
   $("sheetPanel").innerHTML = `<div class="order" data-posting="${e(r.posting)}"><div class="grab"></div>
 <div class="shead"><div><b>${e(r.cb)} · ${e(r.packs)}</b><div class="mut">${e(r.posting)} · ${e(r.address)}</div></div></div>
+${r.status === "Отменён" ? "" : timelineHtml([
+  {label: "Заказ получен", when: r.sent, done: true},
+  {label: r.date ? `Доставка на ${shortDate(r.date)}` : "Согласовать дату с клиентом", when: info.time, done: !!r.date || done},
+  {label: "Доставлен", when: r.delivered_at, done}])}
 <div class="sgroup">Доставка</div>
 <div class="field"><label for="sd">Дата доставки</label><input type="date" id="sd" data-date value="${toIso(r.date)}" ${done ? "disabled" : ""}></div>
-${info.time ? `<div class="sitem">🕑 Время: ${e(info.time)}</div>` : ""}
+${info.time ? `<div class="sitem">${ic("clock")}Время: ${e(info.time)}</div>` : ""}
 <div class="field"><label for="sc">Комментарий</label><input id="sc" data-comment value="${e(r.courier_comment)}" placeholder="для владельца" ${done ? "disabled" : ""}></div>
 <div class="sgroup">Связь и маршрут</div>
-${tel ? `<a class="sitem" href="${e(tel)}">📞 Позвонить клиенту${ext ? `<span class="mut">доб. ${e(ext)} — наберётся сам</span>` : ""}</a>` : ""}
-${foreman ? `<a class="sitem" href="tel:${e(foreman)}">👷 Позвонить прорабу</a>` : ""}
-<a class="sitem" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">🧭 Яндекс Карты</a>
-<a class="sitem" href="${e(appleMaps(r))}" target="_blank" rel="noopener">🗺 Apple Карты</a>
-${IS_ADMIN ? `<div class="sgroup">Владелец</div><button class="sitem" data-edit>✏️ Изменить данные заказа</button>${done ? "" : `<button class="sitem" data-remind>🔔 Напомнить курьеру</button>`}${editForm(r)}` : ""}
+${tel ? `<a class="sitem" href="${e(tel)}">${ic("phone")}Позвонить клиенту${ext ? `<span class="mut">доб. ${e(ext)} — наберётся сам</span>` : ""}</a>` : ""}
+${foreman ? `<a class="sitem" href="tel:${e(foreman)}">${ic("user")}Позвонить прорабу</a>` : ""}
+<a class="sitem" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">${ic("nav")}Яндекс Карты</a>
+<a class="sitem" href="${e(appleMaps(r))}" target="_blank" rel="noopener">${ic("map")}Apple Карты</a>
+${IS_ADMIN ? `<div class="sgroup">Владелец</div><button class="sitem" data-edit>${ic("edit")}Изменить данные заказа</button>${done ? "" : `<button class="sitem" data-remind>${ic("bell")}Напомнить курьеру</button>`}${editForm(r)}` : ""}
 <button class="text wide" data-close>Закрыть</button></div>`;
   sheetShow();
 }
@@ -142,7 +146,7 @@ ${f("delivery", "Доставка, ₽", r.delivery, 'inputmode="numeric"')}
 ${f("lift", "Подъём, ₽", r.lift, 'inputmode="numeric"')}
 <label class="ef wide"><span>Пометка для курьера</span><textarea name="note" rows="2">${e(info.note)}</textarea></label>
 <label class="ef wide"><span>Комментарий курьера</span><input name="courier_comment" value="${e(r.courier_comment)}"></label>
-<p class="mut wide">${r.lat && r.lon ? "📍 Точка на карте есть" : "📍 Нет точки на карте"} — при смене адреса координаты найдутся заново</p>
+<p class="mut wide">${r.lat && r.lon ? ic("pin") + "Точка на карте есть" : ic("pin") + "Нет точки на карте"} — при смене адреса координаты найдутся заново</p>
 <div class="actions wide"><button>Сохранить</button><button type="button" class="ghost" data-cancel>Отмена</button></div>
 </form>`;
 }
@@ -293,7 +297,7 @@ ${sel ? '<div class="actions"><button class="ghost" data-mapall>Показать
     return `<li class="stop${on ? " on" : ""}" data-pick="${e(r.posting)}" role="button" tabindex="0" aria-pressed="${on}">` +
       `<b>${e(r.cb)}</b> · ${e(r.packs)} · ${rub(r.pay)}${ME ? ` · ${km(ME, ll).toFixed(1)} км` : ""}` +
       `${r.unload && r.unload !== "Нет" ? `<div class="mut">Разгрузка: ${e(r.unload)}</div>` : ""}<div class="mut">${e(r.address)}</div>` +
-      (on ? `<div class="actions"><a class="btn" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">🧭 Поехать</a>` +
+      (on ? `<div class="actions"><a class="btn" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">${ic("nav")}Поехать</a>` +
         `<a class="btn ghost" href="${e(appleMaps(r))}" target="_blank" rel="noopener">Apple Карты</a></div>` : "") + `</li>`;
   }).join("")}</ol>
 ${order.length > 1 ? `<div class="actions"><a class="btn ghost" href="${e(all)}" target="_blank" rel="noopener">Маршрут через все точки</a></div>` : ""}</div>
@@ -379,7 +383,7 @@ document.querySelector(".tabs").onclick = ev => {
 };
 $("reload").onclick = load;
 const themeOrder = ["auto", "light", "dark"];
-const drawThemeBtn = () => { $("themeBtn").textContent = "◐ " + THEMES[getTheme()]; };
+const drawThemeBtn = () => { $("themeBtn").innerHTML = ic("theme") + THEMES[getTheme()]; };
 $("themeBtn").onclick = () => { setTheme(themeOrder[(themeOrder.indexOf(getTheme()) + 1) % 3]); drawThemeBtn(); };
 drawThemeBtn();
 
@@ -401,7 +405,7 @@ async function setupNotif() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
     box.hidden = false;
     box.innerHTML = isIOS && !standalone
-      ? `<h3>🔔 Включите уведомления</h3><p class="mut">Нажмите «Поделиться» → «На экран „Домой“», откройте «Доставки» с экрана телефона и включите уведомления там.</p>`
+      ? `<h3>${ic("bell")}Включите уведомления</h3><p class="mut">Нажмите «Поделиться» → «На экран „Домой“», откройте «Доставки» с экрана телефона и включите уведомления там.</p>`
       : `<p class="mut">Этот браузер не умеет показывать уведомления. Откройте ссылку в Safari или Chrome.</p>`;
     return;
   }
@@ -410,7 +414,7 @@ async function setupNotif() {
     return;
   }
   box.hidden = false;
-  box.innerHTML = `<h3>🔔 Уведомления о новых заказах</h3>
+  box.innerHTML = `<h3>${ic("bell")}Уведомления о новых заказах</h3>
 <p class="mut">Включите, чтобы новый заказ сразу приходил на телефон.</p><button id="enable">Включить уведомления</button>`;
   $("enable").onclick = async () => {
     $("enable").disabled = true;

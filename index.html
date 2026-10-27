@@ -10,7 +10,7 @@
 <link rel="manifest" href="owner.webmanifest?v=13">
 <meta name="apple-mobile-web-app-title" content="Алмалы">
 <script src="theme.js?v=12"></script>
-<link rel="stylesheet" href="style.css?v=24">
+<link rel="stylesheet" href="style.css?v=25">
 <link rel="icon" href="icons/owner.svg?v=13" type="image/svg+xml">
 <link rel="icon" href="icons/owner-32.png?v=13" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/owner-180.png?v=13" sizes="180x180">
@@ -18,7 +18,7 @@
 <body>
 <header><div class="bar">
 <div class="brand">Алмалы <span>заказы Ozon</span></div>
-<span class="hbtns"><a class="text" id="dlvLink" href="courier.html?admin=1" hidden>🚚 Доставки</a><button class="text" id="gear" aria-expanded="false" aria-controls="settings">⚙ Настройки</button></span>
+<span class="hbtns"><a class="text" id="dlvLink" href="courier.html?admin=1" hidden><span data-ic="truck"></span>Доставки</a><button class="text" id="gear" aria-expanded="false" aria-controls="settings"><span data-ic="settings"></span>Настройки</button></span>
 </div></header>
 <main>
 
@@ -33,7 +33,7 @@
 </form>
 <div id="ownerNotif"><h3>Уведомления о курьере</h3>
 <p class="mut" id="ownerNotifState">Придут, когда курьер поставит дату, напишет комментарий или нажмёт «Доставлено».</p>
-<button class="ghost" id="ownerNotifBtn">🔔 Включить уведомления</button></div>
+<button class="ghost" id="ownerNotifBtn"><span data-ic="bell"></span>Включить уведомления</button></div>
 <div id="forget"><h3>Ozon</h3>
 <button class="ghost" id="forgetBtn">Сменить ключи Ozon</button></div>
 </div>
@@ -62,7 +62,7 @@
 </div>
 
 <script src="calc.js?v=12"></script>
-<script src="config.js?v=22"></script>
+<script src="config.js?v=23"></script>
 <script src="push.js?v=15"></script>
 <script>
 const API = "https://api-seller.ozon.ru";
@@ -209,7 +209,7 @@ function ozState(p) {  // "ok" — Ozon провёл; "wait" — ждём; "late
   const t = pendingGet()[p.posting_number];
   return !t ? "" : Date.now() - t < PENDING_TTL ? "wait" : "late";
 }
-const OZ_LINE = {ok: "✅ Отмечено в Ozon",wait: "⏳ Отправлено в Ozon — ждём подтверждения", late: "⚠️ Ozon не подтвердил доставку за 2 часа — проверьте в кабинете"};
+const OZ_LINE = {ok: ic("check") + "Отмечено в Ozon",wait: ic("wait") + "Отправлено в Ozon — ждём подтверждения", late: ic("alert") + "Ozon не подтвердил доставку за 2 часа — проверьте в кабинете"};
 
 // Отметили «Доставлено» прямо в кабинете Ozon — переносим в таблицу, чтобы курьер и расчёт выплат это видели
 async function syncDeliveredFromOzon(postings) {
@@ -309,9 +309,23 @@ function primaryActions(p) {
   const needOzon = !["delivered", "cancelled"].includes(p.status) && oz !== "wait", needSheet = d.status !== "Доставлен";
   if (!needOzon && !needSheet) return line;
   const tel = telHref(d.phone, d.ext);
-  return `<div class="actions">${tel && needSheet ? `<a class="btn ghost" href="${e(tel)}">📞 Клиенту</a>` : ""}` +
+  return `<div class="actions">${tel && needSheet ? `<a class="btn ghost" href="${e(tel)}">${ic("phone")}Клиенту</a>` : ""}` +
     `<button class="${needSheet ? "ok" : ""}" data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">` +
     `${needSheet ? "Доставлено" : oz === "late" ? "Повторить в Ozon" : "Отметить доставленным в Ozon"}</button></div>` + line;
+}
+
+// Этапы заказа для истории в меню: Ozon → курьеру → дата → курьер доставил → отмечено в Ozon
+function orderSteps(p, d) {
+  const oz = ozState(p), when = new Date(p.in_process_at).toLocaleString("ru-RU", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"}).replace(",", "");
+  const time = d ? deliveryDetails(d.comment).time : "";
+  return [
+    {label: "Заказ в Ozon", when, done: true},
+    {label: d ? "Отправлен курьеру" : "Отправить курьеру", when: d && d.sent, done: !!d},
+    {label: d && d.date ? `Доставка на ${shortDate(d.date)}` : "Согласовать дату доставки", when: time, done: !!(d && (d.date || d.status === "Доставлен"))},
+    {label: "Курьер доставил", when: d && d.delivered_at, done: !!(d && d.status === "Доставлен")},
+    {label: oz === "wait" ? "Отправлено в Ozon, ждём подтверждения" : oz === "late" ? "Ozon не подтвердил — проверьте" : "Отмечено в Ozon",
+      done: p.status === "delivered", warn: oz === "late"},
+  ];
 }
 
 // Меню «⋯»: все остальные действия, по группам
@@ -320,18 +334,19 @@ function openSheet(i) {
   const done = d && d.status === "Доставлен";
   const tel = d ? telHref(d.phone, d.ext) : "";
   const row = (inner) => `<div class="srow">${inner}</div>`;
-  const callRow = tel ? `<a class="sitem" href="${e(tel)}">📞 Позвонить клиенту${d.ext ? `<span class="mut">доб. ${e(String(d.ext).padStart(4, "0"))}</span>` : ""}</a>`
-    : ["ship", "way"].includes(stage(p.status)[0]) ? `<button class="sitem" data-call="${e(p.posting_number)}">📞 Позвонить клиенту</button>` : "";
+  const callRow = tel ? `<a class="sitem" href="${e(tel)}">${ic("phone")}Позвонить клиенту${d.ext ? `<span class="mut">доб. ${e(String(d.ext).padStart(4, "0"))}</span>` : ""}</a>`
+    : ["ship", "way"].includes(stage(p.status)[0]) ? `<button class="sitem" data-call="${e(p.posting_number)}">${ic("phone")}Позвонить клиенту</button>` : "";
   const needOzon = d && !["delivered", "cancelled"].includes(p.status) && ozState(p) !== "wait";
   $("sheetPanel").innerHTML = `<div class="grab"></div>
 <div class="shead"><div><b>${d ? e(d.cb) + " · " : ""}${p.products.map(x => x.quantity + " уп").join(" + ")}</b>
 <div class="mut">${e(p.posting_number)}${d && d.address ? " · " + e(d.address) : ""}</div></div>${badge(p.status)}</div>
-${callRow || (d && !done) ? `<div class="sgroup">Связь</div>${callRow}${d && !done ? `<button class="sitem" data-remind="${e(p.posting_number)}">🔔 Напомнить курьеру</button>` : ""}` : ""}
+${p.status === "cancelled" ? "" : timelineHtml(orderSteps(p, d))}
+${callRow || (d && !done) ? `<div class="sgroup">Связь</div>${callRow}${d && !done ? `<button class="sitem" data-remind="${e(p.posting_number)}">${ic("bell")}Напомнить курьеру</button>` : ""}` : ""}
 <div class="sgroup">Заказ</div>
-${d && ADMIN() && SCRIPT_URL ? `<details class="sitem-details"><summary class="sitem">✏️ Пометка, время, прораб</summary>` +
+${d && ADMIN() && SCRIPT_URL ? `<details class="sitem-details"><summary class="sitem">${ic("edit")}Пометка, время, прораб</summary>` +
   `<form data-schedule="${e(p.posting_number)}">${deliveryFields(d)}<button>Сохранить для Рашада</button></form></details>` : ""}
-<button class="sitem" data-open="${e(p.posting_number)}">📊 Расчёт ₽/м²</button>
-<button class="sitem" data-copy="${i}">📋 Скопировать для отчёта</button>
+<button class="sitem" data-open="${e(p.posting_number)}">${ic("chart")}Расчёт ₽/м²</button>
+<button class="sitem" data-copy="${i}">${ic("copy")}Скопировать для отчёта</button>
 ${d && (needOzon || !done) && ADMIN() && SCRIPT_URL ? `<button class="ok wide" data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">${done ? "Отметить доставленным в Ozon" : "Доставлено"}</button>` : ""}
 <button class="text wide" data-close>Закрыть</button>`;
   sheetShow();
@@ -616,6 +631,7 @@ $("app").addEventListener("submit", async ev => {
   }
 });
 
+document.querySelectorAll("[data-ic]").forEach(x => { x.outerHTML = ic(x.dataset.ic); });
 show();
 if (location.hash.length > 1) $("n").value = decodeURIComponent(location.hash.slice(1));
 pullToRefresh(() => loadOrders(true));
