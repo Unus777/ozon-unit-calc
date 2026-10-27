@@ -173,6 +173,7 @@ async function loadOrders(silent) {
       postings.push(...r.postings);
       cursor = r.has_next ? r.cursor : "";
     } while (cursor);
+    postings.forEach(p => { p.status = ozStatus(p); });
     const offers = [...new Set(postings.flatMap(p => p.products.map(x => x.offer_id)))];
     const prices = {};
     for (let i = 0; i < offers.length; i += 100) {
@@ -230,13 +231,16 @@ setInterval(() => {
   if (!document.hidden && !busy && ORDERS.length) loadOrders(true);
 }, 120000);
 
+// После отметки продавца rFBS-заказ остаётся «delivering» с подстатусом «условно доставлен» — считаем доставленным
+const ozStatus = p => p.substatus === "posting_conditionally_delivered" ? "delivered" : p.status;
+
 async function checkPending() {
   const pend = pendingGet(), nums = Object.keys(pend);
   if (!nums.length || document.hidden) return;
   let changed = false;
   for (const num of nums) {
     try {
-      const st = (await ozon("/v3/posting/fbs/get", {posting_number: num})).result.status;
+      const st = ozStatus((await ozon("/v3/posting/fbs/get", {posting_number: num})).result);
       const p = ORDERS.find(x => x.posting_number === num);
       if (p && p.status !== st) { p.status = st; changed = true; }
       if (st === "delivered" || st === "cancelled") { delete pend[num]; changed = true; }
