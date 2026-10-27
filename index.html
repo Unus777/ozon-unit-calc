@@ -196,6 +196,33 @@ function ostate(p) {
   return closed ? "done" : "new";
 }
 const OTABS = {new: "Новые", courier: "У курьера", done: "Доставлены"};
+// Ozon меняет статус на «Доставлено» не сразу — помним отправленные заказы и проверяем, пока не подтвердит
+const PENDING_TTL = 2 * 3600e3;
+const pendingGet = () => { try { return JSON.parse(localStorage.getItem("oz_pending") || "{}"); } catch { return {}; } };
+const pendingSet = v => { try { localStorage.setItem("oz_pending", JSON.stringify(v)); } catch {} };
+function ozState(p) {  // "ok" — Ozon провёл; "wait" — ждём; "late" — не подтвердил за 2 часа; "" — не отправляли
+  if (p.status === "delivered") return "ok";
+  const t = pendingGet()[p.posting_number];
+  return !t ? "" : Date.now() - t < PENDING_TTL ? "wait" : "late";
+}
+const OZ_LINE = {ok: "✅ Проведено в Ozon", wait: "⏳ Отправлено в Ozon — ждём подтверждения", late: "⚠️ Ozon не подтвердил доставку за 2 часа — проверьте в кабинете"};
+
+async function checkPending() {
+  const pend = pendingGet(), nums = Object.keys(pend);
+  if (!nums.length || document.hidden) return;
+  let changed = false;
+  for (const num of nums) {
+    try {
+      const st = (await ozon("/v3/posting/fbs/get", {posting_number: num})).result.status;
+      const p = ORDERS.find(x => x.posting_number === num);
+      if (p && p.status !== st) { p.status = st; changed = true; }
+      if (st === "delivered" || st === "cancelled") { delete pend[num]; changed = true; }
+    } catch {}
+  }
+  pendingSet(pend);
+  if (changed && ORDERS.length) drawOrders();
+}
+setInterval(checkPending, 30000);
 let OTAB = "new";
 
 function drawOrders() {
@@ -239,12 +266,13 @@ function primaryActions(p) {
       `aria-label="Номер ЦБ" inputmode="numeric" autocomplete="off" required></label><button>Отправить курьеру</button>` +
       `<details class="delivery-edit"><summary>Пометка, время и прораб</summary>${deliveryFields({})}</details></form>`;
   }
-  const needOzon = !["delivered", "cancelled"].includes(p.status), needSheet = d.status !== "Доставлен";
-  if (!needOzon && !needSheet) return "";
+  const oz = ozState(p), line = oz ? `<div class="ozstate ${oz}">${OZ_LINE[oz]}</div>` : "";
+  const needOzon = !["delivered", "cancelled"].includes(p.status) && oz !== "wait", needSheet = d.status !== "Доставлен";
+  if (!needOzon && !needSheet) return line;
   const tel = telHref(d.phone, d.ext);
   return `<div class="actions">${tel && needSheet ? `<a class="btn ghost" href="${e(tel)}">📞 Клиенту</a>` : ""}` +
     `<button class="ok" data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">` +
-    `${needSheet ? "Доставлено" : "Отметить доставленным в Ozon"}</button></div>`;
+    `${needSheet ? "Доставлено" : oz === "late" ? "Повторить в Ozon" : "Отметить доставленным в Ozon"}</button></div>` + line;
 }
 
 // Меню «⋯»: все остальные действия, по группам
@@ -255,7 +283,7 @@ function openSheet(i) {
   const row = (inner) => `<div class="srow">${inner}</div>`;
   const callRow = tel ? `<a class="sitem" href="${e(tel)}">📞 Позвонить клиенту${d.ext ? `<span class="mut">доб. ${e(String(d.ext).padStart(4, "0"))}</span>` : ""}</a>`
     : ["ship", "way"].includes(stage(p.status)[0]) ? `<button class="sitem" data-call="${e(p.posting_number)}">📞 Позвонить клиенту</button>` : "";
-  const needOzon = d && !["delivered", "cancelled"].includes(p.status);
+  const needOzon = d && !["delivered", "cancelled"].includes(p.status) && ozState(p) !== "wait";
   $("sheetPanel").innerHTML = `<div class="grab"></div>
 <div class="shead"><div><b>${d ? e(d.cb) + " · " : ""}${p.products.map(x => x.quantity + " уп").join(" + ")}</b>
 <div class="mut">${e(p.posting_number)}${d && d.address ? " · " + e(d.address) : ""}</div></div>${badge(p.status)}</div>
@@ -323,9 +351,11 @@ async function markDelivered(posting, needOzon) {
     const r = await ozon("/v2/fbs/posting/delivered", {posting_number: [posting]});
     const res = (r.result || []).find(x => x.posting_number === posting) || {};
     if (!res.result) throw new Error("Ozon не принял: " + (res.error || JSON.stringify(r).slice(0, 200)));
+    pendingSet(Object.assign(pendingGet(), {[posting]: Date.now()}));
+    setTimeout(checkPending, 15000);
   }
   if (d.status !== "Доставлен") DELIV[posting] = await sheetApi({action: "update", key: ADMIN(), posting, data: {status: "Доставлен"}});
-  alert(needOzon ? "Готово. В Ozon статус сменится в течение нескольких минут." : "Готово");
+  alert(needOzon ? "Отправлено в Ozon. Сайт сам проверит и отметит, когда Ozon проведёт доставку." : "Готово");
   return true;
 }
 

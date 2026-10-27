@@ -186,3 +186,7 @@ button.crow{width:100%;display:flex;align-items:center;gap:12px;text-align:left;
 button.big{min-height:50px;font-size:16px}
 .sheet .field{padding:0 4px}
 .shead .badge{white-space:nowrap;flex:0 0 auto}
+.ozstate{margin-top:10px;font-size:14px;font-weight:600;padding:8px 12px;border-radius:10px;background:var(--soft);color:var(--mut)}
+.ozstate.ok{background:var(--green-bg);color:var(--green)}
+.ozstate.wait{background:var(--acc-bg);color:var(--acc)}
+.ozstate.late{background:var(--yellow-bg);color:var(--yellow)}
