@@ -219,3 +219,12 @@ box-shadow:0 8px 24px rgba(20,22,26,.2);opacity:0;transform:translate(-50%,16px)
   .badge,.ozstate{transition:background-color .3s,color .3s}
 }
 @media(prefers-reduced-motion:reduce){.sheet-panel,.sheet-bg,.toast{transition:none}.skel{animation:none}}
+/* «потянуть вниз» — обновить; overscroll-behavior гасит перезагрузку всей страницы в Chrome на Android */
+body{overscroll-behavior-y:contain}
+.ptr{position:fixed;top:calc(env(safe-area-inset-top) + 8px);left:50%;z-index:5;width:40px;height:40px;margin-left:-20px;border-radius:50%;
+background:var(--card);color:var(--acc);box-shadow:0 4px 16px rgba(20,22,26,.16);display:grid;place-items:center;font-size:20px;font-weight:700;
+opacity:0;transform:translateY(-48px);transition:transform .25s cubic-bezier(.2,.8,.2,1),opacity .25s;pointer-events:none}
+.ptr span{display:block;transition:transform .2s}
+.ptr.ready span{transform:rotate(180deg)}
+.ptr.spin span{width:18px;height:18px;border:2.5px solid var(--acc);border-right-color:transparent;border-radius:50%;font-size:0;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}

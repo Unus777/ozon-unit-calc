@@ -10,7 +10,7 @@
 <link rel="manifest" href="owner.webmanifest?v=13">
 <meta name="apple-mobile-web-app-title" content="Алмалы">
 <script src="theme.js?v=12"></script>
-<link rel="stylesheet" href="style.css?v=23">
+<link rel="stylesheet" href="style.css?v=24">
 <link rel="icon" href="icons/owner.svg?v=13" type="image/svg+xml">
 <link rel="icon" href="icons/owner-32.png?v=13" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/owner-180.png?v=13" sizes="180x180">
@@ -62,7 +62,7 @@
 </div>
 
 <script src="calc.js?v=12"></script>
-<script src="config.js?v=21"></script>
+<script src="config.js?v=22"></script>
 <script src="push.js?v=15"></script>
 <script>
 const API = "https://api-seller.ozon.ru";
@@ -618,6 +618,7 @@ $("app").addEventListener("submit", async ev => {
 
 show();
 if (location.hash.length > 1) $("n").value = decodeURIComponent(location.hash.slice(1));
+pullToRefresh(() => loadOrders(true));
 </script>
 </main></body>
 </html>

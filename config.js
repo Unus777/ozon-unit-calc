@@ -100,6 +100,7 @@ function sheetShow() {
   s.hidden = false;
   document.body.classList.add("noscroll");
   requestAnimationFrame(() => requestAnimationFrame(() => s.classList.add("show")));
+  buzz();
 }
 function sheetHide() {
   const s = document.getElementById("sheet");
@@ -130,6 +131,48 @@ function toast(msg, bad) {
   if (!t) { t = document.createElement("div"); t.id = "toast"; t.setAttribute("aria-live", "polite"); document.body.append(t); }
   t.textContent = msg;
   t.className = "toast show" + (bad ? " bad" : "");
+  buzz(bad ? [30, 60, 30] : 15);
   clearTimeout(t.timer);
   t.timer = setTimeout(() => t.classList.remove("show"), bad ? 5000 : 2500);
+}
+
+// Короткая вибрация на Android (iPhone вибрацию с сайтов не поддерживает — там просто ничего не произойдёт)
+function buzz(ms = 10) { try { navigator.vibrate?.(ms); } catch {} }
+
+// «Потянуть вниз» в самом верху страницы — обновить список
+function pullToRefresh(onRefresh) {
+  const ind = document.createElement("div");
+  ind.className = "ptr";
+  ind.setAttribute("aria-hidden", "true");
+  ind.innerHTML = "<span>↓</span>";
+  document.body.prepend(ind);
+  const READY = 70;
+  let y0 = null, h = 0, busy = false;
+  const set = v => {
+    h = v;
+    ind.style.transform = `translateY(${v - 48}px)`;
+    ind.style.opacity = Math.min(1, v / READY);
+    ind.classList.toggle("ready", v >= READY);
+  };
+  addEventListener("touchstart", ev => {
+    const sheet = document.getElementById("sheet");
+    y0 = !busy && scrollY <= 0 && (!sheet || sheet.hidden) && !ev.target.closest("#map") ? ev.touches[0].clientY : null;
+  }, {passive: true});
+  addEventListener("touchmove", ev => {
+    if (y0 === null) return;
+    const v = Math.min(110, Math.max(0, ev.touches[0].clientY - y0) * 0.5);
+    if (v >= READY && h < READY) buzz();
+    ind.style.transition = "none";
+    set(v);
+  }, {passive: true});
+  addEventListener("touchend", () => {
+    if (y0 === null) return;
+    y0 = null;
+    ind.style.transition = "";
+    if (h < READY) { set(0); return; }
+    busy = true;
+    ind.classList.add("spin");
+    set(READY);
+    Promise.resolve(onRefresh()).finally(() => { busy = false; ind.classList.remove("spin"); set(0); });
+  });
 }
