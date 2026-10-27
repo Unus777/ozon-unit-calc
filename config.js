@@ -91,3 +91,45 @@ ${rep.hasPayments ? `<h3>Выплаты</h3>${form}${pays ? `<table>${pays}</tab
     : opts.admin ? '<p class="mut">Чтобы учитывать выплаты, обновите скрипт таблицы.</p>' : ""}
 <h3>По месяцам</h3><table>${months}</table></details>`;
 }
+
+// ---------- нижнее меню и всплывающие подсказки (общие для обеих страниц) ----------
+// Меню выезжает снизу; закрывается фоном, «Закрыть» или свайпом вниз
+function sheetShow() {
+  const s = document.getElementById("sheet");
+  if (s.classList.contains("show")) return;  // уже открыто — только обновили содержимое
+  s.hidden = false;
+  document.body.classList.add("noscroll");
+  requestAnimationFrame(() => requestAnimationFrame(() => s.classList.add("show")));
+}
+function sheetHide() {
+  const s = document.getElementById("sheet");
+  if (!s || s.hidden) return;
+  s.classList.remove("show");
+  s.querySelector(".sheet-panel").style.transform = "";
+  document.body.classList.remove("noscroll");
+  setTimeout(() => { if (!s.classList.contains("show")) s.hidden = true; }, 300);
+}
+(() => {
+  const p = document.querySelector("#sheet .sheet-panel");
+  if (!p) return;
+  let y0 = null, dy = 0;
+  p.addEventListener("touchstart", ev => { y0 = p.scrollTop > 0 ? null : ev.touches[0].clientY; dy = 0; }, {passive: true});
+  p.addEventListener("touchmove", ev => {
+    if (y0 === null) return;
+    dy = Math.max(0, ev.touches[0].clientY - y0);
+    p.style.transition = "none"; p.style.transform = `translateY(${dy}px)`;
+  }, {passive: true});
+  p.addEventListener("touchend", () => {
+    if (y0 === null) return;
+    y0 = null; p.style.transition = "";
+    if (dy > 90) sheetHide(); else p.style.transform = "";
+  });
+})();
+function toast(msg, bad) {
+  let t = document.getElementById("toast");
+  if (!t) { t = document.createElement("div"); t.id = "toast"; t.setAttribute("aria-live", "polite"); document.body.append(t); }
+  t.textContent = msg;
+  t.className = "toast show" + (bad ? " bad" : "");
+  clearTimeout(t.timer);
+  t.timer = setTimeout(() => t.classList.remove("show"), bad ? 5000 : 2500);
+}

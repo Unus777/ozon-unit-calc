@@ -10,7 +10,7 @@
 <link rel="manifest" href="owner.webmanifest?v=13">
 <meta name="apple-mobile-web-app-title" content="Алмалы">
 <script src="theme.js?v=12"></script>
-<link rel="stylesheet" href="style.css?v=22">
+<link rel="stylesheet" href="style.css?v=23">
 <link rel="icon" href="icons/owner.svg?v=13" type="image/svg+xml">
 <link rel="icon" href="icons/owner-32.png?v=13" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/owner-180.png?v=13" sizes="180x180">
@@ -62,7 +62,7 @@
 </div>
 
 <script src="calc.js?v=12"></script>
-<script src="config.js?v=20"></script>
+<script src="config.js?v=21"></script>
 <script src="push.js?v=15"></script>
 <script>
 const API = "https://api-seller.ozon.ru";
@@ -163,7 +163,7 @@ let ORDERS = [], PRICES = {};
 const iso = d => d.toISOString().slice(0, 19) + "Z";
 
 async function loadOrders(silent) {
-  if (silent !== true) $("orders").textContent = "Загружаю…";  // фоновая сверка — без мигания списка
+  if (silent !== true) $("orders").innerHTML = '<div class="card skel"></div>'.repeat(3);  // фоновая сверка — без мигания списка
   try {
     const to = new Date(), filter = {since: iso(new Date(to - 90 * 864e5)), to: iso(to)};
     const postings = [];
@@ -185,7 +185,7 @@ async function loadOrders(silent) {
     PAYS = ADMIN() && SCRIPT_URL ? await sheetApi({action: "payments", key: ADMIN()}).catch(() => null) : null;  // null — скрипт ещё без выплат
     drawReport();
     ORDERS = postings; PRICES = prices;
-    drawOrders();
+    drawOrders(silent !== true);
   } catch (err) {
     $("orders").innerHTML = `<div class="card err">${e(err.message)}</div>`;
   }
@@ -252,7 +252,7 @@ async function checkPending() {
 setInterval(checkPending, 30000);
 let OTAB = "new";
 
-function drawOrders() {
+function drawOrders(anim) {
   const counts = {new: 0, courier: 0, done: 0};
   ORDERS.forEach(p => counts[ostate(p)]++);
   $("otabs").innerHTML = Object.entries(OTABS).map(([k, v]) =>
@@ -261,11 +261,12 @@ function drawOrders() {
   const cbNum = p => parseInt(String(DELIV[p.posting_number]?.cb || "").replace(/\D/g, "")) || 0;
   const list = ORDERS.map((p, i) => [p, i]).filter(([p]) => ostate(p) === OTAB)
     .sort(([a], [b]) => new Date(b.in_process_at) - new Date(a.in_process_at) || cbNum(b) - cbNum(a));
-  $("orders").innerHTML = list.length ? list.map(([p, i]) => orderCard(p, i)).join("")
+  $("orders").classList.toggle("anim", !!anim);  // появление карточек — только при смене вкладки и загрузке, не при фоновой сверке
+  $("orders").innerHTML = list.length ? list.map(([p, i], n) => orderCard(p, i, n)).join("")
     : `<div class="card mut">${OTAB === "new" ? "Новых заказов нет" : OTAB === "courier" ? "У курьера сейчас ничего нет" : "Пока пусто"}</div>`;
 }
 
-function orderCard(p, i) {
+function orderCard(p, i, n = 0) {
   const date = new Date(p.in_process_at).toLocaleDateString("ru-RU", {day: "numeric", month: "short"});
   const d = DELIV[p.posting_number];
   const meta = d ? `${e(d.cb)}${d.date ? " · на " + e(d.date) : ""}` : `${date} · ${e(p.posting_number)}`;
@@ -280,10 +281,10 @@ function orderCard(p, i) {
   } catch (err) {
     items = `<div class="err">${e(err.message)}</div>`;
   }
-  return `<div class="card order${p.status === "cancelled" ? " cancelled" : ""}"><div class="top">` +
+  return `<div class="card order${p.status === "cancelled" ? " cancelled" : ""}" data-card="${i}" tabindex="0" aria-haspopup="dialog" style="--i:${Math.min(n, 8)}"><div class="top">` +
     `${d ? courierBadge(p, d) : badge(p.status)}` +
     `<span class="mut num">${meta}</span>` +
-    `<button class="more" data-more="${i}" aria-label="Ещё действия">⋯</button></div>${items}${primaryActions(p)}</div>`;
+    `<span class="chev" aria-hidden="true">›</span></div>${items}${primaryActions(p)}</div>`;
 }
 
 // Значок заказа у курьера: у курьера → курьер доставил (ждёт отметки в Ozon) → доставлен
@@ -333,9 +334,9 @@ ${d && ADMIN() && SCRIPT_URL ? `<details class="sitem-details"><summary class="s
 <button class="sitem" data-copy="${i}">📋 Скопировать для отчёта</button>
 ${d && (needOzon || !done) && ADMIN() && SCRIPT_URL ? `<button class="ok wide" data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">${done ? "Отметить доставленным в Ozon" : "Доставлено"}</button>` : ""}
 <button class="text wide" data-close>Закрыть</button>`;
-  $("sheet").hidden = false;
+  sheetShow();
 }
-const closeSheet = () => { $("sheet").hidden = true; };
+const closeSheet = sheetHide;
 
 let PAYS = null;
 function drawReport() {
@@ -359,7 +360,7 @@ $("report").addEventListener("submit", async ev => {
     PAYS.push(p);
     drawReport();
   } catch (err) {
-    alert(err.message);
+    toast(err.message, true);
     btn.disabled = false;
   }
 });
@@ -370,7 +371,7 @@ $("report").addEventListener("click", async ev => {
     await sheetApi({action: "unpay", key: ADMIN(), id: b.dataset.unpay});
     PAYS = PAYS.filter(p => p.id !== b.dataset.unpay);
     drawReport();
-  } catch (err) { alert(err.message); }
+  } catch (err) { toast(err.message, true); }
 });
 
 // tel: с добавочным (Ozon даёт 4 цифры, таблица теряла ведущий ноль) — «,» = пауза, затем добавочный
@@ -393,7 +394,7 @@ async function markDelivered(posting, needOzon) {
     setTimeout(checkPending, 15000);
   }
   if (d.status !== "Доставлен") DELIV[posting] = await sheetApi({action: "update", key: ADMIN(), posting, data: {status: "Доставлен"}});
-  alert(needOzon ? "Отправлено в Ozon. Сайт сам проверит и отметит, когда Ozon проведёт доставку." : "Готово");
+  toast(needOzon ? "Отправлено в Ozon ✓ Сайт сам проверит подтверждение" : "Готово ✓");
   return true;
 }
 
@@ -485,7 +486,7 @@ $("gear").onclick = () => {
 };
 $("accessForm").onsubmit = ev => {
   ev.preventDefault();
-  if (!applyAccess($("accessLink").value.trim())) { alert("Это не ваша ссылка доступа — скопируйте её целиком"); return; }
+  if (!applyAccess($("accessLink").value.trim())) { toast("Это не ваша ссылка доступа — скопируйте её целиком", true); return; }
   $("accessLink").value = "";
   drawDlvState();
   if (store.get("ozon_cid")) loadOrders();
@@ -515,19 +516,21 @@ $("out").onclick = ev => {
 
 $("app").addEventListener("click", ev => {
   const t = ev.target.closest("[data-otab]");
-  if (t) { OTAB = t.dataset.otab; drawOrders(); return; }
-  const m = ev.target.closest("[data-more]");
-  if (m) { openSheet(+m.dataset.more); return; }
-  if (ev.target.closest("[data-close]")) closeSheet();
+  if (t) { OTAB = t.dataset.otab; drawOrders(true); return; }
+  if (ev.target.closest("[data-close]")) { closeSheet(); return; }
+  // нажатие на карточку (не на её кнопку или поле) открывает меню действий
+  const c = ev.target.closest("[data-card]");
+  if (c && !ev.target.closest("a, button, input, textarea, select, label, summary, form, details")) openSheet(+c.dataset.card);
+});
+$("app").addEventListener("keydown", ev => {
+  if ((ev.key === "Enter" || ev.key === " ") && ev.target.matches("[data-card]")) { ev.preventDefault(); openSheet(+ev.target.dataset.card); }
 });
 $("app").addEventListener("click", async ev => {
   const b = ev.target.closest("button[data-copy], button[data-open]");
   if (!b) return;
   if (b.dataset.copy) {
     await copy(copyText(ORDERS[b.dataset.copy], PRICES));
-    const label = b.textContent;
-    b.textContent = "Скопировано ✓";
-    setTimeout(() => { b.textContent = label; }, 1500);
+    toast("Скопировано ✓");
   } else if (b.dataset.open) {
     closeSheet();
     $("n").value = b.dataset.open;
@@ -535,10 +538,10 @@ $("app").addEventListener("click", async ev => {
     scrollTo({top: 0, behavior: "smooth"});
   }
 });
-$("reload").onclick = loadOrders;
+$("reload").onclick = () => loadOrders();
 $("app").addEventListener("click", async ev => {
   const b = ev.target.closest("[data-remind]");
-  if (b) sendReminder(b.dataset.remind, ADMIN()).catch(err => alert(err.message));
+  if (b) sendReminder(b.dataset.remind, ADMIN()).catch(err => toast(err.message, true));
   const cl = ev.target.closest("[data-call]");
   if (cl) {  // заказа ещё нет у курьера: номер берём из Ozon в момент звонка
     cl.disabled = true;
@@ -547,7 +550,7 @@ $("app").addEventListener("click", async ev => {
       const tel = telHref((posting.customer || {}).phone || (posting.addressee || {}).phone, (posting.addressee || {}).pin);
       if (!tel) throw new Error("Ozon не отдал телефон клиента по этому заказу");
       location.href = tel;
-    } catch (err) { alert(err.message); }
+    } catch (err) { toast(err.message, true); }
     cl.disabled = false;
     return;
   }
@@ -555,7 +558,7 @@ $("app").addEventListener("click", async ev => {
   if (!dv) return;
   dv.disabled = true;
   try { if (await markDelivered(dv.dataset.delivered, dv.dataset.ozon === "1")) { closeSheet(); loadOrders(); } }
-  catch (err) { alert(err.message); }
+  catch (err) { toast(err.message, true); }
   dv.disabled = false;
 });
 
@@ -581,7 +584,7 @@ $("ownerNotifBtn").onclick = async () => {
   try {
     if (await Notification.requestPermission() !== "granted") throw new Error("Уведомления запрещены в настройках телефона");
     await ownerSubscribe();
-  } catch (err) { alert(err.message); }
+  } catch (err) { toast(err.message, true); }
   $("ownerNotifBtn").disabled = false;
   drawOwnerNotif();
 };
@@ -604,12 +607,12 @@ $("app").addEventListener("submit", async ev => {
       btn.disabled = false; btn.textContent = "Сохранено ✓";
       setTimeout(() => { btn.textContent = label; }, 2000);
     } else {
-      if (!r.pushed) alert("Заказ у курьера, но пуш не дошёл: курьер не включил уведомления.");
+      toast(r.pushed ? "Отправлено Рашаду ✓" : "Заказ у курьера, но пуш не дошёл: курьер не включил уведомления", !r.pushed);
       drawOrders();
     }
   } catch (err) {
     btn.disabled = false; btn.textContent = label;
-    alert(err.message);
+    toast(err.message, true);
   }
 });
 

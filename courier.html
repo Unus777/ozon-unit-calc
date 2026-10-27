@@ -10,7 +10,7 @@
 <title>Доставки</title>
 <link rel="manifest" href="manifest.webmanifest?v=13">
 <script src="theme.js?v=14"></script>
-<link rel="stylesheet" href="style.css?v=20">
+<link rel="stylesheet" href="style.css?v=23">
 <link rel="icon" href="icons/courier.svg?v=13" type="image/svg+xml">
 <link rel="icon" href="icons/courier-32.png?v=13" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/courier-180.png?v=13" sizes="180x180">
@@ -33,11 +33,11 @@
 <button role="tab" aria-selected="false" data-tab="done">Готово</button>
 </div>
 <div id="mapbox" hidden><div id="map" role="region" aria-label="Карта доставок"></div><div id="route"></div></div>
-<div id="list" class="mut">Загружаю…</div>
+<div id="list"><div class="card skel"></div><div class="card skel"></div></div>
 <div id="sheet" class="sheet" hidden><div class="sheet-bg" data-close></div><section class="sheet-panel" role="dialog" aria-modal="true" aria-label="Действия с заказом" id="sheetPanel"></section></div>
 </div>
 
-<script src="config.js?v=20"></script>
+<script src="config.js?v=21"></script>
 <script src="push.js?v=15"></script>
 <script>
 const $ = id => document.getElementById(id);
@@ -80,9 +80,9 @@ function card(r) {
       `<span class="crow-pay num">${rub(r.pay)}</span></button>`;
   }
   const info = deliveryDetails(r.comment), {tel} = telOf(r);
-  return `<div class="card order open${r.posting === FOCUS ? " hl" : ""}" data-posting="${e(r.posting)}">
+  return `<div class="card order open${r.posting === FOCUS ? " hl" : ""}" data-posting="${e(r.posting)}" data-card tabindex="0" aria-haspopup="dialog">
 <div class="top"><span class="cb">${e(r.cb)}</span><span class="badge ${done ? "done" : "way"}">${e(done ? r.status : whenText(r))}</span>
-<button class="more" data-sheet aria-label="Ещё действия">⋯</button></div>
+<span class="chev" aria-hidden="true">›</span></div>
 <div class="addr big">${e(r.address)}</div>
 ${info.note || r.comment && !info.note && !info.time && !info.foreman ? `<div class="mut">${e(info.note || r.comment)}</div>` : ""}
 <div class="tiles">
@@ -119,9 +119,9 @@ ${foreman ? `<a class="sitem" href="tel:${e(foreman)}">👷 Позвонить �
 <a class="sitem" href="${e(appleMaps(r))}" target="_blank" rel="noopener">🗺 Apple Карты</a>
 ${IS_ADMIN ? `<div class="sgroup">Владелец</div><button class="sitem" data-edit>✏️ Изменить данные заказа</button>${done ? "" : `<button class="sitem" data-remind>🔔 Напомнить курьеру</button>`}${editForm(r)}` : ""}
 <button class="text wide" data-close>Закрыть</button></div>`;
-  $("sheet").hidden = false;
+  sheetShow();
 }
-const closeCSheet = () => { $("sheet").hidden = true; SHEET = null; };
+const closeCSheet = () => { sheetHide(); SHEET = null; };
 
 function editForm(r) {
   const info = deliveryDetails(r.comment);
@@ -166,7 +166,7 @@ async function saveEdit(form) {
   await save(r.posting, data);
 }
 
-function draw() {
+function draw(anim) {
   $("mapbox").hidden = TAB !== "map";
   $("list").hidden = TAB === "map";
   if (TAB === "map") { drawMap(); return; }
@@ -180,6 +180,7 @@ function draw() {
   if (TAB !== "done") rows.sort((a, b) => (toIso(a.date) || "9999").localeCompare(toIso(b.date) || "9999"));
   if (TAB !== "done" && !rows.some(r => r.posting === OPEN)) OPEN = (rows.find(r => r.posting === FOCUS) || rows[0] || {}).posting || null;
   const head = TAB === "done" ? reportHtml(rep, IS_ADMIN ? {title: "Курьеру осталось выплатить", leftLabel: ""} : {title: "Вам должны", leftLabel: ""}) : "";
+  $("list").classList.toggle("anim", !!anim);
   $("list").innerHTML = head + (rows.length ? rows.map(card).join("")
     : `<div class="card mut">${TAB === "done" ? "Пока нет доставленных" : TAB === "today" ? "На сегодня заказов нет — смотрите вкладку «Все»" : "Заказов в работе нет"}</div>`);
   if (FOCUS) document.querySelector(".order.hl")?.scrollIntoView({block: "center"});
@@ -316,7 +317,7 @@ async function load() {
   try {
     ROWS = await api({action: "list"});
     PAYS = await api({action: "payments"}).catch(() => null);
-    draw();
+    draw(true);
   } catch (err) {
     $("list").innerHTML = `<div class="card err">${e(err.message)}</div>`;
   }
@@ -327,9 +328,10 @@ async function save(posting, data, el) {
     const r = await api({action: "update", posting, data});
     ROWS = ROWS.map(x => x.posting === posting ? r : x);
     draw();
-    if (SHEET === posting) data.status ? closeCSheet() : openCSheet(posting);  // меню «⋯» показывает свежие данные
+    if (SHEET === posting) data.status ? closeCSheet() : openCSheet(posting);
+    if (data.status === "Доставлен") toast("Доставлено ✓ Владелец получит уведомление");  // меню «⋯» показывает свежие данные
   } catch (err) {
-    alert(err.message);
+    toast(err.message, true);
     if (el) el.disabled = false;
   }
 }
@@ -346,29 +348,34 @@ $("app").addEventListener("submit", async ev => {
   ev.preventDefault();
   const btn = form.querySelector("button");
   btn.disabled = true; btn.textContent = "Сохраняю…";
-  try { await saveEdit(form); } catch (err) { alert(err.message); btn.disabled = false; btn.textContent = "Сохранить"; }
+  try { await saveEdit(form); } catch (err) { toast(err.message, true); btn.disabled = false; btn.textContent = "Сохранить"; }
 });
 $("app").addEventListener("click", ev => {
   const row = ev.target.closest("[data-row]");
-  if (row) { OPEN = row.dataset.row; draw(); return; }
-  if (ev.target.closest("[data-sheet]")) { openCSheet(ev.target.closest(".order").dataset.posting); return; }
+  if (row) { OPEN = row.dataset.row; draw(); document.querySelector("#list .order.open")?.classList.add("pop"); return; }
   if (ev.target.closest("[data-close]")) { closeCSheet(); return; }
+  // нажатие на раскрытую карточку (не на кнопку) открывает меню действий
+  const c = ev.target.closest("[data-card]");
+  if (c && !ev.target.closest("a, button, input, textarea, select, label, summary, form, details")) { openCSheet(c.dataset.posting); return; }
   const ed = ev.target.closest("[data-edit], [data-cancel]");
   if (ed) { const f = ed.closest(".order").querySelector("[data-editform]"); f.hidden = !f.hidden; return; }
   const rm = ev.target.closest("[data-remind]");
-  if (rm) { sendReminder(rm.closest(".order").dataset.posting, KEY).catch(err => alert(err.message)); return; }
+  if (rm) { sendReminder(rm.closest(".order").dataset.posting, KEY).catch(err => toast(err.message, true)); return; }
   const b = ev.target.closest("[data-done]");
   if (!b) return;
   if (!confirm("Отметить заказ доставленным?")) return;
   b.disabled = true;
   save(b.closest(".order").dataset.posting, {status: "Доставлен"}, b);
 });
+$("app").addEventListener("keydown", ev => {
+  if ((ev.key === "Enter" || ev.key === " ") && ev.target.matches("[data-card]")) { ev.preventDefault(); openCSheet(ev.target.dataset.posting); }
+});
 document.querySelector(".tabs").onclick = ev => {
   const b = ev.target.closest("[data-tab]");
   if (!b) return;
   TAB = b.dataset.tab;
   document.querySelectorAll(".tabs button").forEach(x => x.setAttribute("aria-selected", x === b));
-  draw();
+  draw(true);
 };
 $("reload").onclick = load;
 const themeOrder = ["auto", "light", "dark"];

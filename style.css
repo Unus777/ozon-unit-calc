@@ -190,3 +190,32 @@ button.big{min-height:50px;font-size:16px}
 .ozstate.ok{background:var(--green-bg);color:var(--green)}
 .ozstate.wait{background:var(--acc-bg);color:var(--acc)}
 .ozstate.late{background:var(--yellow-bg);color:var(--yellow)}
+/* --- анимации: меню выезжает, карточки появляются, кнопки «пружинят» --- */
+body.noscroll{overflow:hidden}
+.sheet-bg{opacity:0;transition:opacity .25s ease}
+.sheet.show .sheet-bg{opacity:1}
+.sheet-panel{transform:translateY(100%);transition:transform .32s cubic-bezier(.2,.8,.2,1);box-shadow:0 -8px 32px rgba(20,22,26,.12)}
+.sheet.show .sheet-panel{transform:none}
+.grab{cursor:grab;touch-action:none}
+[data-card]{cursor:pointer;-webkit-tap-highlight-color:transparent}
+.order .chev{margin-left:auto;color:var(--mut);font-size:22px;line-height:1;padding:0 2px}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));z-index:30;max-width:calc(100% - 32px);
+padding:12px 16px;border-radius:14px;background:var(--fg);color:var(--bg);font-size:15px;font-weight:600;text-align:center;
+box-shadow:0 8px 24px rgba(20,22,26,.2);opacity:0;transform:translate(-50%,16px);transition:opacity .25s,transform .25s;pointer-events:none}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast.bad{background:var(--red);color:#fff}
+.skel{height:132px;background:linear-gradient(90deg,var(--card) 30%,var(--soft) 50%,var(--card) 70%);background-size:300% 100%;animation:shimmer 1.2s linear infinite}
+@keyframes shimmer{from{background-position:100% 0}to{background-position:0 0}}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}}
+@media(prefers-reduced-motion:no-preference){
+  .anim>.card{animation:rise .34s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i,0) * 45ms)}
+  .order.pop{animation:rise .3s cubic-bezier(.2,.8,.2,1) both}
+  .order,.crow{transition:transform .16s ease,box-shadow .16s ease,border-color .2s}
+  [data-card]:active,.crow:active{transform:scale(.985)}
+  button,a.btn{transition:transform .12s ease,background-color .2s,color .2s,opacity .2s,box-shadow .2s}
+  button:active:not(:disabled),a.btn:active{transform:scale(.96)}
+  .sitem{transition:background-color .15s}
+  .sitem:active,button.sitem:active:not(:disabled){background:var(--soft);transform:none}
+  .badge,.ozstate{transition:background-color .3s,color .3s}
+}
+@media(prefers-reduced-motion:reduce){.sheet-panel,.sheet-bg,.toast{transition:none}.skel{animation:none}}
