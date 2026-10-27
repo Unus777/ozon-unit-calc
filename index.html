@@ -162,8 +162,8 @@ async function fetchPosting(number) {
 let ORDERS = [], PRICES = {};
 const iso = d => d.toISOString().slice(0, 19) + "Z";
 
-async function loadOrders() {
-  $("orders").textContent = "Загружаю…";
+async function loadOrders(silent) {
+  if (silent !== true) $("orders").textContent = "Загружаю…";  // фоновая сверка — без мигания списка
   try {
     const to = new Date(), filter = {since: iso(new Date(to - 90 * 864e5)), to: iso(to)};
     const postings = [];
@@ -180,6 +180,7 @@ async function loadOrders() {
       for (const it of r.items) prices[it.offer_id] = it;
     }
     await loadDeliveries();
+    await syncDeliveredFromOzon(postings);
     PAYS = ADMIN() && SCRIPT_URL ? await sheetApi({action: "payments", key: ADMIN()}).catch(() => null) : null;  // null — скрипт ещё без выплат
     drawReport();
     ORDERS = postings; PRICES = prices;
@@ -191,6 +192,7 @@ async function loadOrders() {
 
 // Этап заказа для вкладок: новые (ещё не у курьера) → у курьера → доставлены
 function ostate(p) {
+  if (p.status === "delivered") return "done";  // в Ozon уже доставлен (с сайта или из кабинета Ozon)
   const d = DELIV[p.posting_number], closed = ["delivered", "cancelled"].includes(p.status);
   // доставлен курьером и отмечен (или уже отправлен) в Ozon — сразу во «Доставлены»
   if (d) return d.status === "Доставлен" && (closed || ozState(p) === "wait") ? "done" : "courier";
@@ -207,6 +209,26 @@ function ozState(p) {  // "ok" — Ozon провёл; "wait" — ждём; "late
   return !t ? "" : Date.now() - t < PENDING_TTL ? "wait" : "late";
 }
 const OZ_LINE = {ok: "✅ Отмечено в Ozon",wait: "⏳ Отправлено в Ozon — ждём подтверждения", late: "⚠️ Ozon не подтвердил доставку за 2 часа — проверьте в кабинете"};
+
+// Отметили «Доставлено» прямо в кабинете Ozon — переносим в таблицу, чтобы курьер и расчёт выплат это видели
+async function syncDeliveredFromOzon(postings) {
+  if (!ADMIN() || !SCRIPT_URL) return;
+  const pend = pendingGet();
+  for (const p of postings) {
+    const d = DELIV[p.posting_number];
+    if (p.status === "delivered" && d && d.status !== "Доставлен") {
+      try { DELIV[p.posting_number] = await sheetApi({action: "update", key: ADMIN(), posting: p.posting_number, data: {status: "Доставлен"}}); } catch {}
+    }
+    if (["delivered", "cancelled"].includes(p.status)) delete pend[p.posting_number];
+  }
+  pendingSet(pend);
+}
+
+// Раз в 2 минуты сверяем статусы с Ozon, пока страница открыта и вы ничего не вводите
+setInterval(() => {
+  const busy = !$("sheet").hidden || document.activeElement?.matches("input, textarea, select");
+  if (!document.hidden && !busy && ORDERS.length) loadOrders(true);
+}, 120000);
 
 async function checkPending() {
   const pend = pendingGet(), nums = Object.keys(pend);
@@ -231,7 +253,10 @@ function drawOrders() {
   ORDERS.forEach(p => counts[ostate(p)]++);
   $("otabs").innerHTML = Object.entries(OTABS).map(([k, v]) =>
     `<button role="tab" data-otab="${k}" aria-selected="${OTAB === k}">${v}${k !== "done" && counts[k] ? " · " + counts[k] : ""}</button>`).join("");
-  const list = ORDERS.map((p, i) => [p, i]).filter(([p]) => ostate(p) === OTAB);
+  // по порядку: новые сверху, при равной дате — по номеру ЦБ
+  const cbNum = p => parseInt(String(DELIV[p.posting_number]?.cb || "").replace(/\D/g, "")) || 0;
+  const list = ORDERS.map((p, i) => [p, i]).filter(([p]) => ostate(p) === OTAB)
+    .sort(([a], [b]) => new Date(b.in_process_at) - new Date(a.in_process_at) || cbNum(b) - cbNum(a));
   $("orders").innerHTML = list.length ? list.map(([p, i]) => orderCard(p, i)).join("")
     : `<div class="card mut">${OTAB === "new" ? "Новых заказов нет" : OTAB === "courier" ? "У курьера сейчас ничего нет" : "Пока пусто"}</div>`;
 }
@@ -270,7 +295,7 @@ function primaryActions(p) {
   const d = DELIV[p.posting_number];
   if (!ADMIN() || !SCRIPT_URL) return "";
   if (!d) {
-    if (!["ship", "way"].includes(stage(p.status)[0])) return "";
+    if (!["ship", "way"].includes(stage(p.status)[0])) return p.status === "delivered" ? `<div class="ozstate ok">${OZ_LINE.ok}</div>` : "";
     return `<form class="send" data-send="${e(p.posting_number)}"><label class="cbfield">ЦБ-<input name="cb" placeholder="970" ` +
       `aria-label="Номер ЦБ" inputmode="numeric" autocomplete="off" required></label><button>Отправить курьеру</button>` +
       `<details class="delivery-edit"><summary>Пометка, время и прораб</summary>${deliveryFields({})}</details></form>`;
