@@ -71,29 +71,34 @@ function telOf(r) {
 }
 const unloadText = r => r.unload === "Нет" ? "Без разгрузки" : r.unload ? r.unload : "—";
 const whenText = r => { const t = deliveryDetails(r.comment).time; return [r.date === todayStr() ? "Сегодня" : r.date, t].filter(Boolean).join(" ") || r.status; };
+const isPpz = r => /ППЗ|Реутовская/i.test(r.address || "") || /ППЗ/i.test(r.unload || "");
 
 function card(r) {
   const done = r.status === "Доставлен" || r.status === "Отменён";
+  const ppz = isPpz(r);
   if (r.posting !== OPEN) {  // свёрнутая строка: нажатие раскрывает
     return `<button class="card crow${r.posting === FOCUS ? " hl" : ""}" data-row="${e(r.posting)}">` +
-      `<span class="crow-main"><b>${e(r.cb)} · ${e(r.packs || "—")}</b><span class="mut">${e(r.address)} · ${e(unloadText(r).toLowerCase())}</span></span>` +
+      `<span class="crow-main">${ppz ? '<span class="badge fbs" style="margin-right:4px">ППЗ</span>' : ''}<b>${e(r.cb)} · ${e(r.packs || "—")}</b>` +
+      `<span class="mut">${e(r.address)}${ppz ? '' : ' · ' + e(unloadText(r).toLowerCase())}</span></span>` +
       `<span class="crow-pay num">${rub(r.pay)}</span></button>`;
   }
   const info = deliveryDetails(r.comment), {tel} = telOf(r);
+  const badgeCls = done ? "done" : (ppz ? "fbs" : "way");
+  const badgeTxt = done ? (ppz ? "Сдан в ППЗ" : r.status) : (ppz ? "ППЗ Ozon · " + whenText(r) : whenText(r));
   return `<div class="card order open${r.posting === FOCUS ? " hl" : ""}" data-posting="${e(r.posting)}" data-card tabindex="0" aria-haspopup="dialog">
-<div class="top"><span class="cb">${e(r.cb)}</span><span class="badge ${done ? "done" : "way"}">${e(done ? r.status : whenText(r))}</span>
+<div class="top"><span class="cb">${e(r.cb)}</span><span class="badge ${badgeCls}">${e(badgeTxt)}</span>
 <span class="chev" aria-hidden="true">›</span></div>
 <div class="addr big">${e(r.address)}</div>
 ${info.note || r.comment && !info.note && !info.time && !info.foreman ? `<div class="mut">${e(info.note || r.comment)}</div>` : ""}
 <div class="tiles">
 <div class="tile"><span>Везти</span><b>${e(r.packs || "—")}</b></div>
-<div class="tile ${r.unload && r.unload !== "Нет" ? "warn" : ""}"><span>Разгрузка</span><b>${e(unloadText(r))}</b></div>
+<div class="tile ${r.unload && r.unload !== "Нет" && !ppz ? "warn" : ""}"><span>${ppz ? "Сдача" : "Разгрузка"}</span><b>${e(ppz ? "В ППЗ Ozon" : unloadText(r))}</b></div>
 <div class="tile pay"><span>Оплата</span><b class="num">${rub(r.pay)}</b></div>
 </div>
-${done ? `<p class="mut">Доставлен${r.delivered_at ? " " + e(r.delivered_at) : ""}</p>` : `<div class="actions two">
+${done ? `<p class="mut">${ppz ? "Сдан в ППЗ" : "Доставлен"}${r.delivered_at ? " " + e(r.delivered_at) : ""}</p>` : `<div class="actions two">
 ${tel ? `<a class="btn ghost" href="${e(tel)}">${ic("phone")}Позвонить</a>` : ""}
 <a class="btn ghost" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">${ic("nav")}Маршрут</a></div>
-<button class="ok wide big" data-done>Доставлено</button>`}
+<button class="ok wide big" data-done>${ppz ? "Сдал в ППЗ" : "Доставлено"}</button>`}
 </div>`;
 }
 
@@ -367,9 +372,12 @@ $("app").addEventListener("click", ev => {
   if (rm) { sendReminder(rm.closest(".order").dataset.posting, KEY).catch(err => toast(err.message, true)); return; }
   const b = ev.target.closest("[data-done]");
   if (!b) return;
-  if (!confirm("Отметить заказ доставленным?")) return;
+  const post = b.closest(".order").dataset.posting;
+  const curRow = ROWS.find(x => x.posting === post);
+  const ppz = curRow && isPpz(curRow);
+  if (!confirm(ppz ? "Отметить сдачу в ППЗ Ozon?" : "Отметить заказ доставленным?")) return;
   b.disabled = true;
-  save(b.closest(".order").dataset.posting, {status: "Доставлен"}, b);
+  save(post, {status: "Доставлен"}, b);
 });
 $("app").addEventListener("keydown", ev => {
   if ((ev.key === "Enter" || ev.key === " ") && ev.target.matches("[data-card]")) { ev.preventDefault(); openCSheet(ev.target.dataset.posting); }

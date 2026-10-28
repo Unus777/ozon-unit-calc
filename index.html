@@ -111,6 +111,10 @@ async function loadDeliveries() {
   } catch { DELIV = {}; }  // таблица недоступна — список заказов всё равно показываем
 }
 
+const isFbs = p => typeof isFbsPosting === "function" ? isFbsPosting(p) : !!(p && (p.tpl_integration_type === "ozon" ||
+  (p.delivery_method || {}).warehouse_id === 1020005035230080 ||
+  (p.delivery_method || {}).tpl_provider === "Доставка Ozon"));
+
 function unloadText(prr) {
   const floor = prr && prr.floor ? `, эт. ${prr.floor}` : "";
   if (!prr || !prr.code || prr.code === "none") return "Нет";  // Ozon шлёт "none", когда подъём не заказан
@@ -119,17 +123,32 @@ function unloadText(prr) {
 
 async function sendToCourier(number, cbRaw, details) {
   const [posting] = await fetchPosting(number);
+  const fbs = isFbs(posting);
   const c = posting.customer || {}, a = c.address || {}, prr = posting.prr_option || {};
   const phone = String(c.phone || (posting.addressee || {}).phone || "").replace(/\D/g, "");
+
+  const address = fbs ? "ППЗ Ozon (Балашиха, ул. Реутовская, 5)" : (a.address_tail || "");
+  const lat = fbs ? "55.779774" : (a.latitude || "");
+  const lon = fbs ? "37.881267" : (a.longitude || "");
+  const unload = fbs ? "Сдача в ППЗ Ozon" : unloadText(prr);
+
+  let delivery = 0;
+  if (details.delivery_pay !== "" && !isNaN(Number(details.delivery_pay))) {
+    delivery = Number(details.delivery_pay);
+  } else if (!fbs) {
+    delivery = parseFloat(posting.delivery_price) || 0;
+  }
+  const lift = fbs ? 0 : (parseFloat(prr.price) || 0);
+
   const data = {
     posting: posting.posting_number,
     cb: /^\d+$/.test(cbRaw) ? `ЦБ-${cbRaw}` : cbRaw.toUpperCase().replace(/^ЦБ\s*-?\s*/, "ЦБ-"),
-    address: a.address_tail || "", lat: a.latitude || "", lon: a.longitude || "",
+    address, lat, lon,
     phone: phone ? "+" + phone : "", ext: (posting.addressee || {}).pin || "",
     packs: posting.products.map(p => `${p.quantity} уп ${tileFormat(p.offer_id, p.name) || p.offer_id}`).join(", "),
-    unload: unloadText(prr), delivery: parseFloat(posting.delivery_price) || 0, lift: parseFloat(prr.price) || 0,
-    date: details.date,
-    comment: deliveryComment({...details, note: [a.comment, details.note].filter(Boolean).join("\n")}),
+    unload, delivery, lift,
+    date: details.date || (fbs ? new Date().toLocaleDateString("ru-RU") : ""),
+    comment: deliveryComment({...details, note: [fbs ? "" : a.comment, details.note].filter(Boolean).join("\n")}),
   };
   const jwk = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(store.get("dlv_vk").replace(/-/g, "+").replace(/_/g, "/")), ch => ch.charCodeAt(0))));
   const jwts = {};
@@ -271,11 +290,13 @@ function drawOrders(anim) {
 function orderCard(p, i, n = 0) {
   const date = new Date(p.in_process_at).toLocaleDateString("ru-RU", {day: "numeric", month: "short"});
   const d = DELIV[p.posting_number];
-  const meta = d ? `${e(d.cb)}${d.date ? " · на " + e(d.date) : ""}` : `${date} · ${e(p.posting_number)}`;
+  const fbs = isFbs(p);
+  const ppzFee = d && fbs ? (Number(d.delivery) || 0) : 0;
+  const meta = d ? `${e(d.cb)}${d.date ? " · на " + e(d.date) : ""}` : `${date} · ${e(p.posting_number)}${fbs ? " · ППЗ Реутовская" : ""}`;
   let items;
   try {
     items = p.products.map(x => {
-      const [, t] = calc({...p, products: [x]}, PRICES);
+      const [, t] = calc({...p, products: [x]}, PRICES, 0, ppzFee);
       return `<div class="item"><div><b>${x.quantity} уп · ${tileFormat(x.offer_id, x.name) || e(x.offer_id)}</b>` +
         `<span class="mut">${e(shortName(x.name).replace(/^Керамогранит\s+/i, "").replace(/\s*60\s*[xх×]\s*(60|120)$/i, ""))}</span></div>` +
         `<div class="price"><div class="v num ${t.status[0]}">${Math.round(t.payout_m2)}</div><div class="mut">₽/м² на руки</div></div></div>`;
@@ -284,13 +305,18 @@ function orderCard(p, i, n = 0) {
     items = `<div class="err">${e(err.message)}</div>`;
   }
   return `<div class="card order${p.status === "cancelled" ? " cancelled" : ""}" data-card="${i}" tabindex="0" aria-haspopup="dialog" style="--i:${Math.min(n, 8)}"><div class="top">` +
-    `${d ? courierBadge(p, d) : badge(p.status)}` +
+    `${d ? courierBadge(p, d, fbs) : (fbs ? '<span class="badge fbs">FBS · ППЗ</span> ' : '') + badge(p.status)}` +
     `<span class="mut num">${meta}</span>` +
     `<span class="chev" aria-hidden="true">›</span></div>${items}${primaryActions(p)}</div>`;
 }
 
 // Значок заказа у курьера: у курьера → курьер доставил (ждёт отметки в Ozon) → доставлен
-function courierBadge(p, d) {
+function courierBadge(p, d, fbs) {
+  if (fbs) {
+    if (d.status !== "Доставлен") return '<span class="badge fbs">В ППЗ</span>';
+    if (p.status === "delivered" || ozState(p) === "wait") return '<span class="badge done">Сдан в ППЗ</span>';
+    return '<span class="badge ship">Сдан в ППЗ</span>';
+  }
   if (d.status !== "Доставлен") return '<span class="badge way">У курьера</span>';
   if (p.status === "delivered" || ozState(p) === "wait") return '<span class="badge done">Доставлен</span>';
   return '<span class="badge ship">Курьер доставил</span>';
@@ -301,19 +327,29 @@ function courierBadge(p, d) {
 function primaryActions(p) {
   const d = DELIV[p.posting_number];
   if (!ADMIN() || !SCRIPT_URL) return "";
+  const fbs = isFbs(p);
   if (!d) {
     if (!["ship", "way"].includes(stage(p.status)[0])) return p.status === "delivered" ? `<div class="ozstate ok">${OZ_LINE.ok}</div>` : "";
+    if (fbs) {
+      return `<form class="send" data-send="${e(p.posting_number)}">` +
+        `<div class="fbs-banner"><span class="badge fbs">FBS</span> <b>Сдача в ППЗ: Реутовская, 5</b> <span>окно 12:00–18:00</span></div>` +
+        `<label class="cbfield">ЦБ-<input name="cb" placeholder="970" aria-label="Номер ЦБ" inputmode="numeric" autocomplete="off" required></label>` +
+        `<label class="payfield"><input name="delivery_pay" placeholder="Оплата" aria-label="Оплата курьеру" inputmode="numeric" autocomplete="off"> ₽ курьеру</label>` +
+        `<button>Отправить курьеру</button>` +
+        `<details class="delivery-edit"><summary>Пометка, время и детали сдачи</summary>${deliveryFields({}, p)}</details></form>`;
+    }
     return `<form class="send" data-send="${e(p.posting_number)}"><label class="cbfield">ЦБ-<input name="cb" placeholder="970" ` +
       `aria-label="Номер ЦБ" inputmode="numeric" autocomplete="off" required></label><button>Отправить курьеру</button>` +
-      `<details class="delivery-edit"><summary>Пометка, время и прораб</summary>${deliveryFields({})}</details></form>`;
+      `<details class="delivery-edit"><summary>Пометка, время и прораб</summary>${deliveryFields({}, p)}</details></form>`;
   }
   const oz = ozState(p), line = oz ? `<div class="ozstate ${oz}">${OZ_LINE[oz]}</div>` : "";
   const needOzon = !["delivered", "cancelled"].includes(p.status) && oz !== "wait", needSheet = d.status !== "Доставлен";
   if (!needOzon && !needSheet) return line;
   const tel = telHref(d.phone, d.ext);
+  const doneLabel = fbs ? "Сдан в ППЗ" : "Доставлено";
   return `<div class="actions">${tel && needSheet ? `<a class="btn ghost" href="${e(tel)}">${ic("phone")}Клиенту</a>` : ""}` +
     `<button class="${needSheet ? "ok" : ""}" data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">` +
-    `${needSheet ? "Доставлено" : oz === "late" ? "Повторить в Ozon" : "Отметить доставленным в Ozon"}</button></div>` + line;
+    `${needSheet ? doneLabel : oz === "late" ? "Повторить в Ozon" : (fbs ? "Подтвердить сдачу в Ozon" : "Отметить доставленным в Ozon")}</button></div>` + line;
 }
 
 // Этапы заказа для истории в меню: Ozon → курьеру → дата → курьер доставил → отмечено в Ozon
@@ -333,23 +369,25 @@ function orderSteps(p, d) {
 // Меню «⋯»: все остальные действия, по группам
 function openSheet(i) {
   const p = ORDERS[i], d = DELIV[p.posting_number];
+  const fbs = isFbs(p);
   const done = d && d.status === "Доставлен";
   const tel = d ? telHref(d.phone, d.ext) : "";
   const row = (inner) => `<div class="srow">${inner}</div>`;
   const callRow = tel ? `<a class="sitem" href="${e(tel)}">${ic("phone")}Позвонить клиенту${d.ext ? `<span class="mut">доб. ${e(String(d.ext).padStart(4, "0"))}</span>` : ""}</a>`
-    : ["ship", "way"].includes(stage(p.status)[0]) ? `<button class="sitem" data-call="${e(p.posting_number)}">${ic("phone")}Позвонить клиенту</button>` : "";
+    : ["ship", "way"].includes(stage(p.status)[0]) && !fbs ? `<button class="sitem" data-call="${e(p.posting_number)}">${ic("phone")}Позвонить клиенту</button>` : "";
   const needOzon = d && !["delivered", "cancelled"].includes(p.status) && ozState(p) !== "wait";
+  const doneBtnText = fbs ? (done ? "Подтвердить сдачу в Ozon" : "Сдан в ППЗ") : (done ? "Отметить доставленным в Ozon" : "Доставлено");
   $("sheetPanel").innerHTML = `<div class="grab"></div>
 <div class="shead"><div><b>${d ? e(d.cb) + " · " : ""}${p.products.map(x => x.quantity + " уп").join(" + ")}</b>
-<div class="mut">${e(p.posting_number)}${d && d.address ? " · " + e(d.address) : ""}</div></div>${badge(p.status)}</div>
+<div class="mut">${e(p.posting_number)}${d && d.address ? " · " + e(d.address) : (fbs ? " · ППЗ Реутовская, 5" : "")}</div></div>${fbs ? '<span class="badge fbs">FBS</span> ' : ''}${badge(p.status)}</div>
 ${p.status === "cancelled" ? "" : timelineHtml(orderSteps(p, d))}
 ${callRow || (d && !done) ? `<div class="sgroup">Связь</div>${callRow}${d && !done ? `<button class="sitem" data-remind="${e(p.posting_number)}">${ic("bell")}Напомнить курьеру</button>` : ""}` : ""}
 <div class="sgroup">Заказ</div>
-${d && ADMIN() && SCRIPT_URL ? `<details class="sitem-details"><summary class="sitem">${ic("edit")}Пометка, время, прораб</summary>` +
-  `<form data-schedule="${e(p.posting_number)}">${deliveryFields(d)}<button>Сохранить для Рашада</button></form></details>` : ""}
+${d && ADMIN() && SCRIPT_URL ? `<details class="sitem-details"><summary class="sitem">${ic("edit")}Пометка, время, оплата курьеру</summary>` +
+  `<form data-schedule="${e(p.posting_number)}">${deliveryFields(d, p)}<button>Сохранить изменения</button></form></details>` : ""}
 <button class="sitem" data-open="${e(p.posting_number)}">${ic("chart")}Расчёт ₽/м²</button>
 <button class="sitem" data-copy="${i}">${ic("copy")}Скопировать для отчёта</button>
-${d && (needOzon || !done) && ADMIN() && SCRIPT_URL ? `<button class="ok wide" data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">${done ? "Отметить доставленным в Ozon" : "Доставлено"}</button>` : ""}
+${d && (needOzon || !done) && ADMIN() && SCRIPT_URL ? `<button class="ok wide" data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">${doneBtnText}</button>` : ""}
 <button class="text wide" data-close>Закрыть</button>`;
   sheetShow();
 }
@@ -415,36 +453,79 @@ async function markDelivered(posting, needOzon) {
   return true;
 }
 
-function deliveryFields(d) {
-  const info = deliveryDetails(d.comment);
-  const date = /^(\d\d)\.(\d\d)\.(\d{4})$/.exec(d.date || "");
+function deliveryFields(d, p) {
+  const fbs = (p && isFbs(p)) || /ППЗ|Реутовская/i.test(d?.address || "") || /ППЗ/i.test(d?.unload || "");
+  const info = deliveryDetails(d?.comment);
+  const dateMatch = /^(\d\d)\.(\d\d)\.(\d{4})$/.exec(d?.date || "");
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const dateVal = dateMatch ? `${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}` : (fbs ? todayIso : "");
+  const timeVal = info.time || (fbs ? "12:00–18:00 (окно сдачи)" : "");
+  const noteVal = info.note || (fbs ? "Сдать в ППЗ Ozon (Балашиха, ул. Реутовская, 5) по штрихкоду на коробке" : "");
+  const payVal = d?.delivery ?? "";
   return `<div class="delivery-fields">
-    <label>Дата доставки<input name="date" type="date" value="${date ? `${date[3]}-${date[2]}-${date[1]}` : ""}"></label>
-    <label>Время доставки<input name="time" value="${e(info.time)}" placeholder="Например: с 14:00 до 16:00" maxlength="100"></label>
-    <label>Телефон прораба<input name="foreman" type="tel" value="${e(info.foreman)}" placeholder="+7 900 000-00-00" maxlength="30"></label>
-    <label>Пометка для Рашада<textarea name="note" rows="3" maxlength="2000" placeholder="Например: позвонить прорабу за час">${e(info.note)}</textarea></label>
+    <label>Оплата курьеру за доставку, ₽<input name="delivery_pay" inputmode="numeric" placeholder="${fbs ? 'Например: 350' : 'По умолчанию из заказа Ozon'}" value="${e(payVal)}"></label>
+    <label>Дата доставки<input name="date" type="date" value="${dateVal}"></label>
+    <label>Время доставки<input name="time" value="${e(timeVal)}" placeholder="Например: с 14:00 до 16:00" maxlength="100"></label>
+    ${fbs ? "" : `<label>Телефон прораба<input name="foreman" type="tel" value="${e(info.foreman)}" placeholder="+7 900 000-00-00" maxlength="30"></label>`}
+    <label>Пометка для курьера<textarea name="note" rows="3" maxlength="2000" placeholder="Например: позвонить прорабу за час">${e(noteVal)}</textarea></label>
     </div>`;
 }
 
 function readDeliveryFields(form) {
   const f = form.elements;
-  return {date: f.date.value ? f.date.value.split("-").reverse().join(".") : "",
-    time: f.time.value.trim(), foreman: foremanPhone(f.foreman.value), note: f.note.value.trim()};
+  return {
+    date: f.date?.value ? f.date.value.split("-").reverse().join(".") : "",
+    time: f.time?.value.trim() || "",
+    foreman: f.foreman ? foremanPhone(f.foreman.value) : "",
+    note: f.note?.value.trim() || "",
+    delivery_pay: f.delivery_pay?.value.trim() ?? ""
+  };
 }
 
-function render([lines, t], posting) {
+function render([lines, t], posting, customPpz) {
   const goods = lines.map(l => `<tr><td>${e(shortName(l.name))}<div class="mut">${e(l.offer_id)} · ${l.qty} уп · ` +
     `${l.m2.toFixed(2)} м²</div></td><td>${rub(l.price)}<div class="mut">${rub(l.price_m2)}/м²</div></td></tr>`).join("");
   const pcts = [...new Set(lines.map(l => l.pct + "%"))].sort().join(", ");
   const boost = lines.some(l => l.boost) ? "с бустингом" : "без бустинга";
   const [cls, label] = t.status;
-  const city = ((posting.customer || {}).address || {}).city;
+  const fbs = isFbs(posting);
+  const city = ((posting.customer || {}).address || {}).city ||
+               (posting.analytics_data || {}).city ||
+               (posting.financial_data || {}).cluster_to || "";
+  const d = DELIV[posting.posting_number];
+  const ppzPay = customPpz !== undefined ? Number(customPpz) : (t.ppz_fee || (d && fbs ? Number(d.delivery) || 0 : 0));
+
+  let logisticsBlock = "";
+  if (fbs) {
+    logisticsBlock = `<div class="card"><h3>Логистика до ППЗ Ozon</h3>
+<table>
+<tr><td>Сдача в ППЗ</td><td>Балашиха, ул. Реутовская, 5</td></tr>
+<tr><td>Оплата курьеру за доставку до ППЗ</td><td>${ppzPay ? "−" + rub(ppzPay) : "0 ₽ (своими силами)"}</td></tr>
+<tr class="total"><td>На руки после курьера</td><td>${rub(t.payout - ppzPay)} <span class="mut">(${rub((t.payout - ppzPay) / t.m2)}/м²)</span></td></tr>
+<tr><td>Магистраль и доставка Ozon</td><td>Берёт Ozon (по тарифам FBS)</td></tr>
+</table>
+<div class="calc-ppz-box">
+  <div class="row">
+    <b>Тест другой оплаты курьеру:</b>
+    <input id="calcPpzInput" type="number" inputmode="numeric" value="${ppzPay || ''}" placeholder="0 ₽">
+  </div>
+  <div class="mut">Измените сумму, чтобы сразу увидеть пересчёт ₽/м² на руки с учётом курьера.</div>
+</div>
+</div>`;
+  } else {
+    logisticsBlock = `<div class="card"><h3>Логистика от клиента</h3><table>
+<tr><td>Доставка</td><td>${rub(t.delivery)}</td></tr>
+<tr><td>Подъём <span class="mut">${e(t.lift_note)}</span></td><td>${rub(t.lift)}</td></tr>
+<tr class="total"><td>Итого на свою доставку</td><td>${rub(t.delivery + t.lift)}</td></tr>
+</table><p class="mut">В ₽/м² не входит. Логистика Ozon 0 ₽ (RealFBS). Комиссия — прогноз по ставке карточки.</p></div>`;
+  }
+
   return `
 <div class="card hero">
-<div class="dhead"><span>${badge(posting.status)} <span class="mut num">${e(posting.posting_number)}${city ? " · " + e(city) : ""}</span></span>
+<div class="dhead"><span>${fbs ? '<span class="badge fbs">FBS · ППЗ</span> ' : ''}${badge(posting.status)} <span class="mut num">${e(posting.posting_number)}${city ? " · " + e(city) : ""}</span></span>
 <button class="text" id="close" aria-label="Закрыть расчёт">Закрыть</button></div>
 <div class="v num ${cls}">${rub(t.payout_m2)}</div>
-<div class="mut">на руки за 1 м²</div>
+<div class="mut">на руки за 1 м²${fbs && t.ppz_fee ? ` (за вычетом ${rub(t.ppz_fee)} курьеру)` : ''}</div>
 <div class="pill ${cls}">${label} · порог ${t.floor} ₽${t.opt ? " (опт)" : ""}</div>
 <div class="kpis">
 <div class="kpi"><div class="mut">Прибыль на 1 м²</div><div class="v num">${rub(t.profit_m2)}</div></div>
@@ -459,15 +540,12 @@ function render([lines, t], posting) {
 <tr><td>Сбор за отправление</td><td>−${rub(t.fee)}</td></tr>
 <tr class="total"><td>На баланс Ozon</td><td>${rub(t.balance)}</td></tr>
 <tr><td>НДС к уплате<div class="mut">${rub(t.vat_out)} с продажи − ${rub(t.vat_in_commission)} с комиссии − ${rub(t.vat_in_cost)} с закупки</div></td><td>−${rub(t.vat)}</td></tr>
-<tr class="total"><td>На руки</td><td>${rub(t.payout)}</td></tr>
+<tr class="total"><td>На руки от Ozon</td><td>${rub(t.payout)}</td></tr>
+${fbs && t.ppz_fee ? `<tr><td>Оплата курьеру до ППЗ</td><td>−${rub(t.ppz_fee)}</td></tr><tr class="total"><td>Чистыми на руки</td><td>${rub(t.payout_clean)}</td></tr>` : ''}
 <tr><td>Себестоимость закупки</td><td>−${rub(t.cost)}</td></tr>
 <tr class="total"><td>Чистая прибыль</td><td>${rub(t.profit)}</td></tr>
 </table></div>
-<div class="card"><h3>Логистика от клиента</h3><table>
-<tr><td>Доставка</td><td>${rub(t.delivery)}</td></tr>
-<tr><td>Подъём <span class="mut">${e(t.lift_note)}</span></td><td>${rub(t.lift)}</td></tr>
-<tr class="total"><td>Итого на свою доставку</td><td>${rub(t.delivery + t.lift)}</td></tr>
-</table><p class="mut">В ₽/м² не входит. Логистика Ozon 0 ₽ (RealFBS). Комиссия — прогноз по ставке карточки.</p></div>`;
+${logisticsBlock}`;
 }
 
 async function copy(text) {
@@ -509,6 +587,8 @@ $("accessForm").onsubmit = ev => {
   if (store.get("ozon_cid")) loadOrders();
 };
 
+let CURRENT_CALC_POSTING = null, CURRENT_CALC_PRICES = null;
+
 $("calcForm").onsubmit = async ev => {
   ev.preventDefault();
   const number = $("n").value.trim();
@@ -516,7 +596,10 @@ $("calcForm").onsubmit = async ev => {
   $("out").innerHTML = '<div class="card mut">Считаю…</div>';
   try {
     const [posting, prices] = await fetchPosting(number);
-    $("out").innerHTML = render(calc(posting, prices), posting);
+    CURRENT_CALC_POSTING = posting; CURRENT_CALC_PRICES = prices;
+    const d = DELIV[posting.posting_number];
+    const initialPpz = d ? Number(d.delivery) || 0 : 0;
+    $("out").innerHTML = render(calc(posting, prices, 0, initialPpz), posting, initialPpz);
     history.replaceState(null, "", "#" + encodeURIComponent(number));
   } catch (err) {
     $("out").innerHTML = `<div class="card err">${e(err.message)}</div>`;
@@ -524,6 +607,19 @@ $("calcForm").onsubmit = async ev => {
     $("go").disabled = false;
   }
 };
+
+$("out").addEventListener("input", ev => {
+  if (ev.target.id !== "calcPpzInput") return;
+  const val = Number(ev.target.value) || 0;
+  if (!CURRENT_CALC_POSTING || !CURRENT_CALC_PRICES) return;
+  const res = calc(CURRENT_CALC_POSTING, CURRENT_CALC_PRICES, 0, val);
+  $("out").innerHTML = render(res, CURRENT_CALC_POSTING, val);
+  const inp = $("calcPpzInput");
+  if (inp) {
+    inp.focus();
+    inp.selectionStart = inp.selectionEnd = inp.value.length;
+  }
+});
 
 $("out").onclick = ev => {
   if (ev.target.id !== "close") return;
@@ -635,16 +731,23 @@ $("app").addEventListener("submit", async ev => {
   btn.disabled = true; btn.textContent = "Сохраняю…";
   try {
     const details = readDeliveryFields(f);
-    const r = f.dataset.schedule
-      ? await sheetApi({action: "update", key: ADMIN(), posting: f.dataset.schedule,
-          data: {date: details.date, comment: deliveryComment(details)}})
-      : await sendToCourier(f.dataset.send, f.elements.cb.value.trim(), details);
+    let r;
+    if (f.dataset.schedule) {
+      const updData = {date: details.date, comment: deliveryComment(details)};
+      if (details.delivery_pay !== "" && !isNaN(Number(details.delivery_pay))) {
+        updData.delivery = Number(details.delivery_pay);
+      }
+      r = await sheetApi({action: "update", key: ADMIN(), posting: f.dataset.schedule, data: updData});
+    } else {
+      r = await sendToCourier(f.dataset.send, f.elements.cb.value.trim(), details);
+    }
     DELIV[r.posting] = r;
     if (f.dataset.schedule) {
       btn.disabled = false; btn.textContent = "Сохранено ✓";
       setTimeout(() => { btn.textContent = label; }, 2000);
+      drawOrders();
     } else {
-      toast(r.pushed ? "Отправлено Рашаду ✓" : "Заказ у курьера, но пуш не дошёл: курьер не включил уведомления", !r.pushed);
+      toast(r.pushed ? "Отправлено курьеру ✓" : "Заказ у курьера, но пуш не дошёл: курьер не включил уведомления", !r.pushed);
       drawOrders();
     }
   } catch (err) {

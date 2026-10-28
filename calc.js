@@ -12,16 +12,24 @@ function tileFormat(offerId, name) {
   return null;
 }
 
-function calc(posting, prices, adRub = 0) {
+function isFbsPosting(posting) {
+  return !!(posting && (posting.tpl_integration_type === "ozon" ||
+    (posting.delivery_method || {}).warehouse_id === 1020005035230080 ||
+    (posting.delivery_method || {}).tpl_provider === "Доставка Ozon"));
+}
+
+function calc(posting, prices, adRub = 0, ppzFee = 0) {
   const lines = [];
   const t = { sales: 0, commission: 0, acquiring: 0, cost: 0, m2: 0, packs: 0 };
+  const fbs = isFbsPosting(posting);
   for (const p of posting.products) {
     const fmt = tileFormat(p.offer_id, p.name);
     if (!fmt) throw new Error(`Не плитка 60×60/60×120: ${p.offer_id} — расчёт ₽/м² не применим`);
     // /v3/posting/fbs/get отдаёт цену строкой, /v4/posting/fbs/list — объектом {amount, currency}
     const f = FORMATS[fmt], qty = p.quantity, price = parseFloat(p.price?.amount ?? p.price);
     const info = prices[p.offer_id] || {};
-    const pct = (info.commissions || {}).sales_percent_rfbs || 51;
+    const comms = info.commissions || {};
+    const pct = (fbs ? comms.sales_percent_fbs : comms.sales_percent_rfbs) || comms.sales_percent_rfbs || comms.sales_percent_fbs || 51;
     const boost = ((info.marketing_actions || {}).actions || [])
       .some(a => (a.title || "").toLowerCase().includes("бустинг"));
     const sales = price * qty;
@@ -38,9 +46,11 @@ function calc(posting, prices, adRub = 0) {
   t.vat_in_cost = t.cost * VAT / (1 + VAT);
   t.vat = Math.max(0, t.vat_out - t.vat_in_commission - t.vat_in_cost);
   t.payout = t.balance - t.vat;
+  t.ppz_fee = Number(ppzFee) || 0;
   t.ad = adRub;
-  t.profit = t.payout - t.cost - adRub;
-  t.payout_m2 = t.payout / t.m2;
+  t.profit = t.payout - t.cost - adRub - t.ppz_fee;
+  t.payout_clean = t.payout - t.ppz_fee;
+  t.payout_m2 = t.payout_clean / t.m2;
   t.profit_m2 = t.profit / t.m2;
 
   const fmts = new Set(lines.map(l => l.fmt));
@@ -55,6 +65,7 @@ function calc(posting, prices, adRub = 0) {
   t.lift = parseFloat(prr.price || 0);
   t.lift_note = ({ lift: "лифт", stairs: "без лифта" })[prr.code] || prr.code || "";
   if (prr.floor) t.lift_note += `, этаж ${prr.floor}`;
+  t.is_fbs = fbs;
   return [lines, t];
 }
 
@@ -73,4 +84,4 @@ function copyText(posting, prices) {
   }).join("\n\n");
 }
 
-if (typeof module !== "undefined") module.exports = { calc, tileFormat, shortName, copyText };
+if (typeof module !== "undefined") module.exports = { calc, tileFormat, shortName, copyText, isFbsPosting };
