@@ -1,7 +1,7 @@
 // Service worker курьера: принимает пуш без содержимого и сам собирает текст из таблицы.
 // Ключ курьера приходит в адресе регистрации: sw.js?k=…
 // Версия меняется вместе с дизайном и config.js — браузер видит новый sw.js и обновляет его (офлайн-кэша здесь нет).
-const SW_VERSION = "v32-push";
+const SW_VERSION = "v33-push";
 importScripts("config.js?v=32");
 const KEY = new URL(self.location).searchParams.get("k");
 const PAGE = `courier.html?k=${encodeURIComponent(KEY || "")}`;
@@ -10,8 +10,8 @@ self.addEventListener("push", e => e.waitUntil(notify()));
 
 // Новый заказ — максимально заметный пуш: крупный заголовок, баннер (Android/компьютер), кнопки «✅ Принял» / «Открыть»,
 // липкий (requireInteraction; iOS игнорирует), свой tag на заказ, renotify, длинная вибрация.
-// Ночью по Москве (NIGHT_FROM–NIGHT_TO) — silent: без звука. Chrome запрещает вибрацию у silent-уведомлений, поэтому ночью
-// пуш без звука и без вибрации; вибрирует экран тревоги в открытом приложении.
+// Ночью по Москве (NIGHT_FROM–NIGHT_TO) пуш обычный (не silent): звук или только вибрацию решают настройки телефона
+// (беззвучный режим / фокус «Сон» — только вибрация). Экран тревоги в открытом приложении ночью — без звука, с вибрацией.
 // Скрипт таблицы шлёт пуш без содержимого: поля берём из «notice» (type, posting, cb, packs, address, unload),
 // время доставки и число непринятых — из списка, если он доступен. Любого поля может не быть.
 const ALERT_VIBRATE = [500, 200, 500, 200, 800];
@@ -32,12 +32,11 @@ function courierNote(n, row, night = isNight()) {
       renotify: true, icon: ICON, badge: BADGE, data: {url, posting: n.posting || ""}}];
   }
   const body = [n.address || (row && row.address), n.packs || (row && row.packs), when(row)].filter(Boolean).join(" · ") || "Откройте, чтобы посмотреть";
-  const opts = {body: `${body}\n${night ? "🌙 Ночной режим · без звука" : "Нажмите «✅ Принял»"}`,
-    tag: `order-${n.posting || "new"}`, renotify: true, requireInteraction: true, silent: night,
+  const opts = {body: `${body}\n${night ? "🌙 Ночной режим · нажмите «✅ Принял»" : "Нажмите «✅ Принял»"}`,
+    tag: `order-${n.posting || "new"}`, renotify: true, requireInteraction: true, vibrate: ALERT_VIBRATE,
     icon: ICON, badge: BADGE, image: BANNER, timestamp: Date.now(),
     actions: [{action: "accept", title: "✅ Принял"}, {action: "open", title: "Открыть"}],
     data: {url, posting: n.posting || ""}};
-  if (!night) opts.vibrate = ALERT_VIBRATE;  // silent + vibrate — ошибка в Chrome
   return [`🚨 НОВЫЙ ЗАКАЗ${n.cb ? " · " + n.cb : ""}`, opts];
 }
 
