@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Тест тревоги · Алмалы Доставка</title>
+<script src="theme.js?v=32"></script>
+<link rel="stylesheet" href="style.css?v=32">
+<style>
+  .tst{max-width:420px;margin:0 auto;padding:32px 20px calc(32px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:12px;font-family:Inter,-apple-system,system-ui,sans-serif}
+  .tst h1{font-size:24px;margin:0 0 4px}
+  .tst p{margin:0 0 8px;color:#6b7280;line-height:1.45}
+  .tst button{min-height:56px;border:0;border-radius:16px;font:600 17px/1 inherit;cursor:pointer}
+  .tst .p{background:#2f5bea;color:#fff}
+  .tst .s{background:#eef1f7;color:#0f1b3d}
+  .tst small{color:#9aa1ad;text-align:center}
+</style>
+</head>
+<body>
+<div class="tst">
+  <h1>Тест экрана тревоги</h1>
+  <p>Это проверка. Данные вымышленные, настоящие заказы и таблица не меняются, курьеру ничего не уходит.</p>
+  <button class="p" data-t="0">Показать сейчас (день, со звуком)</button>
+  <button class="s" data-t="5">Показать через 5 секунд</button>
+  <button class="s" data-t="0" data-night="1">Показать как ночью (без звука)</button>
+  <small id="st"></small>
+</div>
+<script src="config.js?v=32"></script>
+<script src="alarm.js?v=32"></script>
+<script>
+const realNight = typeof isNight === "function" ? isNight : () => false;
+document.querySelectorAll("[data-t]").forEach(b => b.addEventListener("click", () => {
+  Alarm.unlock();
+  const forceNight = b.dataset.night === "1";
+  window.isNight = () => forceNight;
+  const sec = +b.dataset.t, st = document.getElementById("st");
+  st.textContent = sec ? "Тревога появится через 5 секунд…" : "";
+  setTimeout(() => {
+    st.textContent = "";
+    Alarm.show([{
+      id: "test-" + Date.now(), kicker: "Новый заказ · ТЕСТ", icon: "truck",
+      title: "Химки, ул. Тестовая, 2", sub: "00000000-0000-1 · проверка",
+      chips: [{k: "Везти", v: "8 уп 60×60"}, {k: "Вес", v: "~224 кг"}, {k: "Когда", v: "Сегодня, 14:00–16:00", warn: true}, {k: "Разгрузка", v: "Без разгрузки"}],
+      note: "Это тест. Нажмите «Принял», чтобы закрыть."
+    }], {onAccept: async () => {}, onClose: () => { window.isNight = realNight; }});
+  }, sec * 1000);
+}));
+</script>
+</body>
+</html>
