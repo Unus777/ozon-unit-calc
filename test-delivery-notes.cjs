@@ -47,7 +47,7 @@ const cc = context.courierComment({text: 'Клиент просил позвон
 assert.equal(cc, 'Клиент просил позвонить\nЗаезд с торца\n' + line);
 assert.equal(context.courierNotes(cc).text, 'Клиент просил позвонить\nЗаезд с торца');
 assert.equal(context.courierNotes(cc).agreed.at, '05.11 14:05');
-assert.deepEqual({...context.courierNotes('Старый комментарий курьера')}, {text: 'Старый комментарий курьера', agreed: null});
+assert.deepEqual({...context.courierNotes('Старый комментарий курьера')}, {text: 'Старый комментарий курьера', agreed: null, ack: null});
 assert.equal(context.courierNotes('').agreed, null);
 assert.equal(context.courierComment({text: '', agreed: null}), '');
 // повторное согласование заменяет прежнюю отметку, а не добавляет вторую
@@ -89,3 +89,84 @@ for (const file of ['manifest.webmanifest', 'owner.webmanifest']) {
   }
 }
 for (const file of ['index.html', 'courier.html']) assert.ok(read(file).includes('rel="apple-touch-icon"'));
+
+// ---------- «Принял»: отметка курьера, экран тревоги, липкий пуш ----------
+const ackOf = vm.runInContext('ackOf', context);
+assert.equal(context.ackLine({at: '05.11 14:05'}), 'Принял: 05.11 14:05');
+assert.equal(context.ackLine('05.11 14:05'), 'Принял: 05.11 14:05');
+assert.equal(context.ackLine({at: 'вчера'}), '');
+assert.equal(context.parseAck('Принял: 05.11 14:05').time, '14:05');
+assert.equal(context.parseAck('Принял: позже'), null);
+const full = context.courierComment({text: 'Заезд с торца', agreed: ag, ack: {at: '05.11 13:58'}});
+assert.equal(full, 'Заезд с торца\nСогласовано: прораб · 05.11 14:05 · интервал 12–14\nПринял: 05.11 13:58');
+const parsed = context.courierNotes(full);
+assert.equal(parsed.text, 'Заезд с торца');
+assert.equal(parsed.agreed.at, '05.11 14:05');
+assert.equal(parsed.ack.at, '05.11 13:58');
+assert.equal(context.courierComment({...parsed, agreed: null}), 'Заезд с торца\nПринял: 05.11 13:58');  // смена согласования не теряет «Принял»
+assert.equal(context.courierComment({...parsed, text: 'новый текст'}).split('\n').length, 3);
+assert.equal(context.isAccepted({status: 'Новый', courier_comment: ''}), false);
+assert.equal(context.isAccepted({status: 'Новый', courier_comment: 'Старый текст'}), false);
+assert.equal(context.isAccepted({status: 'Новый', courier_comment: 'Принял: 05.11 13:58'}), true);
+assert.equal(context.isAccepted({status: 'Новый', courier_comment: cc}), true);                // согласовал — значит видел
+assert.equal(context.isAccepted({status: 'Согласован', courier_comment: ''}), true);
+assert.equal(ackOf({courier_comment: 'x\nПринял: 05.11 13:58'}).at, '05.11 13:58');
+assert.equal(context.ackLabel(context.parseAck('Принял: 05.11 13:58'), '05.11 18:00'), 'Принял · 13:58');
+assert.equal(context.ackLabel(context.parseAck('Принял: 04.11 13:58'), '05.11 18:00'), 'Принял · 04.11');
+assert.equal(context.ackLabel(null), 'Не принят курьером');
+// карточка курьера с «Принял» по-прежнему показывает текст курьера без служебных строк
+assert.ok(!context.card({posting: 'demo', cb: 'ЦБ-3', status: 'Новый', comment: '', courier_comment: 'Принял: 05.11 13:58', phone: '', unload: ''}).includes('Принял:'));
+// содержимое экрана тревоги курьера
+vm.runInContext(courier.slice(courier.indexOf('function alarmItem('), courier.indexOf('\nasync function sendAck(')), context);
+const al = context.alarmItem({posting: '1-1-1', cb: 'ЦБ-7', status: 'Новый', address: 'Химки, ул. Тестовая, 2', packs: '8 уп 60×60', unload: 'Лифт, эт. 5', pay: '1500', date: '', comment: 'Время доставки: 14:00–16:00'});
+assert.equal(al.id, '1-1-1');
+assert.equal(al.kicker, 'Новый заказ · ЦБ-7');
+assert.equal(al.title, 'Химки, ул. Тестовая, 2');
+assert.equal(JSON.stringify(al.chips.map(c => c.v)), JSON.stringify(['8 уп 60×60', '~224 кг', '14:00–16:00', 'Лифт, эт. 5']));
+assert.equal(al.okText, 'Принял');
+// alarm.js и страницы подключают одинаковую версию
+for (const f of ['index.html', 'courier.html']) assert.match(read(f), /alarm\.js\?v=31/);
+assert.match(read('sw.js'), /SW_VERSION = "v31-alarm"/);
+assert.doesNotThrow(() => new vm.Script(read('alarm.js')));
+
+// sw.js: новый заказ и повтор — липкие, свой tag на заказ, переход на #alert=<номер>
+async function swRun(notice) {
+  const shown = [], handlers = {};
+  const sw = {importScripts() {}, URL, console, encodeURIComponent,
+    sheetApi: async () => notice,
+    clients: {matchAll: async () => [], openWindow: async url => { sw.opened = url; }},
+    self: {location: 'https://unus777.github.io/ozon-unit-calc/sw.js?k=K', addEventListener: (n, f) => { handlers[n] = f; },
+      registration: {scope: 'https://unus777.github.io/ozon-unit-calc/', showNotification: async (t, o) => { shown.push([t, o]); }}}};
+  sw.addEventListener = sw.self.addEventListener; sw.registration = sw.self.registration;
+  vm.createContext(sw);
+  vm.runInContext(read('sw.js'), sw);
+  let wait;
+  handlers.push({waitUntil: p => { wait = p; }});
+  await wait;
+  return {shown, sw, handlers};
+}
+(async () => {
+  let {shown, sw, handlers} = await swRun({type: 'new', posting: '1-1-1', cb: 'ЦБ-7', packs: '8 уп', address: 'Химки', unload: 'Нет'});
+  assert.equal(shown.length, 1);
+  assert.match(shown[0][0], /Новый заказ ЦБ-7/);
+  assert.equal(shown[0][1].tag, 'order-1-1-1');
+  assert.equal(shown[0][1].requireInteraction, true);
+  assert.equal(shown[0][1].renotify, true);
+  assert.ok(shown[0][1].vibrate.length > 2);
+  assert.equal(shown[0][1].data.url, 'courier.html?k=K&o=1-1-1#alert=1-1-1');
+  let wait; handlers.notificationclick({notification: {close() {}, data: shown[0][1].data}, waitUntil: p => { wait = p; }});
+  await wait;
+  assert.equal(sw.opened, 'https://unus777.github.io/ozon-unit-calc/courier.html?k=K&o=1-1-1#alert=1-1-1');
+  ({shown} = await swRun({type: 'repeat', posting: '1-1-1', cb: 'ЦБ-7', tries: 3, more: [{posting: '2-2-2', cb: 'ЦБ-8', tries: 2}]}));
+  assert.equal(shown.map(x => x[1].tag).sort().join(), 'order-1-1-1,order-2-2-2');
+  assert.ok(shown.every(x => x[1].requireInteraction && /#alert=/.test(x[1].data.url)));
+  assert.match(shown.find(x => x[1].tag === 'order-1-1-1')[0], /Примите заказ ЦБ-7 · 3-й раз/);
+  ({shown} = await swRun({type: 'remind', posting: '1-1-1', cb: 'ЦБ-7', text: 'позвони'}));
+  assert.equal(shown[0][1].requireInteraction, false);                    // напоминание — обычное
+  assert.ok(!shown[0][1].data.url.includes('#alert'));
+  ({shown} = await swRun({role: 'owner', type: 'accepted', posting: '1-1-1', title: '👍 Рашад принял ЦБ-7', text: 'Химки'}));
+  assert.equal(shown[0][0], '👍 Рашад принял ЦБ-7');
+  assert.equal(shown[0][1].data.url, './');
+  console.log('«Принял» и экран тревоги: проверки пройдены');
+})().catch(err => { console.error(err); process.exit(1); });
+

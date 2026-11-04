@@ -8,12 +8,12 @@
 <meta name="robots" content="noindex">
 <meta name="referrer" content="no-referrer">
 <title>Доставки</title>
-<link rel="manifest" href="manifest.webmanifest?v=30">
-<script src="theme.js?v=30"></script>
-<link rel="stylesheet" href="style.css?v=30">
-<link rel="icon" href="icons/courier.svg?v=30" type="image/svg+xml">
-<link rel="icon" href="icons/courier-32.png?v=30" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" href="icons/courier-180.png?v=30" sizes="180x180">
+<link rel="manifest" href="manifest.webmanifest?v=31">
+<script src="theme.js?v=31"></script>
+<link rel="stylesheet" href="style.css?v=31">
+<link rel="icon" href="icons/courier.svg?v=31" type="image/svg+xml">
+<link rel="icon" href="icons/courier-32.png?v=31" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/courier-180.png?v=31" sizes="180x180">
 </head>
 <body>
 <header class="hdr"><div class="bar">
@@ -54,8 +54,9 @@
 <button role="tab" aria-selected="false" data-tab="done"><span data-ico="checkc"></span>Готово</button>
 </div></nav>
 
-<script src="config.js?v=30"></script>
-<script src="push.js?v=30"></script>
+<script src="config.js?v=31"></script>
+<script src="push.js?v=31"></script>
+<script src="alarm.js?v=31"></script>
 <script>
 const $ = id => document.getElementById(id);
 const e = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
@@ -420,10 +421,53 @@ async function load() {
     ROWS = await api({action: "list"});
     PAYS = await api({action: "payments"}).catch(() => null);
     draw(true);
+    checkAlerts();
   } catch (err) {
     $("list").innerHTML = `<div class="card err">${e(err.message)}</div>`;
   }
 }
+
+// ---------- Экран тревоги: новый заказ, пока курьер не нажмёт «Принял» ----------
+// «Принял» запоминается в этом телефоне сразу и строкой «Принял: 05.11 14:05» в комментарии курьера —
+// владелец видит отметку, скрипт перестаёт повторять пуш. Нет сети — строка допишется при следующей загрузке.
+const ACK_KEY = "dlv_ack";
+const ackGet = () => { try { return JSON.parse(localStorage.getItem(ACK_KEY) || "{}"); } catch { return {}; } };
+const ackSet = v => { try { localStorage.setItem(ACK_KEY, JSON.stringify(v)); } catch {} };
+const ACK_SYNC = new Set();
+function alarmItem(r) {
+  const info = deliveryDetails(r.comment), {kg} = parsePacksKg(r.packs), ppz = isPpz(r);
+  const when = [r.date ? (r.date === todayStr() ? "Сегодня" : r.date.slice(0, 5)) : "", info.time].filter(Boolean).join(", ") || "Дата не назначена";
+  return {id: r.posting, kicker: ppz ? `Сдача в ППЗ · ${r.cb}` : `Новый заказ · ${r.cb}`, icon: ppz ? "box" : "truck",
+    title: r.address || "Адрес уточняется", sub: r.posting,
+    chips: [{k: "Везти", v: r.packs || "—"}, {k: "Вес", v: kg ? `~${kg} кг` : "—"},
+      {k: "Когда", v: when, warn: !r.date}, {k: ppz ? "Оплата" : "Разгрузка", v: ppz ? rub(r.pay) : unloadText(r), warn: !ppz && r.unload && r.unload !== "Нет"}],
+    note: info.note || "", okText: "Принял"};
+}
+async function sendAck(posting, at) {
+  const r = ROWS.find(x => x.posting === posting);
+  if (!r || ackOf(r) || ACK_SYNC.has(posting)) return;
+  ACK_SYNC.add(posting);
+  try {
+    const next = await api({action: "update", posting, data: {courier_comment: courierComment({...courierNotes(r.courier_comment), ack: {at}})}});
+    ROWS = ROWS.map(x => x.posting === posting ? next : x);
+    draw();
+  } catch {} finally { ACK_SYNC.delete(posting); }
+}
+function checkAlerts() {
+  if (IS_ADMIN || !KEY) return;
+  const local = ackGet();
+  for (const r of ROWS) if (local[r.posting] && r.status === "Новый" && !ackOf(r)) sendAck(r.posting, local[r.posting]);  // досылаем
+  const fresh = ROWS.filter(r => r.status === "Новый" && !isAccepted(r) && !local[r.posting]);
+  Alarm.show(fresh.map(alarmItem), {replace: true, first: Alarm.hashId(), onAccept: it => {
+    const at = agreedNow(), l = ackGet();
+    l[it.id] = at;
+    for (const k of Object.keys(l)) if (!ROWS.some(r => r.posting === k)) delete l[k];  // забываем закрытые заказы
+    ackSet(l);
+    OPEN = it.id;
+    return sendAck(it.id, at);
+  }});
+}
+addEventListener("hashchange", () => { if (Alarm.hashId()) load(); });
 
 async function save(posting, data, el) {
   try {
@@ -446,7 +490,7 @@ $("app").addEventListener("change", ev => {
   if (ev.target.matches("[data-date]")) save(box.dataset.posting, {date: fromIso(ev.target.value)});
   if (ev.target.matches("[data-comment]")) {  // отметка «Согласовано» хранится в том же поле — не теряем её
     const row = ROWS.find(x => x.posting === box.dataset.posting);
-    save(box.dataset.posting, {courier_comment: courierComment({text: ev.target.value, agreed: courierNotes(row && row.courier_comment).agreed})});
+    save(box.dataset.posting, {courier_comment: courierComment({...courierNotes(row && row.courier_comment), text: ev.target.value})});
   }
 });
 $("app").addEventListener("submit", async ev => {
@@ -459,7 +503,7 @@ $("app").addEventListener("submit", async ev => {
   btn.disabled = true; btn.textContent = "Сохраняю…";
   const who = af.querySelector("[data-who][aria-pressed=true]")?.dataset.who || "прораб";
   const agreed = {who, at: agreedNow(), slot: af.elements.slot.value.trim()};
-  const data = {courier_comment: courierComment({text: courierNotes(r.courier_comment).text, agreed})};
+  const data = {courier_comment: courierComment({...courierNotes(r.courier_comment), agreed})};
   const date = fromIso(af.elements.date.value);
   if (date && date !== r.date) data.date = date;
   if (await save(posting, data, btn)) { closeCSheet(); toast("Согласовано ✓ Владелец получит уведомление"); }

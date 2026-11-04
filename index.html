@@ -7,13 +7,13 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="robots" content="noindex">
 <title>Юнит-экономика</title>
-<link rel="manifest" href="owner.webmanifest?v=30">
+<link rel="manifest" href="owner.webmanifest?v=31">
 <meta name="apple-mobile-web-app-title" content="Алмалы">
-<script src="theme.js?v=30"></script>
-<link rel="stylesheet" href="style.css?v=30">
-<link rel="icon" href="icons/owner.svg?v=30" type="image/svg+xml">
-<link rel="icon" href="icons/owner-32.png?v=30" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" href="icons/owner-180.png?v=30" sizes="180x180">
+<script src="theme.js?v=31"></script>
+<link rel="stylesheet" href="style.css?v=31">
+<link rel="icon" href="icons/owner.svg?v=31" type="image/svg+xml">
+<link rel="icon" href="icons/owner-32.png?v=31" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/owner-180.png?v=31" sizes="180x180">
 </head>
 <body data-view="orders">
 <header class="hdr"><div class="bar">
@@ -109,9 +109,10 @@
   <button type="button" id="gear" data-view="settings" aria-selected="false" aria-expanded="false" aria-controls="settings"><span data-ic="settings"></span>Настройки</button>
 </div></nav>
 
-<script src="calc.js?v=30"></script>
-<script src="config.js?v=30"></script>
-<script src="push.js?v=30"></script>
+<script src="calc.js?v=31"></script>
+<script src="config.js?v=31"></script>
+<script src="push.js?v=31"></script>
+<script src="alarm.js?v=31"></script>
 <script>
 const API = "https://api-seller.ozon.ru";
 // Статусы Ozon → понятные этапы; неизвестный статус показываем как есть
@@ -258,9 +259,37 @@ async function loadOrders(silent) {
     const now = new Date(), day = now.toLocaleDateString("ru-RU", {weekday: "short", day: "numeric", month: "long"});
     $("ltSub").textContent = `${day[0].toUpperCase() + day.slice(1)} · обновлено ${now.toLocaleTimeString("ru-RU", {hour: "2-digit", minute: "2-digit"})}`;
     drawOrders(silent !== true);
+    ownerAlerts(postings);
   } catch (err) {
     $("orders").innerHTML = `<div class="card err">${e(err.message)}</div>`;
   }
+}
+
+// ---------- Экран тревоги владельца: новый заказ Ozon, пока не нажмёте «Принял» ----------
+// Пушей о заказах Ozon нет (Ozon опрашивает сама страница раз в 2 минуты), поэтому тревога — только при открытом приложении.
+// Первый запуск запоминает уже существующие заказы без тревоги.
+function ownerAlerts(postings) {
+  let seen = null;
+  try { seen = JSON.parse(store.get("oz_seen") || "null"); } catch {}
+  const fresh = postings.filter(p => ostate(p) === "new" && !["delivered", "cancelled"].includes(p.status));
+  const save = v => { const keep = Object.entries(v).sort((a, b) => b[1] - a[1]).slice(0, 400); store.set("oz_seen", JSON.stringify(Object.fromEntries(keep))); };
+  if (!seen) { save(Object.fromEntries(fresh.map(p => [p.posting_number, Date.now()]))); return; }
+  const items = fresh.filter(p => !seen[p.posting_number]).map(p => {
+    const qty = p.products.reduce((s, x) => s + (Number(x.quantity) || 0), 0);
+    const sum = p.products.reduce((s, x) => s + (Number(x.price?.amount ?? x.price) || 0) * (Number(x.quantity) || 0), 0);
+    const a = p.customer?.address || {};
+    return {id: p.posting_number, kicker: isFbs(p) ? "Новый заказ Ozon · FBS ППЗ" : "Новый заказ Ozon", icon: "orders",
+      title: a.address_tail || a.city || "Адрес в заказе Ozon", sub: p.posting_number,
+      chips: [{k: "Товар", v: (p.products[0]?.name || "—").replace(/^Керамогранит\s*/i, "")}, {k: "Количество", v: `${qty} уп`},
+        {k: "Сумма", v: Math.round(sum).toLocaleString("ru-RU").replace(/\u00a0/g, " ") + " ₽"}, {k: "Дальше", v: "Нужен ЦБ", warn: true}],
+      okText: "Принял"};
+  });
+  Alarm.show(items, {first: Alarm.hashId(), onAccept: it => {
+    let v = {};
+    try { v = JSON.parse(store.get("oz_seen") || "{}"); } catch {}
+    v[it.id] = Date.now(); save(v);
+    OTAB = "new"; drawOrders();
+  }});
 }
 
 // Этап заказа для вкладок: новые (ещё не у курьера) → у курьера → доставлены
@@ -456,7 +485,11 @@ function orderCard(p, i, n = 0) {
   if (d && (d.address || d.date || d.comment)) {
     const info = deliveryDetails(d.comment);
     const a = agreementOf(d);
-    const agreeBadge = fbs || isDone ? "" : a ? `<span class="badge ok">${ic("check")}${e(agreedLabel(a))}</span>` : `<span class="badge warn">Не согласовано</span>`;
+    const accepted = isAccepted(d), ack = ackOf(d);
+    // Курьер ещё не нажал «Принял» — главное, что нужно знать; после — отметка «Принял · 14:05» и согласование
+    const ackBadge = isDone || d.status === "Отменён" ? "" : !accepted ? `<span class="badge warn">Не принят курьером</span>`
+      : ack ? `<span class="badge ok">${ic("check")}${e(ackLabel(ack))}</span>` : "";
+    const agreeBadge = ackBadge + (fbs || isDone || !accepted ? "" : a ? `<span class="badge ok">${ic("check")}${e(agreedLabel(a))}</span>` : `<span class="badge warn">Не согласовано</span>`);
     const tags = [d.delivery ? `<span class="tag">Рашаду ${rub(d.delivery)}</span>` : "",
       d.unload && d.unload !== "Нет" && !fbs ? `<span class="tag warn">Подъём: ${e(d.unload)}</span>` : ""].filter(Boolean).join("");
     detailsBlock = `<div class="hr"></div><div class="info">
@@ -536,6 +569,7 @@ function orderSteps(p, d) {
   return [
     {label: "Заказ в Ozon", when, done: true},
     {label: d ? "Отправлен курьеру" : "Отправить курьеру", when: d && d.sent, done: !!d},
+    ...(d ? [{label: isAccepted(d) ? "Курьер принял заказ" : "Ждём «Принял» от курьера", when: ackOf(d)?.at, done: isAccepted(d)}] : []),
     {label: d && d.date ? `Доставка на ${shortDate(d.date)}` : "Согласовать дату доставки", when: time, done: !!(d && (d.date || d.status === "Доставлен"))},
     ...(isFbs(p) ? [] : [{label: agreementOf(d) ? `Курьер согласовал с ${agreementOf(d).who}ом` : "Курьер согласует с клиентом", when: agreementOf(d)?.at, done: !!(d && (agreementOf(d) || d.status === "Доставлен"))}]),
     {label: "Курьер доставил", when: d && d.delivered_at, done: !!(d && d.status === "Доставлен")},
@@ -1043,7 +1077,7 @@ $("app").addEventListener("submit", async ev => {
 
 document.querySelectorAll("[data-ic]").forEach(x => { x.outerHTML = ic(x.dataset.ic); });
 show();
-if (location.hash.length > 1) $("n").value = decodeURIComponent(location.hash.slice(1));
+if (location.hash.length > 1 && !/^#alert=/.test(location.hash)) $("n").value = decodeURIComponent(location.hash.slice(1));
 pullToRefresh(() => loadOrders(true));
 </script>
 </body>

@@ -44,17 +44,35 @@ function parseAgreement(line) {
   const m = /^Согласовано: (прораб|клиент) · (\d\d)\.(\d\d) (\d\d:\d\d)(?: · интервал (.+))?$/.exec(String(line || "").trim());
   return m ? {who: m[1], day: `${m[2]}.${m[3]}`, time: m[4], at: `${m[2]}.${m[3]} ${m[4]}`, slot: (m[5] || "").trim()} : null;
 }
-function courierNotes(value) {  // «Комментарий курьера» → его текст + отметка согласования
+function courierNotes(value) {  // «Комментарий курьера» → его текст + отметки «Согласовано:» и «Принял:»
   const text = [];
-  let agreed = null;
+  let agreed = null, ack = null;
   for (const line of String(value || "").split("\n")) {
-    const a = parseAgreement(line);
-    if (a) agreed = a; else text.push(line);
+    const a = parseAgreement(line), k = parseAck(line);
+    if (a) agreed = a; else if (k) ack = k; else text.push(line);
   }
-  return {text: text.join("\n").trim(), agreed};
+  return {text: text.join("\n").trim(), agreed, ack};
 }
-function courierComment({text, agreed}) {
-  return [String(text || "").trim(), agreementLine(agreed)].filter(Boolean).join("\n");
+function courierComment({text, agreed, ack}) {
+  return [String(text || "").trim(), agreementLine(agreed), ackLine(ack)].filter(Boolean).join("\n");
+}
+// «Принял: 05.11 14:05» — курьер нажал «Принял» на экране тревоги нового заказа
+function ackLine(a) {
+  const at = typeof a === "string" ? a : a && a.at;
+  return /^\d\d\.\d\d \d\d:\d\d$/.test(at || "") ? `Принял: ${at}` : "";
+}
+function parseAck(line) {
+  const m = /^Принял: (\d\d)\.(\d\d) (\d\d:\d\d)$/.exec(String(line || "").trim());
+  return m ? {day: `${m[1]}.${m[2]}`, time: m[3], at: `${m[1]}.${m[2]} ${m[3]}`} : null;
+}
+function ackOf(r) { return r ? courierNotes(r.courier_comment).ack : null; }
+// Курьер уже видел заказ: нажал «Принял», согласовал доставку или заказ ушёл дальше «Нового»
+function isAccepted(r) {
+  return !!r && (r.status !== "Новый" || !!ackOf(r) || !!courierNotes(r.courier_comment).agreed);
+}
+function ackLabel(a, today = agreedNow()) {
+  if (!a) return "Не принят курьером";
+  return "Принял · " + (a.day === today.slice(0, 5) ? a.time : a.day);
 }
 // Отметка по строке листа: из комментария курьера, иначе из комментария владельца
 const agreementOf = r => r ? (courierNotes(r.courier_comment).agreed || deliveryDetails(r.comment).agreed) : null;
