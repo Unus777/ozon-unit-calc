@@ -7,6 +7,8 @@ const Alarm = (() => {
   let AC = null, queue = [], opts = {}, loop = null, titleLoop = null, el = null, baseTitle = document.title;
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
   const soundOn = () => !!AC && AC.state === "running";
+  // Ночной режим по Москве (isNight из config.js, часы NIGHT_FROM–NIGHT_TO): экран и вибрация есть, звука нет
+  const night = () => typeof isNight === "function" && isNight();
 
   function unlock() {
     try {
@@ -25,7 +27,7 @@ const Alarm = (() => {
   document.addEventListener("visibilitychange", () => { if (!document.hidden && el && AC) AC.resume().catch(() => {}); });
 
   function beep() {
-    if (!soundOn()) return;
+    if (!soundOn() || night()) return;
     const t = AC.currentTime;
     [[988, 0], [1319, .2], [988, .4], [1319, .6]].forEach(([f, dt]) => {
       const o = AC.createOscillator(), g = AC.createGain();
@@ -37,12 +39,12 @@ const Alarm = (() => {
     });
   }
   // Chrome разрешает вибрацию только после первого касания страницы
-  function buzz() { try { if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate([500, 150, 500, 150, 900]); } catch {} }
+  function buzz() { try { if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate([500, 200, 500, 200, 800]); } catch {} }
   function tick() { beep(); buzz(); }
 
   function hint() {
     const h = el && el.querySelector(".al-hint");
-    if (h) h.hidden = soundOn();
+    if (h) h.hidden = soundOn() || night();
   }
 
   function chip(c) {
@@ -65,6 +67,7 @@ const Alarm = (() => {
     const more = queue.length > 1 ? `<span class="al-count">ещё ${queue.length - 1}</span>` : "";
     el.innerHTML = `<div class="al-in">
       <div class="al-top"><span class="al-kick"><span class="al-dot"></span>${esc(it.kicker || "Новый заказ")}</span>${more}</div>
+      ${night() ? `<div class="al-night">${typeof ic === "function" ? ic("moon", "s") : ""}Ночной режим · без звука</div>` : ""}
       <div class="al-ring" aria-hidden="true"><span></span><span></span>${typeof ic === "function" ? ic(it.icon || "box") : ""}</div>
       <div class="al-main">
         ${it.badge ? `<div class="al-badge">${esc(it.badge)}</div>` : ""}
@@ -74,9 +77,9 @@ const Alarm = (() => {
         ${it.note ? `<div class="al-note">${esc(it.note)}</div>` : ""}
       </div>
       <div class="al-foot">
-        <div class="al-hint" ${soundOn() ? "hidden" : ""}>${typeof ic === "function" ? ic("bell", "s") : ""}Коснитесь экрана, чтобы включить звук</div>
+        <div class="al-hint" ${soundOn() || night() ? "hidden" : ""}>${typeof ic === "function" ? ic("bell", "s") : ""}Коснитесь экрана, чтобы включить звук</div>
         <button type="button" class="al-ok" data-alok="${esc(it.id)}">${typeof ic === "function" ? ic("check") : ""}${esc(it.okText || "Принял")}</button>
-        <div class="al-foot-t">Сигнал повторяется, пока вы не нажмёте «${esc(it.okText || "Принял")}»</div>
+        <div class="al-foot-t">${night() ? "Вибрация" : "Сигнал"} повторяется, пока вы не нажмёте «${esc(it.okText || "Принял")}»</div>
       </div>
     </div>`;
     if (!loop) { tick(); loop = setInterval(tick, 2200); }
@@ -96,7 +99,7 @@ const Alarm = (() => {
   function close() {
     clearInterval(loop); clearInterval(titleLoop); loop = titleLoop = null;
     document.title = baseTitle;
-    try { navigator.vibrate && navigator.vibrate(0); } catch {}
+    try { if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate(0); } catch {}
     if (el) { el.remove(); el = null; }
     document.documentElement.classList.remove("alarm-on");
     if (/[#&]alert=/.test(location.hash)) history.replaceState(null, "", location.pathname + location.search);

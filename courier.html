@@ -8,12 +8,12 @@
 <meta name="robots" content="noindex">
 <meta name="referrer" content="no-referrer">
 <title>Доставки</title>
-<link rel="manifest" href="manifest.webmanifest?v=31">
-<script src="theme.js?v=31"></script>
-<link rel="stylesheet" href="style.css?v=31">
-<link rel="icon" href="icons/courier.svg?v=31" type="image/svg+xml">
-<link rel="icon" href="icons/courier-32.png?v=31" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" href="icons/courier-180.png?v=31" sizes="180x180">
+<link rel="manifest" href="manifest.webmanifest?v=32">
+<script src="theme.js?v=32"></script>
+<link rel="stylesheet" href="style.css?v=32">
+<link rel="icon" href="icons/courier.svg?v=32" type="image/svg+xml">
+<link rel="icon" href="icons/courier-32.png?v=32" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/courier-180.png?v=32" sizes="180x180">
 </head>
 <body>
 <header class="hdr"><div class="bar">
@@ -54,9 +54,9 @@
 <button role="tab" aria-selected="false" data-tab="done"><span data-ico="checkc"></span>Готово</button>
 </div></nav>
 
-<script src="config.js?v=31"></script>
-<script src="push.js?v=31"></script>
-<script src="alarm.js?v=31"></script>
+<script src="config.js?v=32"></script>
+<script src="push.js?v=32"></script>
+<script src="alarm.js?v=32"></script>
 <script>
 const $ = id => document.getElementById(id);
 const e = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
@@ -453,18 +453,35 @@ async function sendAck(posting, at) {
     draw();
   } catch {} finally { ACK_SYNC.delete(posting); }
 }
+function acceptOrder(posting) {  // «Принял»: в телефоне сразу, в таблице — строкой в комментарии курьера
+  const at = agreedNow(), l = ackGet();
+  l[posting] = at;
+  for (const k of Object.keys(l)) if (!ROWS.some(r => r.posting === k)) delete l[k];  // забываем закрытые заказы
+  ackSet(l);
+  OPEN = posting;
+  return sendAck(posting, at);
+}
+function appBadge(n) {  // число непринятых заказов на иконке приложения (iOS 16.4+ с экрана «Домой», Android, компьютер)
+  try { if (navigator.setAppBadge) (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {}); } catch {}
+}
 function checkAlerts() {
   if (IS_ADMIN || !KEY) return;
   const local = ackGet();
   for (const r of ROWS) if (local[r.posting] && r.status === "Новый" && !ackOf(r)) sendAck(r.posting, local[r.posting]);  // досылаем
-  const fresh = ROWS.filter(r => r.status === "Новый" && !isAccepted(r) && !local[r.posting]);
+  // «✅ Принял» нажали прямо в уведомлении: …#alert=<номер>&accept=1 — принимаем без экрана тревоги
+  const direct = /[#&]accept=1(&|$)/.test(location.hash) ? Alarm.hashId() : null;
+  if (direct && ROWS.some(r => r.posting === direct && r.status === "Новый" && !isAccepted(r)) && !local[direct]) {
+    acceptOrder(direct);
+    toast("Принято ✓ Владелец увидит «Принял»");
+  }
+  if (direct) history.replaceState(null, "", location.pathname + location.search);
+  const acked = ackGet();
+  const fresh = ROWS.filter(r => r.status === "Новый" && !isAccepted(r) && !acked[r.posting]);
+  appBadge(fresh.length);
   Alarm.show(fresh.map(alarmItem), {replace: true, first: Alarm.hashId(), onAccept: it => {
-    const at = agreedNow(), l = ackGet();
-    l[it.id] = at;
-    for (const k of Object.keys(l)) if (!ROWS.some(r => r.posting === k)) delete l[k];  // забываем закрытые заказы
-    ackSet(l);
-    OPEN = it.id;
-    return sendAck(it.id, at);
+    const p = acceptOrder(it.id);
+    appBadge(Math.max(0, ROWS.filter(r => r.status === "Новый" && !isAccepted(r) && !ackGet()[r.posting]).length));
+    return p;
   }});
 }
 addEventListener("hashchange", () => { if (Alarm.hashId()) load(); });

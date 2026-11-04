@@ -125,48 +125,104 @@ assert.equal(al.title, 'Химки, ул. Тестовая, 2');
 assert.equal(JSON.stringify(al.chips.map(c => c.v)), JSON.stringify(['8 уп 60×60', '~224 кг', '14:00–16:00', 'Лифт, эт. 5']));
 assert.equal(al.okText, 'Принял');
 // alarm.js и страницы подключают одинаковую версию
-for (const f of ['index.html', 'courier.html']) assert.match(read(f), /alarm\.js\?v=31/);
-assert.match(read('sw.js'), /SW_VERSION = "v31-alarm"/);
+for (const f of ['index.html', 'courier.html']) assert.match(read(f), /alarm\.js\?v=32/);
+assert.match(read('sw.js'), /SW_VERSION = "v32-push"/);
 assert.doesNotThrow(() => new vm.Script(read('alarm.js')));
 
-// sw.js: новый заказ и повтор — липкие, свой tag на заказ, переход на #alert=<номер>
-async function swRun(notice) {
-  const shown = [], handlers = {};
-  const sw = {importScripts() {}, URL, console, encodeURIComponent,
-    sheetApi: async () => notice,
+// Ночной режим по Москве: 23:00–07:59, независимо от часового пояса телефона
+assert.equal(vm.runInContext('NIGHT_FROM', context), 23);
+assert.equal(vm.runInContext('NIGHT_TO', context), 8);
+const night = iso => context.isNight(new Date(iso));
+assert.equal(night('2026-11-05T19:59:00Z'), false);   // 22:59 МСК
+assert.equal(night('2026-11-05T20:00:00Z'), true);    // 23:00 МСК
+assert.equal(night('2026-11-05T02:30:00Z'), true);    // 05:30 МСК
+assert.equal(night('2026-11-05T04:59:00Z'), true);    // 07:59 МСК
+assert.equal(night('2026-11-05T05:00:00Z'), false);   // 08:00 МСК
+assert.equal(night('2026-11-05T11:05:00Z'), false);   // 14:05 МСК
+assert.equal(context.mskHour(new Date('2026-11-05T21:30:00Z')), 0);  // 00:30 МСК
+
+// sw.js: один, но максимально заметный пуш нового заказа; без повторов с сервера
+const ROW = {posting: '1-1-1', cb: 'ЦБ-7', status: 'Новый', address: 'Химки', packs: '8 уп', date: '', comment: 'Время доставки: 14:00–16:00', courier_comment: ''};
+async function swRun(notice, {list = [ROW], hour = '2026-11-05T11:05:00Z', badge = true} = {}) {
+  const shown = [], handlers = {}, badges = [];
+  const RealDate = Date;
+  class FakeDate extends RealDate { constructor(...a) { super(...(a.length ? a : [hour])); } static now() { return new RealDate(hour).getTime(); } }
+  const sw = {importScripts() {}, URL, console, encodeURIComponent, Intl, Date: FakeDate,
+    sheetApi: async req => { if (req.action === 'notice') { if (notice instanceof Error) throw notice; return notice; } if (list instanceof Error) throw list; return list; },
     clients: {matchAll: async () => [], openWindow: async url => { sw.opened = url; }},
     self: {location: 'https://unus777.github.io/ozon-unit-calc/sw.js?k=K', addEventListener: (n, f) => { handlers[n] = f; },
+      navigator: badge ? {setAppBadge: async n => badges.push(n), clearAppBadge: async () => badges.push(0)} : {},
       registration: {scope: 'https://unus777.github.io/ozon-unit-calc/', showNotification: async (t, o) => { shown.push([t, o]); }}}};
   sw.addEventListener = sw.self.addEventListener; sw.registration = sw.self.registration;
   vm.createContext(sw);
+  const stub = sw.sheetApi;
+  vm.runInContext(read('config.js'), sw);
+  vm.runInContext('sheetApi = undefined', sw); sw.sheetApi = stub;   // config.js объявляет настоящий sheetApi
   vm.runInContext(read('sw.js'), sw);
   let wait;
   handlers.push({waitUntil: p => { wait = p; }});
   await wait;
-  return {shown, sw, handlers};
+  const click = async (n, action = '') => { let w; handlers.notificationclick({action, notification: {close() {}, data: n[1].data}, waitUntil: p => { w = p; }}); await w; return sw.opened; };
+  return {shown, sw, handlers, badges, click};
 }
 (async () => {
-  let {shown, sw, handlers} = await swRun({type: 'new', posting: '1-1-1', cb: 'ЦБ-7', packs: '8 уп', address: 'Химки', unload: 'Нет'});
+  // днём: крупный заголовок, адрес · упаковки · время, звук и длинная вибрация, баннер, кнопки
+  let {shown, badges, click} = await swRun({type: 'new', posting: '1-1-1', cb: 'ЦБ-7', packs: '8 уп', address: 'Химки', unload: 'Нет'});
   assert.equal(shown.length, 1);
-  assert.match(shown[0][0], /Новый заказ ЦБ-7/);
-  assert.equal(shown[0][1].tag, 'order-1-1-1');
+  const [title, o] = shown[0];
+  assert.equal(title, '🚨 НОВЫЙ ЗАКАЗ · ЦБ-7');
+  assert.equal(o.body, 'Химки · 8 уп · 14:00–16:00\nНажмите «✅ Принял»');
+  assert.equal(o.tag, 'order-1-1-1');
+  assert.equal(o.requireInteraction, true);
+  assert.equal(o.renotify, true);
+  assert.equal(o.silent, false);
+  assert.equal(JSON.stringify(o.vibrate), '[500,200,500,200,800]');
+  assert.equal(o.icon, 'icons/courier-192.png');
+  assert.equal(o.badge, 'icons/badge-96.png');
+  assert.equal(o.image, 'icons/push-new-order.png');
+  assert.equal(JSON.stringify(o.actions.map(a => a.action)), '["accept","open"]');
+  assert.equal(o.actions[0].title, '✅ Принял');
+  assert.equal(o.data.url, 'courier.html?k=K&o=1-1-1#alert=1-1-1');
+  assert.equal(JSON.stringify(badges), '[1]');                              // значок на иконке: 1 непринятый
+  assert.equal(await click(shown[0]), 'https://unus777.github.io/ozon-unit-calc/courier.html?k=K&o=1-1-1#alert=1-1-1');
+  assert.equal(await click(shown[0], 'open'), 'https://unus777.github.io/ozon-unit-calc/courier.html?k=K&o=1-1-1#alert=1-1-1');
+  assert.equal(await click(shown[0], 'accept'), 'https://unus777.github.io/ozon-unit-calc/courier.html?k=K&o=1-1-1#alert=1-1-1&accept=1');
+  for (const f of ['icons/badge-96.png', 'icons/push-new-order.png']) assert.ok(fs.statSync(path.join(__dirname, f)).size > 500, f);
+  // ночью по Москве: без звука; Chrome не позволяет vibrate у silent — вибрирует экран тревоги в приложении
+  ({shown} = await swRun({type: 'new', posting: '1-1-1', cb: 'ЦБ-7', packs: '8 уп', address: 'Химки'}, {hour: '2026-11-05T21:30:00Z'}));
+  assert.equal(shown[0][1].silent, true);
+  assert.equal(shown[0][1].vibrate, undefined);
   assert.equal(shown[0][1].requireInteraction, true);
-  assert.equal(shown[0][1].renotify, true);
-  assert.ok(shown[0][1].vibrate.length > 2);
-  assert.equal(shown[0][1].data.url, 'courier.html?k=K&o=1-1-1#alert=1-1-1');
-  let wait; handlers.notificationclick({notification: {close() {}, data: shown[0][1].data}, waitUntil: p => { wait = p; }});
-  await wait;
-  assert.equal(sw.opened, 'https://unus777.github.io/ozon-unit-calc/courier.html?k=K&o=1-1-1#alert=1-1-1');
-  ({shown} = await swRun({type: 'repeat', posting: '1-1-1', cb: 'ЦБ-7', tries: 3, more: [{posting: '2-2-2', cb: 'ЦБ-8', tries: 2}]}));
-  assert.equal(shown.map(x => x[1].tag).sort().join(), 'order-1-1-1,order-2-2-2');
-  assert.ok(shown.every(x => x[1].requireInteraction && /#alert=/.test(x[1].data.url)));
-  assert.match(shown.find(x => x[1].tag === 'order-1-1-1')[0], /Примите заказ ЦБ-7 · 3-й раз/);
+  assert.match(shown[0][1].body, /Ночной режим · без звука/);
+  // нет списка и полей в notice — всё равно понятный пуш
+  ({shown, badges} = await swRun({type: 'new', posting: '9-9-9'}, {list: new Error('нет сети')}));
+  assert.equal(shown[0][0], '🚨 НОВЫЙ ЗАКАЗ');
+  assert.match(shown[0][1].body, /^Откройте, чтобы посмотреть/);
+  assert.equal(shown[0][1].tag, 'order-9-9-9');
+  assert.equal(badges.length, 0);
+  // скрипт без «notice» — по последнему новому заказу из списка
+  ({shown} = await swRun(new Error('old script')));
+  assert.equal(shown[0][0], '🚨 НОВЫЙ ЗАКАЗ · ЦБ-7');
+  assert.equal(shown[0][1].tag, 'order-1-1-1');
+  // ничего не доступно — всё равно показываем (iOS требует уведомление на каждый пуш), без setAppBadge — не падаем
+  ({shown} = await swRun(new Error('x'), {list: new Error('x'), badge: false}));
+  assert.equal(shown.length, 1);
+  assert.equal(shown[0][0], '🚨 НОВЫЙ ЗАКАЗ');
+  // принятый заказ не считается в значке
+  ({badges} = await swRun({type: 'new', posting: '1-1-1', cb: 'ЦБ-7'}, {list: [{...ROW, courier_comment: 'Принял: 05.11 14:00'}]}));
+  assert.equal(JSON.stringify(badges), '[0]');
+  // напоминание — обычное, без кнопок и баннера
   ({shown} = await swRun({type: 'remind', posting: '1-1-1', cb: 'ЦБ-7', text: 'позвони'}));
-  assert.equal(shown[0][1].requireInteraction, false);                    // напоминание — обычное
+  assert.ok(!shown[0][1].requireInteraction);
+  assert.equal(shown[0][1].actions, undefined);
   assert.ok(!shown[0][1].data.url.includes('#alert'));
+  // владельцу — как раньше
   ({shown} = await swRun({role: 'owner', type: 'accepted', posting: '1-1-1', title: '👍 Рашад принял ЦБ-7', text: 'Химки'}));
   assert.equal(shown[0][0], '👍 Рашад принял ЦБ-7');
   assert.equal(shown[0][1].data.url, './');
-  console.log('«Принял» и экран тревоги: проверки пройдены');
+  // страница: «✅ Принял» из уведомления обрабатывается, экран тревоги ночью — без звука, с плашкой
+  assert.match(courier, /accept=1/);
+  assert.match(read('alarm.js'), /Ночной режим · без звука/);
+  assert.match(read('alarm.js'), /!soundOn\(\) \|\| night\(\)/);
+  console.log('Пуш нового заказа, «✅ Принял» и ночной режим: проверки пройдены');
 })().catch(err => { console.error(err); process.exit(1); });
-

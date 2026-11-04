@@ -467,3 +467,5 @@ display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;b
 .pt .ph .r>.badge{min-width:0;max-width:calc(100% - 92px);display:inline-block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:28px;height:28px}
 .pt .ph .r>.badge .ic{vertical-align:-3px;margin-right:6px}
 .al-ok:focus{outline:none}.al-ok:focus-visible{outline:3px solid rgba(255,255,255,.55);outline-offset:3px}
+.al-night{align-self:center;display:inline-flex;align-items:center;gap:6px;margin-top:10px;height:28px;padding:0 12px;border-radius:14px;background:rgba(255,255,255,.1);color:rgba(255,255,255,.85);font-size:13px;font-weight:600;white-space:nowrap}
+.al-night .ic{width:14px;height:14px}

@@ -87,6 +87,16 @@ function agreedLabel(a, today = agreedNow()) {
   return "Согласовано · " + (a.day === today.slice(0, 5) ? a.time : a.day);
 }
 
+// Ночной режим по московскому времени (не по часовому поясу телефона): 23:00–07:59 — без звука, только вибрация
+var NIGHT_FROM = 23, NIGHT_TO = 8;
+function mskHour(d = new Date()) {
+  return Number(new Intl.DateTimeFormat("en-GB", {timeZone: "Europe/Moscow", hour: "2-digit", hour12: false}).format(d)) % 24;
+}
+function isNight(d = new Date()) {
+  const h = mskHour(d);
+  return NIGHT_FROM > NIGHT_TO ? h >= NIGHT_FROM || h < NIGHT_TO : h >= NIGHT_FROM && h < NIGHT_TO;
+}
+
 function foremanPhone(value) {
   let phone = String(value || "").replace(/\D/g, "");
   if (!String(value || "").trim()) return "";
@@ -200,7 +210,7 @@ function toast(msg, bad) {
 }
 
 // Короткая вибрация на Android (iPhone вибрацию с сайтов не поддерживает — там просто ничего не произойдёт)
-function buzz(ms = 10) { try { navigator.vibrate?.(ms); } catch {} }
+function buzz(ms = 10) { try { if (!navigator.userActivation || navigator.userActivation.hasBeenActive) navigator.vibrate?.(ms); } catch {} }
 
 // «Потянуть вниз» в самом верху страницы — обновить список
 function pullToRefresh(onRefresh) {
