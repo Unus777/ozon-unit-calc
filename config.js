@@ -197,6 +197,38 @@ function sheetHide() {
     if (dy > 90) sheetHide(); else p.style.transform = "";
   });
 })();
+// ---------- загрузка: заставка, скелетоны, крутящаяся кнопка «Обновить» ----------
+// Заставка (#splash) уже в разметке страницы; убираем плавно после первой отрисовки данных, но не раньше ~0,7 с — без мигания
+function splashHide() {
+  const s = typeof document !== "undefined" && document.getElementById("splash");
+  if (!s || s.classList.contains("out")) return;
+  const wait = Math.max(0, 700 - performance.now());
+  setTimeout(() => { s.classList.add("out"); setTimeout(() => s.remove(), 500); }, wait);
+}
+// Скелетоны повторяют настоящие карточки: hero (сумма + 3 показателя) и карточка заказа (бейдж, адрес, факты, кнопки)
+function skelHero() {
+  return `<div class="hero sk-hero" aria-hidden="true"><div class="r"><i class="skl w30"></i><i class="skl pill ml"></i></div>
+<i class="skl big"></i><i class="skl w45 sm"></i>
+<div class="hstats">${'<div><i class="skl w60 xs"></i><i class="skl w80"></i></div>'.repeat(3)}</div></div>`;
+}
+function skelCards(n = 3, opts = {}) {
+  const card = i => `<div class="card sk-card" style="--d:${i * .12}s" aria-hidden="true">
+<div class="r"><i class="skl pill w40"></i><i class="skl w20 ml"></i></div>
+<i class="skl ttl w80"></i>${opts.compact ? "" : '<i class="skl ttl w55"></i>'}<i class="skl w45 sm"></i>
+<div class="sk-facts">${'<div><i class="skl w50 xs"></i><i class="skl w70"></i></div>'.repeat(3)}</div>
+<div class="sk-btns"><i class="skl btn"></i><i class="skl btn"></i></div></div>`;
+  return `<div class="sk-wrap" role="status" aria-label="Загрузка">${Array.from({length: n}, (_, i) => card(i)).join("")}</div>`;
+}
+// «Обновить»: значок крутится, пока идёт загрузка (фоновая сверка кнопку не трогает)
+function busyBtn(btn, run) {
+  if (!btn || btn.classList.contains("busy")) return Promise.resolve(run && run());
+  btn.classList.add("busy");
+  btn.setAttribute("aria-busy", "true");
+  const started = Date.now();
+  return Promise.resolve().then(run).finally(() => setTimeout(() => { btn.classList.remove("busy"); btn.removeAttribute("aria-busy"); },
+    Math.max(0, 600 - (Date.now() - started))));  // хотя бы один оборот, чтобы было видно
+}
+
 function toast(msg, bad) {
   let t = document.getElementById("toast");
   if (!t) { t = document.createElement("div"); t.id = "toast"; t.setAttribute("aria-live", "polite"); document.body.append(t); }

@@ -7,15 +7,55 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="robots" content="noindex">
 <title>Юнит-экономика</title>
-<link rel="manifest" href="owner.webmanifest?v=33">
+<link rel="manifest" href="owner.webmanifest?v=34">
 <meta name="apple-mobile-web-app-title" content="Алмалы">
-<script src="theme.js?v=33"></script>
-<link rel="stylesheet" href="style.css?v=33">
-<link rel="icon" href="icons/owner.svg?v=33" type="image/svg+xml">
-<link rel="icon" href="icons/owner-32.png?v=33" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" href="icons/owner-180.png?v=33" sizes="180x180">
+<script src="theme.js?v=34"></script>
+<style id="splash-css">/* заставка первой загрузки: стили прямо в странице — видна сразу, до style.css; тема — из theme.js выше */
+html{background:#F5F4F0}:root[data-theme="dark"]{background:#0A0D14}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){background:#0A0D14}}
+#splash{position:fixed;inset:0;z-index:1500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;
+background:radial-gradient(90% 60% at 50% 38%,#FFFFFF 0%,#F5F4F0 70%);color:#0B1220;
+font:15px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,system-ui,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;
+transition:opacity .45s ease,visibility .45s;padding-bottom:6vh}
+:root[data-theme="dark"] #splash{background:radial-gradient(90% 60% at 50% 38%,#151C33 0%,#0A0D14 70%);color:#ECEEF3}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) #splash{background:radial-gradient(90% 60% at 50% 38%,#151C33 0%,#0A0D14 70%);color:#ECEEF3}}
+#splash.out{opacity:0;visibility:hidden;pointer-events:none}
+#splash.out .sp-in{transform:scale(1.06)}
+.sp-in{display:flex;flex-direction:column;align-items:center;transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+.sp-logo{position:relative;width:84px;height:84px;border-radius:24px;display:grid;place-items:center;color:#fff;font-size:42px;font-weight:800;letter-spacing:0;
+background:linear-gradient(145deg,#5C7CFA 0%,#3B5BDB 45%,#2A45B8 100%);
+box-shadow:inset 0 1px 0 rgba(255,255,255,.3),0 14px 34px -10px rgba(59,91,219,.6);animation:sp-breathe 2.2s ease-in-out infinite}
+.sp-logo::before,.sp-logo::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:0 0 0 2px rgba(92,124,250,.55);animation:sp-ring 2.2s cubic-bezier(.2,.6,.3,1) infinite;z-index:-1}
+.sp-logo::after{animation-delay:1.1s}
+.sp-name{margin-top:26px;font-size:22px;font-weight:750;letter-spacing:-.02em}
+.sp-sub{margin-top:4px;font-size:14px;color:#7C818B}
+.sp-road{position:relative;margin-top:30px;width:168px;height:30px;overflow:hidden}
+.sp-road::before{content:"";position:absolute;left:0;right:0;bottom:3px;height:2px;border-radius:2px;
+background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transparent 10px 18px);background-size:18px 2px;animation:sp-dash .5s linear infinite}
+.sp-truck{position:absolute;bottom:5px;left:0;width:30px;height:22px;color:#3B5BDB;animation:sp-drive 2.4s cubic-bezier(.45,0,.55,1) infinite}
+:root[data-theme="dark"] .sp-truck{color:#6F8BFF}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .sp-truck{color:#6F8BFF}}
+.sp-truck svg{width:30px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;animation:sp-bump .3s ease-in-out infinite alternate}
+@keyframes sp-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
+@keyframes sp-ring{0%{transform:scale(1);opacity:.9}100%{transform:scale(1.75);opacity:0}}
+@keyframes sp-dash{to{background-position:-18px 0}}
+@keyframes sp-drive{0%{transform:translateX(-34px)}50%{transform:translateX(69px)}100%{transform:translateX(172px)}}
+@keyframes sp-bump{to{transform:translateY(-1.5px)}}
+@media(prefers-reduced-motion:reduce){.sp-logo,.sp-logo::before,.sp-logo::after,.sp-road::before,.sp-truck,.sp-truck svg{animation:none}
+.sp-logo::before,.sp-logo::after{display:none}.sp-truck{transform:translateX(69px)}#splash,.sp-in{transition:none}}
+</style>
+<link rel="stylesheet" href="style.css?v=34">
+<link rel="icon" href="icons/owner.svg?v=34" type="image/svg+xml">
+<link rel="icon" href="icons/owner-32.png?v=34" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/owner-180.png?v=34" sizes="180x180">
 </head>
 <body data-view="orders">
+<div id="splash" role="status" aria-live="polite" aria-label="Загрузка"><div class="sp-in">
+<div class="sp-logo" aria-hidden="true">А</div>
+<div class="sp-name">Алмалы Доставка</div><div class="sp-sub">Загружаем заказы…</div>
+<div class="sp-road" aria-hidden="true"><div class="sp-truck"><svg viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h8A1.5 1.5 0 0 1 14 6.5V16H3zM14 9h3.6a1 1 0 0 1 .8.4l2.4 3.1a1 1 0 0 1 .2.6V16h-7M7.5 18.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM16.5 18.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg></div></div>
+</div></div>
+<script>setTimeout(function () { if (window.splashHide) splashHide(); else { var s = document.getElementById("splash"); if (s) s.remove(); } }, 10000);  // страховка: заставка не дольше 10 с</script>
 <header class="hdr"><div class="bar">
 <div class="logo" aria-hidden="true">А</div>
 <div class="grow"><div class="brand">Алмалы Доставка<span id="brandSub">Заказы и курьер</span></div></div>
@@ -109,10 +149,10 @@
   <button type="button" id="gear" data-view="settings" aria-selected="false" aria-expanded="false" aria-controls="settings"><span data-ic="settings"></span>Настройки</button>
 </div></nav>
 
-<script src="calc.js?v=33"></script>
-<script src="config.js?v=33"></script>
-<script src="push.js?v=33"></script>
-<script src="alarm.js?v=33"></script>
+<script src="calc.js?v=34"></script>
+<script src="config.js?v=34"></script>
+<script src="push.js?v=34"></script>
+<script src="alarm.js?v=34"></script>
 <script>
 const API = "https://api-seller.ozon.ru";
 // Статусы Ozon → понятные этапы; неизвестный статус показываем как есть
@@ -211,7 +251,8 @@ function show() {
   $("forget").hidden = !has;
   $("cidMask").textContent = has ? "••••" + String(store.get("ozon_cid")).slice(-4) : "";
   $("presence").hidden = !(ADMIN() && SCRIPT_URL);
-  if (has) loadOrders();
+  if (has) { if (ADMIN() && !$("ownerDash").innerHTML) $("ownerDash").innerHTML = skelHero(); loadOrders(); }
+  else splashHide();
 }
 
 async function ozon(path, payload) {
@@ -234,7 +275,7 @@ let ORDERS = [], PRICES = {};
 const iso = d => d.toISOString().slice(0, 19) + "Z";
 
 async function loadOrders(silent) {
-  if (silent !== true) $("orders").innerHTML = '<div class="card skel"></div>'.repeat(3);  // фоновая сверка — без мигания списка
+  if (silent !== true) $("orders").innerHTML = skelCards(3);  // фоновая сверка — без мигания списка
   try {
     const to = new Date(), filter = {since: iso(new Date(to - 90 * 864e5)), to: iso(to)};
     const postings = [];
@@ -259,9 +300,12 @@ async function loadOrders(silent) {
     const now = new Date(), day = now.toLocaleDateString("ru-RU", {weekday: "short", day: "numeric", month: "long"});
     $("ltSub").textContent = `${day[0].toUpperCase() + day.slice(1)} · обновлено ${now.toLocaleTimeString("ru-RU", {hour: "2-digit", minute: "2-digit"})}`;
     drawOrders(silent !== true);
+    splashHide();
     ownerAlerts(postings);
   } catch (err) {
+    if ($("ownerDash").querySelector(".sk-hero")) $("ownerDash").innerHTML = "";
     $("orders").innerHTML = `<div class="card err">${e(err.message)}</div>`;
+    splashHide();
   }
 }
 
@@ -844,7 +888,7 @@ $("calcForm").onsubmit = async ev => {
   const number = $("n").value.trim();
   $("go").disabled = true;
   setView("calc");
-  $("out").innerHTML = '<div class="card skel"></div>';
+  $("out").innerHTML = skelCards(1, {compact: true});
   try {
     const [posting, prices] = await fetchPosting(number);
     CURRENT_CALC_POSTING = posting; CURRENT_CALC_PRICES = prices;
@@ -965,7 +1009,7 @@ $("app").addEventListener("click", async ev => {
     $("calcForm").requestSubmit();
   }
 });
-$("reload").onclick = () => loadOrders();
+$("reload").onclick = () => busyBtn($("reload"), () => loadOrders());
 $("app").addEventListener("click", async ev => {
   const b = ev.target.closest("[data-remind]");
   if (b) sendReminder(b.dataset.remind, ADMIN()).catch(err => toast(err.message, true));

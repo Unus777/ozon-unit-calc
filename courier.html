@@ -8,14 +8,54 @@
 <meta name="robots" content="noindex">
 <meta name="referrer" content="no-referrer">
 <title>Доставки</title>
-<link rel="manifest" href="manifest.webmanifest?v=33">
-<script src="theme.js?v=33"></script>
-<link rel="stylesheet" href="style.css?v=33">
-<link rel="icon" href="icons/courier.svg?v=33" type="image/svg+xml">
-<link rel="icon" href="icons/courier-32.png?v=33" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" href="icons/courier-180.png?v=33" sizes="180x180">
+<link rel="manifest" href="manifest.webmanifest?v=34">
+<script src="theme.js?v=34"></script>
+<style id="splash-css">/* заставка первой загрузки: стили прямо в странице — видна сразу, до style.css; тема — из theme.js выше */
+html{background:#F5F4F0}:root[data-theme="dark"]{background:#0A0D14}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){background:#0A0D14}}
+#splash{position:fixed;inset:0;z-index:1500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;
+background:radial-gradient(90% 60% at 50% 38%,#FFFFFF 0%,#F5F4F0 70%);color:#0B1220;
+font:15px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,system-ui,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;
+transition:opacity .45s ease,visibility .45s;padding-bottom:6vh}
+:root[data-theme="dark"] #splash{background:radial-gradient(90% 60% at 50% 38%,#151C33 0%,#0A0D14 70%);color:#ECEEF3}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) #splash{background:radial-gradient(90% 60% at 50% 38%,#151C33 0%,#0A0D14 70%);color:#ECEEF3}}
+#splash.out{opacity:0;visibility:hidden;pointer-events:none}
+#splash.out .sp-in{transform:scale(1.06)}
+.sp-in{display:flex;flex-direction:column;align-items:center;transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+.sp-logo{position:relative;width:84px;height:84px;border-radius:24px;display:grid;place-items:center;color:#fff;font-size:42px;font-weight:800;letter-spacing:0;
+background:linear-gradient(145deg,#5C7CFA 0%,#3B5BDB 45%,#2A45B8 100%);
+box-shadow:inset 0 1px 0 rgba(255,255,255,.3),0 14px 34px -10px rgba(59,91,219,.6);animation:sp-breathe 2.2s ease-in-out infinite}
+.sp-logo::before,.sp-logo::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:0 0 0 2px rgba(92,124,250,.55);animation:sp-ring 2.2s cubic-bezier(.2,.6,.3,1) infinite;z-index:-1}
+.sp-logo::after{animation-delay:1.1s}
+.sp-name{margin-top:26px;font-size:22px;font-weight:750;letter-spacing:-.02em}
+.sp-sub{margin-top:4px;font-size:14px;color:#7C818B}
+.sp-road{position:relative;margin-top:30px;width:168px;height:30px;overflow:hidden}
+.sp-road::before{content:"";position:absolute;left:0;right:0;bottom:3px;height:2px;border-radius:2px;
+background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transparent 10px 18px);background-size:18px 2px;animation:sp-dash .5s linear infinite}
+.sp-truck{position:absolute;bottom:5px;left:0;width:30px;height:22px;color:#3B5BDB;animation:sp-drive 2.4s cubic-bezier(.45,0,.55,1) infinite}
+:root[data-theme="dark"] .sp-truck{color:#6F8BFF}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .sp-truck{color:#6F8BFF}}
+.sp-truck svg{width:30px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;animation:sp-bump .3s ease-in-out infinite alternate}
+@keyframes sp-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
+@keyframes sp-ring{0%{transform:scale(1);opacity:.9}100%{transform:scale(1.75);opacity:0}}
+@keyframes sp-dash{to{background-position:-18px 0}}
+@keyframes sp-drive{0%{transform:translateX(-34px)}50%{transform:translateX(69px)}100%{transform:translateX(172px)}}
+@keyframes sp-bump{to{transform:translateY(-1.5px)}}
+@media(prefers-reduced-motion:reduce){.sp-logo,.sp-logo::before,.sp-logo::after,.sp-road::before,.sp-truck,.sp-truck svg{animation:none}
+.sp-logo::before,.sp-logo::after{display:none}.sp-truck{transform:translateX(69px)}#splash,.sp-in{transition:none}}
+</style>
+<link rel="stylesheet" href="style.css?v=34">
+<link rel="icon" href="icons/courier.svg?v=34" type="image/svg+xml">
+<link rel="icon" href="icons/courier-32.png?v=34" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/courier-180.png?v=34" sizes="180x180">
 </head>
 <body>
+<div id="splash" role="status" aria-live="polite" aria-label="Загрузка"><div class="sp-in">
+<div class="sp-logo" aria-hidden="true">А</div>
+<div class="sp-name">Алмалы Доставка</div><div class="sp-sub">Загружаем доставки…</div>
+<div class="sp-road" aria-hidden="true"><div class="sp-truck"><svg viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h8A1.5 1.5 0 0 1 14 6.5V16H3zM14 9h3.6a1 1 0 0 1 .8.4l2.4 3.1a1 1 0 0 1 .2.6V16h-7M7.5 18.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM16.5 18.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg></div></div>
+</div></div>
+<script>setTimeout(function () { if (window.splashHide) splashHide(); else { var s = document.getElementById("splash"); if (s) s.remove(); } }, 10000);  // страховка: заставка не дольше 10 с</script>
 <header class="hdr"><div class="bar">
 <div class="logo" aria-hidden="true">А</div>
 <div class="grow"><div class="brand">Доставки <span id="subtitle">Алмалы</span></div></div>
@@ -30,6 +70,7 @@
 <div id="owed"></div>
 <div id="mapbox" hidden>
 <div id="map" role="region" aria-label="Карта доставок"></div>
+<div class="map-load" id="mapLoad" role="status"><i></i><span>Загружаем карту…</span></div>
 <div class="mtop"><div class="mleg" aria-label="Цвета меток"><span><i class="st-n"></i>Новый</span><span><i class="st-g"></i>Согласован</span><span><i class="st-p"></i>ППЗ</span></div>
 <div class="mctl"><button type="button" class="mbtn" data-mfit aria-label="Показать все точки" title="Все точки"><span data-ico="fit"></span></button><button type="button" class="mbtn" data-mme aria-label="Где я" title="Где я"><span data-ico="locate"></span></button></div></div>
 <div class="mcard" id="mcard" aria-live="polite"></div>
@@ -40,7 +81,7 @@
 <div class="ms-body" id="mlist"></div>
 </section>
 </div>
-<div id="list"><div class="card skel"></div><div class="card skel"></div></div>
+<div id="list"></div>
 <div id="sheet" class="sheet" hidden><div class="sheet-bg" data-close></div><section class="sheet-panel" role="dialog" aria-modal="true" aria-label="Действия с заказом" id="sheetPanel"></section></div>
 <div id="modal-courier-done" class="modal-bg" hidden>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-c-title">
@@ -65,9 +106,9 @@
 <button role="tab" aria-selected="false" data-tab="done"><span data-ico="checkc"></span>Готово</button>
 </div></nav>
 
-<script src="config.js?v=33"></script>
-<script src="push.js?v=33"></script>
-<script src="alarm.js?v=33"></script>
+<script src="config.js?v=34"></script>
+<script src="push.js?v=34"></script>
+<script src="alarm.js?v=34"></script>
 <script>
 const $ = id => document.getElementById(id);
 const e = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
@@ -547,6 +588,7 @@ function drawMap() {
   // ---- сама карта ----
   if (info.key && !info.data) Promise.resolve(roadRoute(info.lls)).then(() => { if (TAB === "map" && routeInfo(MAP_ORDER).key === info.key) drawMap(); });
   initMap().then(() => {
+    $("mapLoad").classList.add("out");
     $("map").querySelector(".map-err")?.remove();
     MAP.resize();
     drawPins(order);
@@ -554,6 +596,7 @@ function drawMap() {
     const fk = order.map(p => p.r.posting).join() + (ME ? ":me" : "");
     if (fk !== FIT_KEY) { const first = !FIT_KEY; FIT_KEY = fk; fitAll(!first); }
   }).catch(err => {
+    $("mapLoad").classList.add("out");
     if (!$("map").querySelector(".map-err")) $("map").insertAdjacentHTML("beforeend", `<div class="map-err">${ic("map", "l")}<b>${e(err.message || "Карта не загрузилась")}</b><span>Список остановок работает и без карты</span></div>`);
   });
 }
@@ -604,9 +647,12 @@ async function load() {
     ROWS = await api({action: "list"});
     PAYS = await api({action: "payments"}).catch(() => null);
     draw(true);
+    splashHide();
     checkAlerts();
   } catch (err) {
+    if ($("driverHero").querySelector(".sk-hero")) $("driverHero").innerHTML = "";
     $("list").innerHTML = `<div class="card err">${e(err.message)}</div>`;
+    splashHide();
   }
 }
 
@@ -786,7 +832,7 @@ document.querySelector(".tabs").onclick = ev => {
   document.querySelectorAll(".tabs button").forEach(x => x.setAttribute("aria-selected", x === b));
   draw(true);
 };
-$("reload").onclick = load;
+$("reload").onclick = () => busyBtn($("reload"), load);
 const themeOrder = ["auto", "light", "dark"];
 const drawThemeBtn = () => {
   $("themeBtn").innerHTML = ic({auto: "theme", light: "sun", dark: "moon"}[getTheme()]);
@@ -840,12 +886,15 @@ async function setupNotif() {
 
 if (KEY) {
   $("app").hidden = false;
+  $("driverHero").innerHTML = skelHero();  // пока грузятся данные — скелетоны вместо пустого экрана
+  $("list").innerHTML = skelCards(3);
   load();
   if (IS_ADMIN) document.querySelector(".brand span").textContent = "режим владельца";
   else setupNotif();
   setInterval(() => { if (!document.hidden) load(); }, 60000);
 } else {
   $("nokey").hidden = false;
+  splashHide();
 }
 pullToRefresh(load);
 </script>

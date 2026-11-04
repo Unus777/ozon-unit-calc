@@ -483,7 +483,41 @@ background:var(--fg);color:var(--bg);font-size:15px;font-weight:600;text-align:c
 opacity:0;transform:translate(-50%,16px);transition:opacity .25s,transform .25s;pointer-events:none}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 .toast.bad{background:var(--red);color:#fff}
-.skel{height:132px;background:linear-gradient(90deg,var(--card) 30%,var(--soft) 50%,var(--card) 70%);background-size:300% 100%;animation:shimmer 1.2s linear infinite}
+/* ---------- скелетоны загрузки: повторяют настоящие карточки, блик идёт волной с задержкой --d ---------- */
+.skel{height:132px;background:var(--card);position:relative;overflow:hidden}
+.skel::after,.skl::after{content:"";position:absolute;inset:0;transform:translateX(-100%);
+background:linear-gradient(90deg,transparent 0%,var(--sk-shine,rgba(255,255,255,.75)) 50%,transparent 100%);animation:sk-shine 1.5s ease-in-out infinite;animation-delay:var(--d,0s)}
+.skl{display:block;position:relative;overflow:hidden;height:12px;border-radius:7px;background:var(--sk,#ECEAE4);width:100%;flex:0 0 auto}
+:root[data-theme="dark"]{--sk:#1B2130;--sk-shine:rgba(255,255,255,.07)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--sk:#1B2130;--sk-shine:rgba(255,255,255,.07)}}
+.skl.xs{height:9px}.skl.sm{height:10px}.skl.ttl{height:18px;border-radius:9px;margin-top:10px}
+.skl.pill{height:26px;border-radius:999px}.skl.big{height:40px;border-radius:12px;width:58%;margin:12px 0 10px}
+.skl.btn{height:48px;border-radius:14px}
+.w20{width:20%!important}.w30{width:30%!important}.w40{width:40%!important}.w45{width:45%!important}.w50{width:50%!important}
+.w55{width:55%!important}.w60{width:60%!important}.w70{width:70%!important}.w80{width:80%!important}
+.sk-card{animation:sk-in .4s ease both;animation-delay:var(--d,0s)}
+.sk-card .skl.w45.sm{margin-top:10px}
+.sk-card .r .skl.w20{height:18px}
+.sk-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:16px;border-radius:14px;box-shadow:inset 0 0 0 1px var(--line)}
+.sk-facts>div{padding:12px;display:grid;gap:8px}.sk-facts>div+div{border-left:1px solid var(--line)}
+.sk-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}
+.sk-hero{--sk:rgba(255,255,255,.12);--sk-shine:rgba(255,255,255,.22);padding:16px 20px}
+.sk-hero .skl.pill{width:120px}
+.sk-hero .hstats{margin-top:14px;padding-top:14px}
+.sk-hero .hstats>div{display:grid;gap:8px}
+@keyframes sk-shine{0%{transform:translateX(-100%)}60%,100%{transform:translateX(100%)}}
+@keyframes sk-in{from{opacity:0;transform:translateY(8px)}}
+/* карта: подложка с сеткой и спиннер, пока не загрузился стиль */
+.map-load{position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding-bottom:var(--peek);
+color:var(--mut);font-size:13px;font-weight:600;background:
+linear-gradient(var(--line) 1px,transparent 1px) 0 0/44px 44px,linear-gradient(90deg,var(--line) 1px,transparent 1px) 0 0/44px 44px,var(--soft);
+transition:opacity .4s ease,visibility .4s}
+.map-load::before{content:"";position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,var(--sk-shine,rgba(255,255,255,.6)),transparent);animation:sk-shine 1.8s ease-in-out infinite}
+.map-load.out{opacity:0;visibility:hidden}
+.map-load i{width:34px;height:34px;border-radius:50%;border:3px solid var(--acc-bg);border-top-color:var(--acc);animation:spin .8s linear infinite;position:relative}
+.map-load span{position:relative}
+/* «Обновить»: значок крутится, пока идёт загрузка */
+.busy .ic{animation:spin .8s linear infinite}
 .empty{text-align:center;padding:32px 16px;color:var(--mut);font-size:14px}
 .empty .ic{width:28px;height:28px;display:block;margin:0 auto 8px;color:var(--mut2)}
 .ptr{position:fixed;top:calc(env(safe-area-inset-top) + 8px);left:50%;z-index:7;width:40px;height:40px;margin-left:-20px;border-radius:50%;
@@ -505,7 +539,7 @@ body.noscroll{overflow:hidden}
   button,a.btn{transition:transform .12s ease,background-color .2s,color .2s,opacity .2s,box-shadow .2s}
   button:active:not(:disabled),a.btn:active{transform:scale(.97)}
 }
-@media(prefers-reduced-motion:reduce){.sheet-panel,.sheet-bg,.toast,.modal-card{transition:none;animation:none}.skel{animation:none}}
+@media(prefers-reduced-motion:reduce){.sheet-panel,.sheet-bg,.toast,.modal-card{transition:none;animation:none}.skel::after,.skl::after,.map-load::before,.sk-card,.busy .ic,.map-load i{animation:none}}
 /* экраны владельца: «Заказы», «Расчёт», «Настройки» (нижние вкладки) */
 body[data-view="settings"] #app,body[data-view="settings"] #keys{display:none!important}
 body[data-view="calc"] #ownerDash,body[data-view="calc"] #report,body[data-view="calc"] #otabs,body[data-view="calc"] #orders,body[data-view="calc"] #reloadP{display:none!important}
