@@ -91,7 +91,7 @@
 </div>
 
 <script src="calc.js?v=12"></script>
-<script src="config.js?v=23"></script>
+<script src="config.js?v=24"></script>
 <script src="push.js?v=15"></script>
 <script>
 const API = "https://api-seller.ozon.ru";
@@ -107,6 +107,7 @@ const STAGES = {
 const $ = id => document.getElementById(id);
 const e = s => String(s).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
 const rub = x => Math.round(x).toLocaleString("ru-RU").replace(/ /g, " ") + " ₽";
+const todayStr = () => new Date().toLocaleDateString("ru-RU", {day: "2-digit", month: "2-digit", year: "numeric"});
 const stage = s => Object.entries(STAGES).find(([, [, list]]) => list.includes(s)) || ["", [s]];
 const badge = s => { const [cls, [label]] = stage(s); return `<span class="badge ${cls}">${e(label)}</span>`; };
 
@@ -316,47 +317,51 @@ function drawOrders(anim) {
 }
 
 function drawOwnerDash() {
-  const el = $("ownerDash");
-  if (!el || !ADMIN()) { if (el) el.innerHTML = ""; return; }
-  const today = todayStr();
-  let countToday = 0, packsToday = 0, kgToday = 0, courierOwed = 0, waitCbCount = 0;
-  for (const p of ORDERS) {
-    const st = ostate(p);
-    const d = DELIV[p.posting_number];
-    if (st === "new") waitCbCount++;
-    const isToday = (d && d.date === today) || (!d && new Date(p.in_process_at).toLocaleDateString("ru-RU") === today);
-    if (isToday || st === "courier") {
-      countToday++;
-      for (const prod of (p.products || [])) {
-        const q = Number(prod.quantity) || 0;
-        packsToday += q;
-        kgToday += q * 28;
-      }
-      if (d && d.status !== "Доставлен") {
-        courierOwed += (Number(d.delivery) || 0) + (Number(d.lift) || 0);
+  try {
+    const el = $("ownerDash");
+    if (!el || !ADMIN()) { if (el) el.innerHTML = ""; return; }
+    const today = typeof todayStr === "function" ? todayStr() : new Date().toLocaleDateString("ru-RU", {day: "2-digit", month: "2-digit", year: "numeric"});
+    let countToday = 0, packsToday = 0, kgToday = 0, courierOwed = 0, waitCbCount = 0;
+    for (const p of (ORDERS || [])) {
+      const st = ostate(p);
+      const d = DELIV ? DELIV[p.posting_number] : null;
+      if (st === "new") waitCbCount++;
+      const isToday = (d && d.date === today) || (!d && new Date(p.in_process_at).toLocaleDateString("ru-RU") === today);
+      if (isToday || st === "courier") {
+        countToday++;
+        for (const prod of (p.products || [])) {
+          const q = Number(prod.quantity) || 0;
+          packsToday += q;
+          kgToday += q * 28;
+        }
+        if (d && d.status !== "Доставлен") {
+          courierOwed += (Number(d.delivery) || 0) + (Number(d.lift) || 0);
+        }
       }
     }
+    const tons = (kgToday / 1000).toFixed(1);
+    const rep = typeof deliveryReport === "function" ? deliveryReport(Object.values(DELIV || {}), PAYS) : {left: courierOwed};
+    const leftPay = rep && rep.hasPayments ? rep.left : courierOwed;
+    el.innerHTML = `<div class="owner-dash">
+      <div class="dash-card">
+        <div class="label">В работе</div>
+        <div class="val">${countToday} ${typeof plural === "function" ? plural(countToday, "заказ", "заказа", "заказов") : "зак."}</div>
+        <div class="sub">${packsToday} уп · ${tons > 0 ? tons + " т" : "0 т"}</div>
+      </div>
+      <div class="dash-card">
+        <div class="label">Курьеру</div>
+        <div class="val" style="color:var(--acc)">${rub(leftPay)}</div>
+        <div class="sub">к выплате</div>
+      </div>
+      <div class="dash-card">
+        <div class="label">Ждут ЦБ</div>
+        <div class="val" style="color:${waitCbCount > 0 ? 'var(--yellow)' : 'var(--green)'}">${waitCbCount}</div>
+        <div class="sub ${waitCbCount > 0 ? '' : 'green'}">${waitCbCount > 0 ? "требуют накладную" : "все переданы ✓"}</div>
+      </div>
+    </div>`;
+  } catch (err) {
+    console.error("Owner dash error:", err);
   }
-  const tons = (kgToday / 1000).toFixed(1);
-  const rep = deliveryReport(Object.values(DELIV), PAYS);
-  const leftPay = rep.hasPayments ? rep.left : courierOwed;
-  el.innerHTML = `<div class="owner-dash">
-    <div class="dash-card">
-      <div class="label">В работе</div>
-      <div class="val">${countToday} ${plural(countToday, "заказ", "заказа", "заказов")}</div>
-      <div class="sub">${packsToday} уп · ${tons > 0 ? tons + " т" : "0 т"}</div>
-    </div>
-    <div class="dash-card">
-      <div class="label">Курьеру</div>
-      <div class="val" style="color:var(--acc)">${rub(leftPay)}</div>
-      <div class="sub">к выплате</div>
-    </div>
-    <div class="dash-card">
-      <div class="label">Ждут ЦБ</div>
-      <div class="val" style="color:${waitCbCount > 0 ? 'var(--yellow)' : 'var(--green)'}">${waitCbCount}</div>
-      <div class="sub ${waitCbCount > 0 ? '' : 'green'}">${waitCbCount > 0 ? "требуют накладную" : "все переданы ✓"}</div>
-    </div>
-  </div>`;
 }
 
 function orderCard(p, i, n = 0) {
@@ -744,13 +749,15 @@ async function saveEditCbModal() {
     toast("Ошибка: " + err.message, true);
   }
 }
-$("modal-cb-close").onclick = closeEditCbModal;
-$("modal-cb-cancel").onclick = closeEditCbModal;
-$("modal-cb-save").onclick = saveEditCbModal;
-$("modal-cb-val").onkeydown = ev => {
-  if (ev.key === "Enter") { ev.preventDefault(); saveEditCbModal(); }
-  else if (ev.key === "Escape") { ev.preventDefault(); closeEditCbModal(); }
-};
+if ($("modal-cb-close")) $("modal-cb-close").onclick = closeEditCbModal;
+if ($("modal-cb-cancel")) $("modal-cb-cancel").onclick = closeEditCbModal;
+if ($("modal-cb-save")) $("modal-cb-save").onclick = saveEditCbModal;
+if ($("modal-cb-val")) {
+  $("modal-cb-val").onkeydown = ev => {
+    if (ev.key === "Enter") { ev.preventDefault(); saveEditCbModal(); }
+    else if (ev.key === "Escape") { ev.preventDefault(); closeEditCbModal(); }
+  };
+}
 
 $("app").addEventListener("click", ev => {
   const cbBtn = ev.target.closest("[data-edit-cb]");

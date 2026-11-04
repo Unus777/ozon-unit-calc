@@ -63,7 +63,7 @@
 </div>
 </div>
 
-<script src="config.js?v=23"></script>
+<script src="config.js?v=24"></script>
 <script src="push.js?v=15"></script>
 <script>
 const $ = id => document.getElementById(id);
@@ -469,15 +469,17 @@ function closeDoneModal() {
   CURRENT_DONE_POST = "";
   CURRENT_DONE_BTN = null;
 }
-$("modal-c-confirm").onclick = () => {
-  const post = CURRENT_DONE_POST, btn = CURRENT_DONE_BTN;
-  closeDoneModal();
-  if (!post) return;
-  if (btn) btn.disabled = true;
-  save(post, {status: "Доставлен"}, btn);
-};
-$("modal-c-close").onclick = closeDoneModal;
-$("modal-c-cancel").onclick = closeDoneModal;
+if ($("modal-c-confirm")) {
+  $("modal-c-confirm").onclick = () => {
+    const post = CURRENT_DONE_POST, btn = CURRENT_DONE_BTN;
+    closeDoneModal();
+    if (!post) return;
+    if (btn) btn.disabled = true;
+    save(post, {status: "Доставлен"}, btn);
+  };
+}
+if ($("modal-c-close")) $("modal-c-close").onclick = closeDoneModal;
+if ($("modal-c-cancel")) $("modal-c-cancel").onclick = closeDoneModal;
 
 $("app").addEventListener("click", ev => {
   const row = ev.target.closest("[data-row]");
