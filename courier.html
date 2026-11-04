@@ -8,12 +8,12 @@
 <meta name="robots" content="noindex">
 <meta name="referrer" content="no-referrer">
 <title>Доставки</title>
-<link rel="manifest" href="manifest.webmanifest?v=32">
-<script src="theme.js?v=32"></script>
-<link rel="stylesheet" href="style.css?v=32">
-<link rel="icon" href="icons/courier.svg?v=32" type="image/svg+xml">
-<link rel="icon" href="icons/courier-32.png?v=32" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" href="icons/courier-180.png?v=32" sizes="180x180">
+<link rel="manifest" href="manifest.webmanifest?v=33">
+<script src="theme.js?v=33"></script>
+<link rel="stylesheet" href="style.css?v=33">
+<link rel="icon" href="icons/courier.svg?v=33" type="image/svg+xml">
+<link rel="icon" href="icons/courier-32.png?v=33" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/courier-180.png?v=33" sizes="180x180">
 </head>
 <body>
 <header class="hdr"><div class="bar">
@@ -28,7 +28,18 @@
 <div class="card" id="notif" hidden></div>
 <div id="driverHero"></div>
 <div id="owed"></div>
-<div id="mapbox" hidden><div id="map" role="region" aria-label="Карта доставок"></div><div id="route"></div></div>
+<div id="mapbox" hidden>
+<div id="map" role="region" aria-label="Карта доставок"></div>
+<div class="mtop"><div class="mleg" aria-label="Цвета меток"><span><i class="st-n"></i>Новый</span><span><i class="st-g"></i>Согласован</span><span><i class="st-p"></i>ППЗ</span></div>
+<div class="mctl"><button type="button" class="mbtn" data-mfit aria-label="Показать все точки" title="Все точки"><span data-ico="fit"></span></button><button type="button" class="mbtn" data-mme aria-label="Где я" title="Где я"><span data-ico="locate"></span></button></div></div>
+<div class="mcard" id="mcard" aria-live="polite"></div>
+<section class="msheet" id="msheet" data-state="peek" aria-label="Остановки маршрута">
+<div class="ms-head" data-mtoggle role="button" tabindex="0" aria-label="Свернуть или развернуть список остановок"><div class="grab"></div>
+<div class="ms-row"><div id="msum" class="grow"></div><span class="ms-chev"><span data-ico="chev"></span></span></div>
+<a class="btn ms-nav" id="mnav" href="#" target="_blank" rel="noopener" hidden><span data-ico="nav"></span>Весь маршрут в Яндекс Картах</a></div>
+<div class="ms-body" id="mlist"></div>
+</section>
+</div>
 <div id="list"><div class="card skel"></div><div class="card skel"></div></div>
 <div id="sheet" class="sheet" hidden><div class="sheet-bg" data-close></div><section class="sheet-panel" role="dialog" aria-modal="true" aria-label="Действия с заказом" id="sheetPanel"></section></div>
 <div id="modal-courier-done" class="modal-bg" hidden>
@@ -54,9 +65,9 @@
 <button role="tab" aria-selected="false" data-tab="done"><span data-ico="checkc"></span>Готово</button>
 </div></nav>
 
-<script src="config.js?v=32"></script>
-<script src="push.js?v=32"></script>
-<script src="alarm.js?v=32"></script>
+<script src="config.js?v=33"></script>
+<script src="push.js?v=33"></script>
+<script src="alarm.js?v=33"></script>
 <script>
 const $ = id => document.getElementById(id);
 const e = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
@@ -247,6 +258,7 @@ async function saveEdit(form) {
 function draw(anim) {
   $("mapbox").hidden = TAB !== "map";
   $("list").hidden = TAB === "map";
+  document.body.classList.toggle("maptab", TAB === "map");
   if (TAB === "map") { drawMap(); return; }
   const isDone = r => r.status === "Доставлен" || r.status === "Отменён";
   const active = ROWS.filter(r => !isDone(r));
@@ -289,14 +301,19 @@ function draw(anim) {
   if (FOCUS) document.querySelector(".order.hl")?.scrollIntoView({block: "center"});
 }
 
-// ---------- карта доставок: виджет Яндекс Карт (без ключа), метки с номерами в порядке объезда ----------
-let ME = null, GEO_ASKED = false;
+// ---------- карта доставок: MapLibre + векторные плитки OpenFreeMap (бесплатно, без ключа и без рекламы) ----------
+// Метки с номерами в порядке объезда и цветом по статусу, нажатие — карточка заказа, маршрут через все точки,
+// снизу шторка со списком остановок. Маршрут по дорогам — публичный OSRM; не ответил за 6 с — пунктир по прямой.
+let ME = null, ME_ACC = 0, GEO_ASKED = false, SEL = null;
+let MAP = null, MAP_P = null, MAP_STYLE = "", PINS = [], ME_PIN = null, FIT_KEY = "", ROUTE_KEY = "", MS_STATE = "peek";
+const MAPLIBRE = {js: "https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js", jsSri: "sha384-5+cfbwT0iiub6VsQAdn6yz16nr6sDiQoHx6tm4O8OVYXHYOxcffFmCJBL0dgdvGp",
+  css: "https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css", cssSri: "sha384-uTttxo/aOKbdE5RlD/SPzSDoDmNvGlUYPjONi2MN/b7c9HPSvW07OIuyP7uL6jxK"};
 const km = (a, b) => {  // расстояние по прямой, км
   const R = 6371, rad = x => x * Math.PI / 180, dLat = rad(b[0] - a[0]), dLon = rad(b[1] - a[1]);
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(dLon / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(h));
 };
-// ponytail: порядок объезда «ближайший следующий» по прямой — не учитывает пробки и дороги, для 5–15 точек достаточно
+// ponytail: порядок объезда «ближайший следующий» по прямой (от курьера, если известна геопозиция) — для 5–15 точек достаточно
 function routeOrder(points, start) {
   const left = [...points], out = [];
   let cur = start || left[0].ll;
@@ -307,113 +324,279 @@ function routeOrder(points, start) {
   }
   return out;
 }
-
-function mapView(lls) {  // центр и масштаб, чтобы влезли все точки
-  const lats = lls.map(p => p[0]), lons = lls.map(p => p[1]);
-  const c = [(Math.min(...lats) + Math.max(...lats)) / 2, (Math.min(...lons) + Math.max(...lons)) / 2];
-  const span = Math.max(Math.max(...lons) - Math.min(...lons), (Math.max(...lats) - Math.min(...lats)) * 1.8, 0.01);
-  return {c, z: Math.max(4, Math.min(15, Math.floor(Math.log2(360 / span)) - 1))};
-}
-
-let SEL = null;  // выбранный на карте заказ: маршрут строится только до него
-
-// ---------- официальный JavaScript API Яндекс Карт (с ключом): номера на метках, выбор нажатием, маршрут ----------
-let YMAP = null, YROUTE = null;
-const loadYmaps = () => window.ymaps ? new Promise(ok => ymaps.ready(ok)) : new Promise((ok, fail) => {
-  const js = document.createElement("script");
-  js.src = `https://api-maps.yandex.ru/2.1/?lang=ru_RU${YANDEX_MAPS_KEY ? "&apikey=" + encodeURIComponent(YANDEX_MAPS_KEY) : ""}`;
-  js.onload = () => ymaps.ready(ok);
-  js.onerror = () => fail(new Error("Яндекс Карты не загрузились — проверьте интернет"));
-  document.head.appendChild(js);
+const loadLib = () => new Promise((ok, fail) => {
+  if (window.maplibregl) return ok();
+  const css = Object.assign(document.createElement("link"), {rel: "stylesheet", href: MAPLIBRE.css, integrity: MAPLIBRE.cssSri, crossOrigin: "anonymous"});
+  const js = Object.assign(document.createElement("script"), {src: MAPLIBRE.js, integrity: MAPLIBRE.jsSri, crossOrigin: "anonymous"});
+  js.onload = ok;
+  js.onerror = () => { css.remove(); js.remove(); fail(new Error("Карта не загрузилась — проверьте интернет")); };
+  document.head.append(css, js);
 });
+const isDark = () => { const t = document.documentElement.dataset.theme; return t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches; };
+// Стиль OpenFreeMap: светлый Positron / тёмный Dark; подписи — по-русски (name:ru), иначе местное название
+const STYLES = {};
+const styleName = () => isDark() ? "dark" : "positron";
+async function mapStyle(name) {
+  if (STYLES[name]) return STYLES[name];
+  const s = await (await fetch(`https://tiles.openfreemap.org/styles/${name}`)).json();
+  for (const l of s.layers) if (l.layout && l.layout["text-field"]) l.layout["text-field"] = ["coalesce", ["get", "name:ru"], ["get", "name"]];
+  return STYLES[name] = s;
+}
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const stCls = r => isPpz(r) ? "st-p" : r.status === "Согласован" || agreementOf(r) ? "st-g" : "st-n";
+const stText = r => isPpz(r) ? "Сдача в ППЗ" : agreementOf(r) ? agreedLabel(agreementOf(r)) : r.status === "Согласован" ? "Согласован" : "Не согласован";
+const kmText = m => m >= 10000 ? Math.round(m / 1000) + " км" : (m / 1000).toFixed(1).replace(".", ",") + " км";
+const durText = s => { const m = Math.max(1, Math.round(s / 60)); return m < 60 ? m + " мин" : `${Math.floor(m / 60)} ч${m % 60 ? " " + (m % 60) + " мин" : ""}`; };
 
-async function drawYmap(order, sel) {
-  try { await loadYmaps(); } catch (err) { $("map").innerHTML = `<div class="mut" style="padding:16px">${e(err.message)}</div>`; return; }
-  if (!YMAP) {
-    $("map").innerHTML = "";
-    YMAP = new ymaps.Map("map", {center: [55.75, 37.62], zoom: 9, controls: ["zoomControl", "geolocationControl"]});
-  }
-  YMAP.geoObjects.removeAll();
-  YROUTE = null;
-  order.forEach(({r, ll}, i) => {
-    const pm = new ymaps.Placemark(ll, {iconContent: String(i + 1), hintContent: `${r.cb} · ${r.packs}`},
-      {preset: r.posting === SEL ? "islands#redStretchyIcon" : "islands#blueStretchyIcon"});
-    pm.events.add("click", () => { SEL = r.posting === SEL ? null : r.posting; drawMap(); });  // выбор заказа нажатием на метку
-    YMAP.geoObjects.add(pm);
-  });
-  if (ME) YMAP.geoObjects.add(new ymaps.Placemark(ME, {hintContent: "Вы здесь"}, {preset: "islands#geolocationIcon"}));
-  if (sel && ME) {  // маршрут по дорогам от курьера до выбранного заказа
-    YROUTE = new ymaps.multiRouter.MultiRoute({referencePoints: [ME, sel.ll], params: {routingMode: "auto"}},
-      {boundsAutoApply: true, wayPointVisible: false});
-    YMAP.geoObjects.add(YROUTE);
-    YMAP.setBounds(ymaps.util.bounds.fromPoints([ME, sel.ll]), {checkZoomRange: true, zoomMargin: 40});  // пока маршрут считается
-  } else if (sel) {
-    YMAP.setCenter(sel.ll, 14, {duration: 300});
-  } else if (order.length) {
-    const lls = order.map(p => p.ll).concat(ME ? [ME] : []);
-    if (lls.length === 1) YMAP.setCenter(lls[0], 13);
-    else YMAP.setBounds(ymaps.util.bounds.fromPoints(lls), {checkZoomRange: true, zoomMargin: 40});
-  }
+// Маршрут: точки по порядку (с курьера, если он известен). Кэш по набору точек — опрос раз в минуту не дёргает OSRM.
+const ROAD = new Map();  // ключ → {road, line, m, s, legs} | Promise
+const llKey = lls => lls.map(p => (+p[0]).toFixed(4) + "," + (+p[1]).toFixed(4)).join(";");
+function straight(lls) {  // запасной вариант: по прямой ×1,3 и ~30 км/ч по городу
+  const legs = lls.slice(1).map((p, i) => km(lls[i], p) * 1300);
+  const m = legs.reduce((a, b) => a + b, 0);
+  return {road: false, line: lls, m, s: m / 30000 * 3600, legs};
+}
+function roadRoute(lls) {
+  const key = llKey(lls);
+  if (ROAD.has(key)) return ROAD.get(key);
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 6000);
+  const p = fetch(`https://router.project-osrm.org/route/v1/driving/${lls.map(x => `${(+x[1]).toFixed(6)},${(+x[0]).toFixed(6)}`).join(";")}?overview=full&geometries=geojson`,
+    {signal: ctl.signal})
+    .then(r => r.json()).then(j => {
+      const r = j && j.code === "Ok" && j.routes && j.routes[0];
+      if (!r) throw new Error("нет маршрута");
+      const out = {road: true, line: r.geometry.coordinates.map(c => [c[1], c[0]]), m: r.distance, s: r.duration, legs: r.legs.map(l => l.distance)};
+      ROAD.set(key, out);
+      return out;
+    })
+    .catch(() => { ROAD.set(key, straight(lls)); setTimeout(() => ROAD.delete(key), 120000); return ROAD.get(key); })  // через 2 мин попробуем снова
+    .finally(() => clearTimeout(timer));
+  ROAD.set(key, p);
+  return p;
+}
+function routeInfo(order) {
+  const lls = (ME ? [ME] : []).concat(order.map(p => p.ll));
+  if (lls.length < 2) return {key: "", lls, data: null};
+  const key = llKey(lls), got = ROAD.get(key);
+  return {key, lls, data: got && !(got instanceof Promise) ? got : null};
 }
 
+function locate(fly) {
+  if (!navigator.geolocation) { if (fly) toast("Геопозиция недоступна в этом браузере", true); return; }
+  GEO_ASKED = true;
+  navigator.geolocation.getCurrentPosition(p => {
+    ME = [p.coords.latitude, p.coords.longitude]; ME_ACC = p.coords.accuracy || 0;
+    if (TAB === "map") drawMap();
+    if (fly && MAP) MAP.flyTo({center: [ME[1], ME[0]], zoom: Math.max(MAP.getZoom(), 14), duration: 600});
+  }, () => { if (fly) toast("Нет доступа к геопозиции — разрешите её в настройках телефона", true); },
+  {enableHighAccuracy: true, timeout: 10000, maximumAge: 30000});
+}
+
+function initMap() {
+  return MAP_P || (MAP_P = (async () => {
+    await loadLib();
+    MAP_STYLE = styleName();
+    const style = await mapStyle(MAP_STYLE);
+    MAP = new maplibregl.Map({container: "map", style, center: [37.62, 55.75], zoom: 8.5, attributionControl: false,
+      dragRotate: false, pitchWithRotate: false, touchPitch: false, maxPitch: 0, fadeDuration: 150});
+    MAP.touchZoomRotate.disableRotation();
+    MAP.keyboard.disableRotation();
+    MAP.addControl(new maplibregl.AttributionControl({compact: false}), "bottom-right");  // «OpenFreeMap © OpenMapTiles Data from OpenStreetMap» — из стиля
+    MAP.on("style.load", () => { ROUTE_KEY = ""; addRouteLayers(); if (TAB === "map") drawRoute(routeInfo(MAP_ORDER)); });
+    MAP.on("click", ev => { if (SEL && !ev.originalEvent.target.closest(".pin")) { SEL = null; drawMap(); } });  // пустая карта закрывает карточку
+    await new Promise(ok => MAP.once("load", ok));
+  })().catch(err => { MAP_P = null; if (MAP) { MAP.remove(); MAP = null; } throw err; }));
+}
+async function mapTheme() {
+  if (!MAP || styleName() === MAP_STYLE) return;
+  MAP_STYLE = styleName();
+  try { MAP.setStyle(await mapStyle(MAP_STYLE), {diff: false}); } catch {}
+}
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", mapTheme);
+const circle = (ll, m) => ({type: "Polygon", coordinates: [Array.from({length: 49}, (_, i) => {
+  const a = i / 48 * 2 * Math.PI, dLat = m / 111320 * Math.sin(a), dLon = m / (111320 * Math.cos(ll[0] * Math.PI / 180)) * Math.cos(a);
+  return [ll[1] + dLon, ll[0] + dLat];
+})]});
+const EMPTY = {type: "FeatureCollection", features: []};
+function addRouteLayers() {
+  if (MAP.getSource("route")) return;
+  const dark = isDark(), acc = cssVar("--acc");
+  MAP.addSource("route", {type: "geojson", data: EMPTY});
+  MAP.addSource("me-acc", {type: "geojson", data: EMPTY});
+  MAP.addLayer({id: "me-acc", type: "fill", source: "me-acc", paint: {"fill-color": "#2F7BF6", "fill-opacity": .12}});
+  MAP.addLayer({id: "me-acc-l", type: "line", source: "me-acc", paint: {"line-color": "#2F7BF6", "line-opacity": .35, "line-width": 1}});
+  const lay = {type: "line", source: "route", layout: {"line-cap": "round", "line-join": "round"}};
+  MAP.addLayer({...lay, id: "route-case", filter: ["==", ["get", "road"], true], paint: {"line-color": dark ? "#05070C" : "#FFFFFF", "line-opacity": dark ? .8 : .95, "line-width": ["interpolate", ["linear"], ["zoom"], 8, 6, 14, 11]}});
+  MAP.addLayer({...lay, id: "route", filter: ["==", ["get", "road"], true], paint: {"line-color": acc, "line-width": ["interpolate", ["linear"], ["zoom"], 8, 3, 14, 6]}});
+  MAP.addLayer({...lay, id: "route-dash", filter: ["!=", ["get", "road"], true], paint: {"line-color": acc, "line-opacity": ["case", ["get", "final"], .85, .45], "line-width": 4, "line-dasharray": [.1, 2.2]}});
+}
+
+function pinEl(cls, html, title) {
+  const el = document.createElement("div");
+  el.className = cls; el.innerHTML = html;
+  if (title) { el.title = title; el.setAttribute("role", "button"); el.setAttribute("aria-label", title); el.tabIndex = 0; }
+  return el;
+}
+function drawPins(order) {
+  PINS.forEach(m => m.remove());
+  PINS = order.map(({r, ll}, i) => {
+    const on = r.posting === SEL;
+    const el = pinEl("pin-w", `<div class="pin ${stCls(r)}${on ? " on" : ""}"><i class="pin-pulse"></i><div class="pin-h"><b>${i + 1}</b></div><i class="pin-s"></i></div>`, `${i + 1}. ${r.cb} · ${r.address}`);
+    el.style.zIndex = on ? 1000 : 100 - i;
+    el.addEventListener("click", ev => { ev.stopPropagation(); pickStop(r.posting); });
+    el.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pickStop(r.posting); } });
+    return new maplibregl.Marker({element: el, anchor: "bottom", offset: [0, 2]}).setLngLat([ll[1], ll[0]]).addTo(MAP);
+  });
+  if (ME) {
+    if (!ME_PIN) ME_PIN = new maplibregl.Marker({element: pinEl("me-w", '<div class="me"><i></i></div>', ""), anchor: "center"});
+    ME_PIN.setLngLat([ME[1], ME[0]]).addTo(MAP);
+    MAP.getSource("me-acc")?.setData(ME_ACC > 30 ? circle(ME, Math.min(ME_ACC, 2000)) : EMPTY);
+  }
+}
+function drawRoute(info) {
+  if (!MAP || !MAP.getSource("route")) return;
+  const key = info.key + (info.data ? (info.data.road ? ":r" : ":s") : ":p");
+  if (key === ROUTE_KEY) return;
+  ROUTE_KEY = key;
+  const d = info.key ? info.data || straight(info.lls) : null;
+  MAP.getSource("route").setData(!d ? EMPTY : {type: "Feature", properties: {road: d.road, final: !!info.data},
+    geometry: {type: "LineString", coordinates: d.line.map(p => [p[1], p[0]])}});
+}
+const sheetPeek = () => ($("msheet").querySelector(".ms-head") || {}).offsetHeight || 150;
+function fitAll(animate) {
+  if (!MAP) return;
+  const lls = MAP_ORDER.map(p => p.ll).concat(ME ? [ME] : []);
+  const duration = animate ? 700 : 0;
+  if (!lls.length) { MAP.jumpTo({center: [37.62, 55.75], zoom: 8.5}); return; }
+  if (lls.length === 1) { MAP.flyTo({center: [lls[0][1], lls[0][0]], zoom: 13.5, duration}); return; }
+  const b = new maplibregl.LngLatBounds();
+  lls.forEach(p => b.extend([p[1], p[0]]));
+  MAP.fitBounds(b, {padding: {top: 76, left: 36, right: 36, bottom: (SEL ? $("mcard").offsetHeight : sheetPeek()) + 36}, maxZoom: 14.5, duration});
+}
+function flyToStop(ll) {  // метка встаёт выше карточки заказа
+  const h = $("mcard").offsetHeight || 280;
+  MAP.flyTo({center: [ll[1], ll[0]], zoom: Math.max(MAP.getZoom(), 13.5), offset: [0, -(h / 2 - 20)], duration: 650});
+}
+function pickStop(posting) {
+  SEL = posting;
+  drawMap();
+  const p = MAP_ORDER.find(x => x.r.posting === posting);
+  if (p && MAP) requestAnimationFrame(() => flyToStop(p.ll));  // карточка уже отрисована — знаем её высоту
+  buzz();
+}
+
+function mcardHtml(r, n) {
+  const {kg} = parsePacksKg(r.packs), {tel} = telOf(r), ppz = isPpz(r), a = agreementOf(r), info = deliveryDetails(r.comment);
+  let foreman = "";
+  try { foreman = foremanPhone(info.foreman); } catch {}
+  const call = tel || (foreman ? "tel:" + foreman : "");
+  const fresh = r.status === "Новый" && !isAccepted(r) && !ackGet()[r.posting];
+  const note = info.note || (r.comment && !info.note && !info.time && !info.foreman ? r.comment : "");
+  const second = fresh ? `<button type="button" class="ok" data-maccept="${e(r.posting)}">${ic("check")}Принял</button>`
+    : ppz ? "" : `<button type="button" class="${a ? "soft" : "tint"}" data-agree="${e(r.posting)}">${ic("calcheck")}${a ? "Изменить" : "Согласовал"}</button>`;
+  return `<div class="order mc ${stCls(r)}" data-posting="${e(r.posting)}">
+<div class="mc-h"><span class="mc-n">${n}</span><div class="grow"><div class="mc-k"><span class="mc-st">${e(stText(r))}</span><span class="num">${e(shortDate(whenText(r)))}</span></div>
+<div class="mc-a">${e(r.address || "Адрес уточняется")}</div><div class="pn">${e(r.cb)} · ${e(r.posting)}</div></div>
+<button type="button" class="mc-x" data-mclose aria-label="Закрыть карточку">${ic("x")}</button></div>
+<div class="facts"><div><span>Везти</span><b>${e(r.packs || "—")}</b></div><div><span>Вес</span><b>${kg ? `~${kg} кг` : "—"}</b></div>
+<div class="${r.unload && r.unload !== "Нет" && !ppz ? "warn" : ""}"><span>${ppz ? "Сдача" : "Разгрузка"}</span><b>${e(ppz ? "В ППЗ Ozon" : unloadText(r))}</b></div></div>
+${note ? `<div class="mc-note">${ic("note")}<span>${e(note)}</span></div>` : ""}
+<div class="mc-pay"><span>Оплата за точку</span><b class="num">${rub(r.pay)}</b></div>
+<div class="mc-a1"><a class="btn mc-go" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">${ic("nav")}Поехать</a>
+${call ? `<a class="btn ghost sq" href="${e(call)}" aria-label="${tel ? "Позвонить клиенту" : "Позвонить прорабу"}">${ic("phone")}</a>` : ""}
+<button type="button" class="ghost sq" data-mmore="${e(r.posting)}" aria-label="Все действия с заказом">${ic("more")}</button></div>
+<div class="mc-a2${second ? "" : " one"}">${second}<button type="button" class="${fresh ? "soft" : "ok"}" data-done="${e(r.posting)}">${ic("check")}${ppz ? "Сдал в ППЗ" : "Доставлено"}</button></div>
+</div>`;
+}
+function stopHtml(r, n, leg) {
+  const on = r.posting === SEL, ppz = isPpz(r);
+  const meta = [shortDate(whenText(r)), ppz ? "сдача в ППЗ" : r.unload && r.unload !== "Нет" ? "разгрузка: " + r.unload : "без разгрузки"].filter(Boolean).join(" · ");
+  return `<li><button type="button" class="mstop ${n ? stCls(r) : "st-x"}${on ? " on" : ""}" ${n ? `data-mpick` : `data-mmore`}="${e(r.posting)}" aria-pressed="${on}">
+<span class="mn">${n || ic("pin", "s")}</span><span class="ms-main"><b>${e(r.cb)} · ${e(r.packs || "—")}</b><span class="ms-ad">${e(r.address || "Адрес уточняется")}</span><span class="ms-mt">${e(meta)}</span></span>
+<span class="ms-r"><b class="num">${rub(r.pay)}</b>${leg ? `<span>${leg}</span>` : ""}</span></button></li>`;
+}
+
+let MAP_ORDER = [];
 function drawMap() {
   const active = ROWS.filter(r => r.status === "Новый" || r.status === "Согласован");
-  const pts = active.filter(r => r.lat && r.lon).map(r => ({r, ll: [+r.lat, +r.lon]}));
-  const noCoords = active.filter(r => !(r.lat && r.lon));
-  if (!GEO_ASKED && navigator.geolocation) {
-    GEO_ASKED = true;
-    navigator.geolocation.getCurrentPosition(p => { ME = [p.coords.latitude, p.coords.longitude]; if (TAB === "map") drawMap(); },
-      () => {}, {enableHighAccuracy: true, timeout: 10000});
-  }
+  const pts = active.filter(r => r.lat && r.lon && isFinite(+r.lat) && isFinite(+r.lon)).map(r => ({r, ll: [+r.lat, +r.lon]}));
+  const noCoords = active.filter(r => !pts.some(p => p.r === r));
+  if (!GEO_ASKED) locate(false);
   if (SEL && !pts.some(p => p.r.posting === SEL)) SEL = null;
-  // список: ближайшие к курьеру сверху (без геопозиции — в порядке «ближайший следующий» от первой точки)
-  const order = pts.length ? routeOrder(pts, ME) : [];
-  const sel = order.find(p => p.r.posting === SEL);
-  const useApi = !!(YANDEX_MAPS_KEY || window.FORCE_YMAPS);  // с ключом — полноценная карта, без ключа — виджет
-  if (useApi) drawYmap(order, sel);
-  let src = "";
-  if (useApi) { /* карта нарисована через API */ }
-  else if (sel) {  // маршрут только до выбранного заказа
-    src = ME ? `https://yandex.ru/map-widget/v1/?rtext=${ME.join(",")}~${sel.ll.join(",")}&rtt=auto`
-      : `https://yandex.ru/map-widget/v1/?ll=${sel.ll[1]},${sel.ll[0]}&z=14&pt=${sel.ll[1]},${sel.ll[0]},pm2rdl`;
-  } else if (order.length) {  // все точки без маршрута; «вы здесь» — отдельной меткой
-    const lls = order.map(p => p.ll).concat(ME ? [ME] : []);
-    const v = mapView(lls);
-    const marks = order.map(({ll}) => `${ll[1]},${ll[0]},pm2blm`).concat(ME ? [`${ME[1]},${ME[0]},ya_ru`] : []);
-    src = `https://yandex.ru/map-widget/v1/?ll=${v.c[1]},${v.c[0]}&z=${v.z}&pt=${marks.join("~")}`;
-  }
-  if (!useApi && $("map").dataset.src !== src) {
-    $("map").dataset.src = src;
-    $("map").innerHTML = src ? `<iframe src="${e(src)}" title="Карта доставок" allowfullscreen></iframe>` : "";
-  }
+  const order = MAP_ORDER = pts.length ? routeOrder(pts, ME) : [];
+  const info = routeInfo(order), d = info.data || (info.key ? straight(info.lls) : null);
+  // ---- шторка: сводка и остановки ----
+  const off = ME ? 0 : -1;  // legs[0] — от курьера до первой точки, без геопозиции — от первой точки до второй
+  const legOf = i => d && d.legs[i + off] != null ? "+" + kmText(d.legs[i + off]) : "";
   const all = `https://yandex.ru/maps/?rtext=~${order.map(p => p.ll.join(",")).join("~")}&rtt=auto`;
-  $("route").innerHTML = !order.length ? `<div class="card mut">Нет активных заказов с точкой на карте</div>` : `
-<div class="card"><h3>${sel ? "Маршрут до " + e(sel.r.cb) : "Выберите заказ"}</h3>
-<p class="mut">${sel ? "" : (YANDEX_MAPS_KEY ? "Нажмите на метку или на заказ — карта покажет маршрут до него. " : "Нажмите на заказ — карта покажет маршрут до него. ")}${ME ? "Ближайшие к вам — сверху." : "Разрешите геопозицию, чтобы видеть ближайшие и маршрут от вас."}</p>
-${sel ? '<div class="actions"><button class="ghost" data-mapall>Показать все точки</button></div>' : ""}
-<ol class="stops">${order.map(({r, ll}) => {
-    const on = r.posting === SEL;
-    return `<li class="stop${on ? " on" : ""}" data-pick="${e(r.posting)}" role="button" tabindex="0" aria-pressed="${on}">` +
-      `<b>${e(r.cb)}</b> · ${e(r.packs)} · ${rub(r.pay)}${ME ? ` · ${km(ME, ll).toFixed(1)} км` : ""}` +
-      `${r.unload && r.unload !== "Нет" ? `<div class="mut">Разгрузка: ${e(r.unload)}</div>` : ""}<div class="mut">${e(r.address)}</div>` +
-      (on ? `<div class="actions"><a class="btn" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">${ic("nav")}Поехать</a>` +
-        `<a class="btn ghost" href="${e(appleMaps(r))}" target="_blank" rel="noopener">Apple Карты</a></div>` : "") + `</li>`;
-  }).join("")}</ol>
-${order.length > 1 ? `<div class="actions"><a class="btn ghost" href="${e(all)}" target="_blank" rel="noopener">Маршрут через все точки</a></div>` : ""}</div>
-${noCoords.length ? `<div class="card mut">Без точки на карте: ${noCoords.map(r => e(r.cb)).join(", ")}</div>` : ""}`;
+  $("msum").innerHTML = `<div class="ms-t"><b>${order.length ? plural(order.length, "точка", "точки", "точек") : "Нет точек"}</b>${d ? ` · ~${kmText(d.m)} · ~${durText(d.s)}` : ""}</div>
+<div class="ms-s">${!order.length ? (noCoords.length ? "У заказов в работе нет точки на карте" : "Нет активных заказов") : !d ? "Один адрес" : info.data && info.data.road ? "По дорогам, без учёта пробок" : info.data ? "По прямой — маршрут по дорогам недоступен" : "Считаю маршрут по дорогам…"}${ME ? " · от вас" : ""}</div>`;
+  $("mnav").hidden = !order.length;
+  $("mnav").href = all;
+  const body = $("mlist"), st = body.scrollTop;
+  body.innerHTML = (order.length ? `<ol class="mstops">${order.map(({r}, i) => stopHtml(r, i + 1, legOf(i))).join("")}</ol>` : "") +
+    (noCoords.length ? `<div class="ms-g">${ic("pin", "s")}Нет точки на карте · ${noCoords.length}</div><ol class="mstops nc">${noCoords.map(r => stopHtml(r, 0, "")).join("")}</ol>` : "") +
+    (!order.length && !noCoords.length ? `<div class="ms-empty">${ic("checkc")}Заказов в работе нет</div>` : "");
+  body.scrollTop = st;
+  // ---- карточка выбранного заказа ----
+  const selIdx = order.findIndex(p => p.r.posting === SEL);
+  $("mcard").innerHTML = selIdx >= 0 ? mcardHtml(order[selIdx].r, selIdx + 1) : "";
+  $("mcard").classList.toggle("show", selIdx >= 0);
+  $("msheet").dataset.state = selIdx >= 0 ? "hide" : MS_STATE;
+  $("mapbox").style.setProperty("--peek", sheetPeek() + "px");
+  // ---- сама карта ----
+  if (info.key && !info.data) Promise.resolve(roadRoute(info.lls)).then(() => { if (TAB === "map" && routeInfo(MAP_ORDER).key === info.key) drawMap(); });
+  initMap().then(() => {
+    $("map").querySelector(".map-err")?.remove();
+    MAP.resize();
+    drawPins(order);
+    drawRoute(info);
+    const fk = order.map(p => p.r.posting).join() + (ME ? ":me" : "");
+    if (fk !== FIT_KEY) { const first = !FIT_KEY; FIT_KEY = fk; fitAll(!first); }
+  }).catch(err => {
+    if (!$("map").querySelector(".map-err")) $("map").insertAdjacentHTML("beforeend", `<div class="map-err">${ic("map", "l")}<b>${e(err.message || "Карта не загрузилась")}</b><span>Список остановок работает и без карты</span></div>`);
+  });
 }
 
-$("route").addEventListener("click", ev => {
-  if (ev.target.closest("a")) return;  // ссылки «Поехать» работают как обычно
-  if (ev.target.closest("[data-mapall]")) { SEL = null; drawMap(); return; }
-  const li = ev.target.closest("[data-pick]");
-  if (!li) return;
-  SEL = li.dataset.pick === SEL ? null : li.dataset.pick;
-  drawMap();
-  $("map").scrollIntoView({behavior: "smooth", block: "start"});
-});
-$("route").addEventListener("keydown", ev => {
-  if ((ev.key === "Enter" || ev.key === " ") && ev.target.matches("[data-pick]")) { ev.preventDefault(); ev.target.click(); }
+// шторка остановок: нажатие на шапку — свернуть/развернуть, можно тянуть
+function setSheet(s) { MS_STATE = s; $("msheet").dataset.state = s; $("msheet").style.transform = ""; }
+(() => {
+  const sh = $("msheet"), head = sh.querySelector(".ms-head");
+  let y0 = null, dy = 0, moved = false;
+  head.addEventListener("touchstart", ev => { if (ev.target.closest("a")) return; y0 = ev.touches[0].clientY; dy = 0; moved = false; }, {passive: true});
+  head.addEventListener("touchmove", ev => {
+    if (y0 === null) return;
+    dy = ev.touches[0].clientY - y0;
+    if (Math.abs(dy) > 6) moved = true;
+    const base = MS_STATE === "open" ? 0 : sh.offsetHeight - sheetPeek();
+    sh.style.transition = "none";
+    sh.style.transform = `translateY(${Math.max(0, Math.min(sh.offsetHeight - sheetPeek() + 40, base + dy))}px)`;
+  }, {passive: true});
+  head.addEventListener("touchend", () => {
+    if (y0 === null) return;
+    y0 = null; sh.style.transition = "";
+    if (moved) { setSheet(dy < -40 ? "open" : dy > 40 ? "peek" : MS_STATE); head.dataset.dragged = "1"; setTimeout(() => delete head.dataset.dragged, 350); }
+    else sh.style.transform = "";
+  });
+})();
+
+$("mapbox").addEventListener("click", ev => {
+  if (ev.target.closest("a")) return;  // «Поехать», «Позвонить», Яндекс Карты — обычные ссылки
+  const t = ev.target.closest("[data-mpick], [data-mmore], [data-mclose], [data-mtoggle], [data-mfit], [data-mme], [data-maccept]");
+  if (!t) return;
+  if (t.dataset.mpick) { pickStop(t.dataset.mpick); return; }
+  if (t.dataset.mmore) { openCSheet(t.dataset.mmore); return; }
+  if (t.hasAttribute("data-mclose")) { SEL = null; drawMap(); return; }
+  if (t.hasAttribute("data-mtoggle")) { if (!t.dataset.dragged) setSheet(MS_STATE === "open" ? "peek" : "open"); return; }
+  if (t.hasAttribute("data-mfit")) { SEL = null; setSheet("peek"); drawMap(); fitAll(true); return; }
+  if (t.hasAttribute("data-mme")) { locate(true); return; }
+  if (t.dataset.maccept) {  // тот же «Принял», что на экране тревоги: в телефоне сразу, в таблице — строкой в комментарии курьера
+    t.disabled = true;
+    acceptOrder(t.dataset.maccept);
+    appBadge(ROWS.filter(r => r.status === "Новый" && !isAccepted(r) && !ackGet()[r.posting]).length);
+    toast("Принято ✓ Владелец увидит «Принял»");
+    drawMap();
+  }
 });
 
 async function load() {
@@ -611,7 +794,7 @@ const drawThemeBtn = () => {
 };
 $("reload").innerHTML = ic("refresh");
 document.querySelectorAll("[data-ico]").forEach(x => { x.innerHTML = ic(x.dataset.ico); if (x.tagName === "SPAN") x.outerHTML = x.innerHTML; });
-$("themeBtn").onclick = () => { setTheme(themeOrder[(themeOrder.indexOf(getTheme()) + 1) % 3]); drawThemeBtn(); };
+$("themeBtn").onclick = () => { setTheme(themeOrder[(themeOrder.indexOf(getTheme()) + 1) % 3]); drawThemeBtn(); mapTheme(); };
 drawThemeBtn();
 
 // ---------- пуш-уведомления ----------

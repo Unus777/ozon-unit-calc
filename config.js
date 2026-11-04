@@ -1,7 +1,5 @@
 // Общие настройки страниц и service worker. Здесь нет секретов: доступ проверяет скрипт таблицы по ключу.
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzMzytUhF-uTuVUAAgZPrlDDj9pPAzBuyNCytb_gv5Jryb3JGPLlj7uZ4SRgnUXd-jr/exec";  // веб-приложение Apps Script таблицы «Заказы озон»
-// Ключ JavaScript API Яндекс Карт (публичный, ограничен адресом сайта в кабинете Яндекса). Пусто — карта-виджет без ключа
-const YANDEX_MAPS_KEY = "";
 const VAPID_PUBLIC = "BLohqQumwjQWSNlNIYhhvMdPS-mKh26EDfLtB35KSQfhR6TivHQStDoRbTneMul52AAuOjekm7YuCNbtLNJ-6mA";
 
 // text/plain — чтобы браузер не делал preflight-запрос: Apps Script на OPTIONS не отвечает
@@ -229,7 +227,7 @@ function pullToRefresh(onRefresh) {
   };
   addEventListener("touchstart", ev => {
     const sheet = document.getElementById("sheet");
-    y0 = !busy && scrollY <= 0 && (!sheet || sheet.hidden) && !ev.target.closest("#map") ? ev.touches[0].clientY : null;
+    y0 = !busy && scrollY <= 0 && (!sheet || sheet.hidden) && !ev.target.closest("#mapbox") ? ev.touches[0].clientY : null;
   }, {passive: true});
   addEventListener("touchmove", ev => {
     if (y0 === null) return;
@@ -284,6 +282,8 @@ const ICONS = {
   key: "M15 13.5a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zM11.8 12.2L4 20M6.5 17.5l2 2M9 15l1.5 1.5",
   x: "M6.5 6.5l11 11M17.5 6.5l-11 11",
   more: "M5.5 12h.01M12 12h.01M18.5 12h.01",
+  locate: "M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
+  fit: "M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15",
   back: "M14.5 18l-6-6 6-6",
   chev: "M9.5 6l6 6-6 6",
   spark: "M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6",

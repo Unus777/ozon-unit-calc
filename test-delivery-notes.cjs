@@ -125,8 +125,10 @@ assert.equal(al.title, 'Химки, ул. Тестовая, 2');
 assert.equal(JSON.stringify(al.chips.map(c => c.v)), JSON.stringify(['8 уп 60×60', '~224 кг', '14:00–16:00', 'Лифт, эт. 5']));
 assert.equal(al.okText, 'Принял');
 // alarm.js и страницы подключают одинаковую версию
-for (const f of ['index.html', 'courier.html']) assert.match(read(f), /alarm\.js\?v=32/);
-assert.match(read('sw.js'), /SW_VERSION = "v32-push"/);
+for (const f of ['index.html', 'courier.html']) assert.match(read(f), /alarm\.js\?v=33/);
+assert.match(read('sw.js'), /SW_VERSION = "v34-map"/);
+assert.match(read("courier.html"), /maplibre-gl@5\.24\.0\/dist\/maplibre-gl\.js/);
+assert.doesNotMatch(read("courier.html"), /map-widget|api-maps\.yandex/);  // карта без виджета Яндекса и рекламы
 assert.doesNotThrow(() => new vm.Script(read('alarm.js')));
 
 // Ночной режим по Москве: 23:00–07:59, независимо от часового пояса телефона
