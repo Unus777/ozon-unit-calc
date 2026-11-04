@@ -25,8 +25,8 @@ assert.ok(context.deliveryFields({comment: '<img src=x onerror=alert(1)>'}).incl
 const input = {elements: {date: {value: '2026-10-27'}, time: {value: details.time}, foreman: {value: details.foreman}, note: {value: details.note}}};
 assert.equal(context.readDeliveryFields(input).date, '27.10.2026');
 const courier = read('courier.html');
-vm.runInContext('const BADGE = {}; const FOCUS = null; const toIso = () => ""; const rub = x => String(x); const yandexMaps = () => "#"; const appleMaps = () => "#";', context);
-vm.runInContext(courier.slice(courier.indexOf('function card('), courier.indexOf('\nfunction draw(')), context);
+vm.runInContext('const BADGE = {}; const FOCUS = null; const toIso = () => ""; const rub = x => String(x); const yandexMaps = () => "#"; const appleMaps = () => "#"; let OPEN = "demo"; const todayStr = () => "";', context);
+vm.runInContext(courier.slice(courier.indexOf('function telOf('), courier.indexOf('\nfunction draw(')), context);
 const card = context.card({posting: 'demo', cb: 'ЦБ-ТЕСТ', status: 'Новый', date: '27.10.2026', comment: encoded, phone: '', unload: ''});
 assert.ok(card.includes('Позвонить прорабу'));
 assert.ok(card.includes('href="tel:+79001234567"'));

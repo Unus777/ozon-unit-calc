@@ -10,7 +10,7 @@
 <link rel="manifest" href="owner.webmanifest?v=13">
 <meta name="apple-mobile-web-app-title" content="Алмалы">
 <script src="theme.js?v=12"></script>
-<link rel="stylesheet" href="style.css?v=25">
+<link rel="stylesheet" href="style.css?v=26">
 <link rel="icon" href="icons/owner.svg?v=13" type="image/svg+xml">
 <link rel="icon" href="icons/owner-32.png?v=13" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/owner-180.png?v=13" sizes="180x180">
@@ -57,10 +57,37 @@
 </form>
 <div id="out"></div>
 <div id="report"></div>
+<div id="ownerDash"></div>
 <div class="otabs" role="tablist" aria-label="Заказы" id="otabs"></div>
 <div id="orders" class="mut"></div>
 <p style="text-align:center"><button class="text" id="reload">Обновить список</button></p>
 <div id="sheet" class="sheet" hidden><div class="sheet-bg" data-close></div><section class="sheet-panel" role="dialog" aria-modal="true" aria-label="Действия с заказом" id="sheetPanel"></section></div>
+<div id="modal-edit-cb" class="modal-bg" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-cb-title">
+    <div class="modal-head">
+      <h3 id="modal-cb-title">Изменение номера ЦБ</h3>
+      <button type="button" class="text" id="modal-cb-close" aria-label="Закрыть">✕</button>
+    </div>
+    <div class="modal-body">
+      <div>
+        <span class="mut" style="font-size:12px">Отправление Ozon:</span>
+        <div id="modal-cb-posting" class="num" style="font-size:13px;font-weight:700;margin-top:2px"></div>
+      </div>
+      <label class="modal-field">
+        <span>Новый номер ЦБ со склада / 1С</span>
+        <div class="cb-input-wrap">
+          <span class="cb-prefix">ЦБ-</span>
+          <input id="modal-cb-val" placeholder="975" autocomplete="off" inputmode="numeric">
+        </div>
+      </label>
+      <p class="mut-hint">Можно ввести только цифры. Номер сразу обновится в таблице и в приложении Рашада.</p>
+    </div>
+    <div class="actions">
+      <button type="button" class="ghost" id="modal-cb-cancel">Отмена</button>
+      <button type="button" id="modal-cb-save">Сохранить ЦБ</button>
+    </div>
+  </div>
+</div>
 </div>
 
 <script src="calc.js?v=12"></script>
@@ -282,9 +309,54 @@ function drawOrders(anim) {
   const cbNum = p => parseInt(String(DELIV[p.posting_number]?.cb || "").replace(/\D/g, "")) || 0;
   const list = ORDERS.map((p, i) => [p, i]).filter(([p]) => ostate(p) === OTAB)
     .sort(([a], [b]) => new Date(b.in_process_at) - new Date(a.in_process_at) || cbNum(b) - cbNum(a));
+  drawOwnerDash();
   $("orders").classList.toggle("anim", !!anim);  // появление карточек — только при смене вкладки и загрузке, не при фоновой сверке
   $("orders").innerHTML = list.length ? list.map(([p, i], n) => orderCard(p, i, n)).join("")
     : `<div class="card mut">${OTAB === "new" ? "Новых заказов нет" : OTAB === "courier" ? "У курьера сейчас ничего нет" : "Пока пусто"}</div>`;
+}
+
+function drawOwnerDash() {
+  const el = $("ownerDash");
+  if (!el || !ADMIN()) { if (el) el.innerHTML = ""; return; }
+  const today = todayStr();
+  let countToday = 0, packsToday = 0, kgToday = 0, courierOwed = 0, waitCbCount = 0;
+  for (const p of ORDERS) {
+    const st = ostate(p);
+    const d = DELIV[p.posting_number];
+    if (st === "new") waitCbCount++;
+    const isToday = (d && d.date === today) || (!d && new Date(p.in_process_at).toLocaleDateString("ru-RU") === today);
+    if (isToday || st === "courier") {
+      countToday++;
+      for (const prod of (p.products || [])) {
+        const q = Number(prod.quantity) || 0;
+        packsToday += q;
+        kgToday += q * 28;
+      }
+      if (d && d.status !== "Доставлен") {
+        courierOwed += (Number(d.delivery) || 0) + (Number(d.lift) || 0);
+      }
+    }
+  }
+  const tons = (kgToday / 1000).toFixed(1);
+  const rep = deliveryReport(Object.values(DELIV), PAYS);
+  const leftPay = rep.hasPayments ? rep.left : courierOwed;
+  el.innerHTML = `<div class="owner-dash">
+    <div class="dash-card">
+      <div class="label">В работе</div>
+      <div class="val">${countToday} ${plural(countToday, "заказ", "заказа", "заказов")}</div>
+      <div class="sub">${packsToday} уп · ${tons > 0 ? tons + " т" : "0 т"}</div>
+    </div>
+    <div class="dash-card">
+      <div class="label">Курьеру</div>
+      <div class="val" style="color:var(--acc)">${rub(leftPay)}</div>
+      <div class="sub">к выплате</div>
+    </div>
+    <div class="dash-card">
+      <div class="label">Ждут ЦБ</div>
+      <div class="val" style="color:${waitCbCount > 0 ? 'var(--yellow)' : 'var(--green)'}">${waitCbCount}</div>
+      <div class="sub ${waitCbCount > 0 ? '' : 'green'}">${waitCbCount > 0 ? "требуют накладную" : "все переданы ✓"}</div>
+    </div>
+  </div>`;
 }
 
 function orderCard(p, i, n = 0) {
@@ -292,7 +364,8 @@ function orderCard(p, i, n = 0) {
   const d = DELIV[p.posting_number];
   const fbs = isFbs(p);
   const ppzFee = d && fbs ? (Number(d.delivery) || 0) : 0;
-  const meta = d ? `${e(d.cb)}${d.date ? " · на " + e(d.date) : ""}` : `${date} · ${e(p.posting_number)}${fbs ? " · ППЗ Реутовская" : ""}`;
+  const cbBadge = d ? `<button type="button" class="cb-pill" data-edit-cb="${e(p.posting_number)}" data-cur-cb="${e(d.cb)}" title="Нажмите, чтобы изменить номер ЦБ">${e(d.cb)} <span class="edit-pen">✏️</span></button>` : "";
+  const meta = d ? (d.date ? "на " + e(d.date) : e(p.posting_number)) : `${date} · ${e(p.posting_number)}${fbs ? " · ППЗ Реутовская" : ""}`;
   let items;
   try {
     items = p.products.map(x => {
@@ -306,6 +379,7 @@ function orderCard(p, i, n = 0) {
   }
   return `<div class="card order${p.status === "cancelled" ? " cancelled" : ""}" data-card="${i}" tabindex="0" aria-haspopup="dialog" style="--i:${Math.min(n, 8)}"><div class="top">` +
     `${d ? courierBadge(p, d, fbs) : (fbs ? '<span class="badge fbs">FBS · ППЗ</span> ' : '') + badge(p.status)}` +
+    (cbBadge ? ` ${cbBadge} ` : "") +
     `<span class="mut num">${meta}</span>` +
     `<span class="chev" aria-hidden="true">›</span></div>${items}${primaryActions(p)}</div>`;
 }
@@ -346,8 +420,12 @@ function primaryActions(p) {
   const needOzon = !["delivered", "cancelled"].includes(p.status) && oz !== "wait", needSheet = d.status !== "Доставлен";
   if (!needOzon && !needSheet) return line;
   const tel = telHref(d.phone, d.ext);
+  const info = deliveryDetails(d.comment);
+  let foreman = "";
+  try { foreman = foremanPhone(info.foreman); } catch {}
   const doneLabel = fbs ? "Сдан в ППЗ" : "Доставлено";
   return `<div class="actions">${tel && needSheet ? `<a class="btn ghost" href="${e(tel)}">${ic("phone")}Клиенту</a>` : ""}` +
+    `${foreman && needSheet ? `<a class="btn ghost foreman-btn" href="tel:${e(foreman)}">${ic("user")}Прорабу</a>` : ""}` +
     `<button class="${needSheet ? "ok" : ""}" data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">` +
     `${needSheet ? doneLabel : oz === "late" ? "Повторить в Ozon" : (fbs ? "Подтвердить сдачу в Ozon" : "Отметить доставленным в Ozon")}</button></div>` + line;
 }
@@ -372,6 +450,10 @@ function openSheet(i) {
   const fbs = isFbs(p);
   const done = d && d.status === "Доставлен";
   const tel = d ? telHref(d.phone, d.ext) : "";
+  const info = d ? deliveryDetails(d.comment) : {};
+  let foreman = "";
+  try { foreman = foremanPhone(info.foreman); } catch {}
+  const foremanRow = foreman ? `<a class="sitem" href="tel:${e(foreman)}">${ic("user")}Позвонить прорабу</a>` : "";
   const row = (inner) => `<div class="srow">${inner}</div>`;
   const callRow = tel ? `<a class="sitem" href="${e(tel)}">${ic("phone")}Позвонить клиенту${d.ext ? `<span class="mut">доб. ${e(String(d.ext).padStart(4, "0"))}</span>` : ""}</a>`
     : ["ship", "way"].includes(stage(p.status)[0]) && !fbs ? `<button class="sitem" data-call="${e(p.posting_number)}">${ic("phone")}Позвонить клиенту</button>` : "";
@@ -381,7 +463,7 @@ function openSheet(i) {
 <div class="shead"><div><b>${d ? e(d.cb) + " · " : ""}${p.products.map(x => x.quantity + " уп").join(" + ")}</b>
 <div class="mut">${e(p.posting_number)}${d && d.address ? " · " + e(d.address) : (fbs ? " · ППЗ Реутовская, 5" : "")}</div></div>${fbs ? '<span class="badge fbs">FBS</span> ' : ''}${badge(p.status)}</div>
 ${p.status === "cancelled" ? "" : timelineHtml(orderSteps(p, d))}
-${callRow || (d && !done) ? `<div class="sgroup">Связь</div>${callRow}${d && !done ? `<button class="sitem" data-remind="${e(p.posting_number)}">${ic("bell")}Напомнить курьеру</button>` : ""}` : ""}
+${callRow || foremanRow || (d && !done) ? `<div class="sgroup">Связь</div>${callRow}${foremanRow}${d && !done ? `<button class="sitem" data-remind="${e(p.posting_number)}">${ic("bell")}Напомнить курьеру</button>` : ""}` : ""}
 <div class="sgroup">Заказ</div>
 ${d && ADMIN() && SCRIPT_URL ? `<details class="sitem-details"><summary class="sitem">${ic("edit")}Пометка, время, оплата курьеру</summary>` +
   `<form data-schedule="${e(p.posting_number)}">${deliveryFields(d, p)}<button>Сохранить изменения</button></form></details>` : ""}
@@ -462,7 +544,9 @@ function deliveryFields(d, p) {
   const timeVal = info.time || (fbs ? "12:00–18:00 (окно сдачи)" : "");
   const noteVal = info.note || (fbs ? "Сдать в ППЗ Ozon (Балашиха, ул. Реутовская, 5) по штрихкоду на коробке" : "");
   const payVal = d?.delivery ?? "";
+  const cbVal = d?.cb ? String(d.cb).replace(/^ЦБ-?/i, "") : "";
   return `<div class="delivery-fields">
+    ${d?.cb ? `<label>Номер ЦБ / Накладной<input name="cb" placeholder="Например: 975" value="${e(cbVal)}" inputmode="numeric" autocomplete="off"></label>` : ""}
     <label>Оплата курьеру за доставку, ₽<input name="delivery_pay" inputmode="numeric" placeholder="${fbs ? 'Например: 350' : 'По умолчанию из заказа Ozon'}" value="${e(payVal)}"></label>
     <label>Дата доставки<input name="date" type="date" value="${dateVal}"></label>
     <label>Время доставки<input name="time" value="${e(timeVal)}" placeholder="Например: с 14:00 до 16:00" maxlength="100"></label>
@@ -474,6 +558,7 @@ function deliveryFields(d, p) {
 function readDeliveryFields(form) {
   const f = form.elements;
   return {
+    cb: f.cb ? f.cb.value.trim() : "",
     date: f.date?.value ? f.date.value.split("-").reverse().join(".") : "",
     time: f.time?.value.trim() || "",
     foreman: f.foreman ? foremanPhone(f.foreman.value) : "",
@@ -627,7 +712,52 @@ $("out").onclick = ev => {
   history.replaceState(null, "", location.pathname);
 };
 
+let ACTIVE_EDIT_POSTING = "";
+function openEditCbModal(posting, curCb) {
+  ACTIVE_EDIT_POSTING = posting;
+  $("modal-cb-posting").textContent = posting;
+  const clean = String(curCb || "").replace(/^ЦБ-?/i, "").trim();
+  $("modal-cb-val").value = clean;
+  $("modal-edit-cb").hidden = false;
+  setTimeout(() => {
+    $("modal-cb-val").focus();
+    $("modal-cb-val").select();
+  }, 50);
+}
+function closeEditCbModal() {
+  $("modal-edit-cb").hidden = true;
+  ACTIVE_EDIT_POSTING = "";
+}
+async function saveEditCbModal() {
+  const raw = $("modal-cb-val").value.trim();
+  if (!raw) { toast("Введите номер ЦБ!", true); return; }
+  const newCb = /^\d+$/.test(raw) ? `ЦБ-${raw}` : raw.toUpperCase().replace(/^ЦБ\s*-?\s*/, "ЦБ-");
+  const posting = ACTIVE_EDIT_POSTING;
+  closeEditCbModal();
+  toast("Сохраняю ЦБ…");
+  try {
+    const r = await sheetApi({action: "update", key: ADMIN(), posting, data: {cb: newCb}});
+    DELIV[posting] = r;
+    drawOrders();
+    toast(`Номер ЦБ изменён на ${newCb} ✓`);
+  } catch (err) {
+    toast("Ошибка: " + err.message, true);
+  }
+}
+$("modal-cb-close").onclick = closeEditCbModal;
+$("modal-cb-cancel").onclick = closeEditCbModal;
+$("modal-cb-save").onclick = saveEditCbModal;
+$("modal-cb-val").onkeydown = ev => {
+  if (ev.key === "Enter") { ev.preventDefault(); saveEditCbModal(); }
+  else if (ev.key === "Escape") { ev.preventDefault(); closeEditCbModal(); }
+};
+
 $("app").addEventListener("click", ev => {
+  const cbBtn = ev.target.closest("[data-edit-cb]");
+  if (cbBtn) {
+    openEditCbModal(cbBtn.dataset.editCb, cbBtn.dataset.curCb);
+    return;
+  }
   const t = ev.target.closest("[data-otab]");
   if (t) { OTAB = t.dataset.otab; drawOrders(true); return; }
   if (ev.target.closest("[data-close]")) { closeSheet(); return; }
@@ -734,6 +864,9 @@ $("app").addEventListener("submit", async ev => {
     let r;
     if (f.dataset.schedule) {
       const updData = {date: details.date, comment: deliveryComment(details)};
+      if (details.cb) {
+        updData.cb = /^\d+$/.test(details.cb) ? `ЦБ-${details.cb}` : details.cb.toUpperCase().replace(/^ЦБ\s*-?\s*/, "ЦБ-");
+      }
       if (details.delivery_pay !== "" && !isNaN(Number(details.delivery_pay))) {
         updData.delivery = Number(details.delivery_pay);
       }

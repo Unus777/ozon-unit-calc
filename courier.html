@@ -10,7 +10,7 @@
 <title>Доставки</title>
 <link rel="manifest" href="manifest.webmanifest?v=13">
 <script src="theme.js?v=14"></script>
-<link rel="stylesheet" href="style.css?v=25">
+<link rel="stylesheet" href="style.css?v=26">
 <link rel="icon" href="icons/courier.svg?v=13" type="image/svg+xml">
 <link rel="icon" href="icons/courier-32.png?v=13" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/courier-180.png?v=13" sizes="180x180">
@@ -25,6 +25,7 @@
 
 <div id="app" hidden>
 <div class="card" id="notif" hidden></div>
+<div id="driverHero"></div>
 <div id="owed"></div>
 <div class="tabs" role="tablist">
 <button role="tab" aria-selected="true" data-tab="today">Сегодня</button>
@@ -35,6 +36,31 @@
 <div id="mapbox" hidden><div id="map" role="region" aria-label="Карта доставок"></div><div id="route"></div></div>
 <div id="list"><div class="card skel"></div><div class="card skel"></div></div>
 <div id="sheet" class="sheet" hidden><div class="sheet-bg" data-close></div><section class="sheet-panel" role="dialog" aria-modal="true" aria-label="Действия с заказом" id="sheetPanel"></section></div>
+<div id="modal-courier-done" class="modal-bg" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-c-title">
+    <div class="modal-head">
+      <h3 id="modal-c-title">Подтверждение вручения</h3>
+      <button type="button" class="text" id="modal-c-close" aria-label="Закрыть">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="modal-c-desc" style="font-size:14px;font-weight:700"></div>
+      <div style="display:grid;gap:8px;margin-top:4px">
+        <label style="display:flex;align-items:center;gap:8px;padding:10px;background:var(--soft);border-radius:10px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="chk-intact" checked style="flex:0 0 18px;height:18px">
+          <span>Плитка проверена, битых коробок нет</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;padding:10px;background:var(--soft);border-radius:10px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="chk-lift" checked style="flex:0 0 18px;height:18px">
+          <span>Подъём / разгрузка выполнена полностью</span>
+        </label>
+      </div>
+    </div>
+    <div class="actions">
+      <button type="button" class="ghost" id="modal-c-cancel">Отмена</button>
+      <button type="button" class="ok" id="modal-c-confirm">Подтвердить ✓</button>
+    </div>
+  </div>
+</div>
 </div>
 
 <script src="config.js?v=23"></script>
@@ -73,32 +99,50 @@ const unloadText = r => r.unload === "Нет" ? "Без разгрузки" : r.
 const whenText = r => { const t = deliveryDetails(r.comment).time; return [r.date === todayStr() ? "Сегодня" : r.date, t].filter(Boolean).join(" ") || r.status; };
 const isPpz = r => /ППЗ|Реутовская/i.test(r.address || "") || /ППЗ/i.test(r.unload || "");
 
+function parsePacksKg(str) {
+  let p = 0;
+  for (const m of (str || "").matchAll(/(\d+)\s*уп/gi)) p += parseInt(m[1], 10) || 0;
+  if (!p) { const n = parseInt(str, 10); if (!isNaN(n)) p = n; }
+  return {packs: p, kg: p * 28};
+}
+
 function card(r) {
   const done = r.status === "Доставлен" || r.status === "Отменён";
   const ppz = isPpz(r);
+  const {packs: pCount, kg} = parsePacksKg(r.packs);
   if (r.posting !== OPEN) {  // свёрнутая строка: нажатие раскрывает
     return `<button class="card crow${r.posting === FOCUS ? " hl" : ""}" data-row="${e(r.posting)}">` +
-      `<span class="crow-main">${ppz ? '<span class="badge fbs" style="margin-right:4px">ППЗ</span>' : ''}<b>${e(r.cb)} · ${e(r.packs || "—")}</b>` +
+      `<span class="crow-main">${ppz ? '<span class="badge fbs" style="margin-right:4px">ППЗ</span>' : ''}<b>${e(r.cb)} · ${e(r.packs || "—")}${kg ? ` (${kg} кг)` : ''}</b>` +
       `<span class="mut">${e(r.address)}${ppz ? '' : ' · ' + e(unloadText(r).toLowerCase())}</span></span>` +
       `<span class="crow-pay num">${rub(r.pay)}</span></button>`;
   }
   const info = deliveryDetails(r.comment), {tel} = telOf(r);
+  let foreman = "";
+  try { foreman = foremanPhone(info.foreman); } catch {}
   const badgeCls = done ? "done" : (ppz ? "fbs" : "way");
   const badgeTxt = done ? (ppz ? "Сдан в ППЗ" : r.status) : (ppz ? "ППЗ Ozon · " + whenText(r) : whenText(r));
   return `<div class="card order open${r.posting === FOCUS ? " hl" : ""}" data-posting="${e(r.posting)}" data-card tabindex="0" aria-haspopup="dialog">
-<div class="top"><span class="cb">${e(r.cb)}</span><span class="badge ${badgeCls}">${e(badgeTxt)}</span>
+<div class="top"><span class="cb-badge${ppz ? ' fbs' : ''}">${e(r.cb)}</span><span class="badge ${badgeCls}">${e(badgeTxt)}</span>
 <span class="chev" aria-hidden="true">›</span></div>
-<div class="addr big">${e(r.address)}</div>
-${info.note || r.comment && !info.note && !info.time && !info.foreman ? `<div class="mut">${e(info.note || r.comment)}</div>` : ""}
+<div class="addr-box">
+  <div class="addr-title"><span>📍</span><span>${e(r.address)}</span></div>
+  <div class="addr-tags">
+    ${info.time ? `<span class="addr-tag warn">⏰ ${e(info.time)}</span>` : ""}
+    <span class="addr-tag acc">${ppz ? "🏢 ППЗ Ozon Балашиха" : "🛗 " + e(unloadText(r))}</span>
+    ${kg ? `<span class="addr-tag">⚖️ ~${kg} кг</span>` : ""}
+  </div>
+</div>
+${info.note || r.comment && !info.note && !info.time && !info.foreman ? `<div class="warn-box"><span>⚠️</span><div><b>Пометка:</b> ${e(info.note || r.comment)}</div></div>` : ""}
 <div class="tiles">
-<div class="tile"><span>Везти</span><b>${e(r.packs || "—")}</b></div>
+<div class="tile"><span>Везти</span><b>${e(r.packs || "—")}${kg ? ` (${kg} кг)` : ''}</b></div>
 <div class="tile ${r.unload && r.unload !== "Нет" && !ppz ? "warn" : ""}"><span>${ppz ? "Сдача" : "Разгрузка"}</span><b>${e(ppz ? "В ППЗ Ozon" : unloadText(r))}</b></div>
 <div class="tile pay"><span>Оплата</span><b class="num">${rub(r.pay)}</b></div>
 </div>
 ${done ? `<p class="mut">${ppz ? "Сдан в ППЗ" : "Доставлен"}${r.delivered_at ? " " + e(r.delivered_at) : ""}</p>` : `<div class="actions two">
-${tel ? `<a class="btn ghost" href="${e(tel)}">${ic("phone")}Позвонить</a>` : ""}
-<a class="btn ghost" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">${ic("nav")}Маршрут</a></div>
-<button class="ok wide big" data-done>${ppz ? "Сдал в ППЗ" : "Доставлено"}</button>`}
+${tel ? `<a class="btn ghost" href="${e(tel)}">${ic("phone")}Клиенту</a>` : ""}
+${foreman ? `<a class="btn ghost foreman-btn" href="tel:${e(foreman)}">${ic("user")}Позвонить прорабу</a>` : ""}
+<a class="btn nav-btn" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">${ic("nav")}Маршрут</a></div>
+<button class="ok wide big" data-done="${e(r.posting)}">${ppz ? "Сдал в ППЗ" : "Доставлено"}</button>`}
 </div>`;
 }
 
@@ -184,6 +228,54 @@ function draw(anim) {
   $("subtitle").textContent = `${IS_ADMIN ? "режим владельца · " : ""}${plural(active.length, "заказ", "заказа", "заказов")} в работе`;
   const rep = deliveryReport(ROWS, PAYS);
   $("owed").innerHTML = rep.hasPayments && TAB !== "done" ? `<div class="owed">${IS_ADMIN ? "Курьеру осталось" : "Вам должны"} <b class="num">${rub(rep.left)}</b></div>` : "";
+
+  const heroEl = $("driverHero");
+  if (heroEl) {
+    let leftPoints = active.length;
+    let leftPacks = 0, leftKg = 0, activePay = 0;
+    for (const r of active) {
+      const {packs, kg} = parsePacksKg(r.packs);
+      leftPacks += packs;
+      leftKg += kg;
+      activePay += Number(String(r.pay || 0).replace(/\D/g, "")) || 0;
+    }
+    const isOver = leftKg > 1500;
+    heroEl.innerHTML = `<div class="courier-hero">
+      <div class="courier-hero-top">
+        <div class="driver-info">
+          <div class="driver-avatar">🚚</div>
+          <div>
+            <div class="driver-title">
+              ${IS_ADMIN ? "Владелец" : "Рашад"}
+              <span class="driver-status"><span class="pulse-dot"></span> На смене</span>
+            </div>
+            <div style="font-size:12px;opacity:.85;margin-top:2px">Доставка Алмалы · ${plural(active.length, "заказ", "заказа", "заказов")}</div>
+          </div>
+        </div>
+        <button type="button" class="text" id="driverHeroReload" style="color:#fff;background:rgba(255,255,255,.18);border-radius:10px;padding:6px 10px;font-size:13px;display:flex;align-items:center;gap:4px" title="Сверить с сервером">↻</button>
+      </div>
+      <div class="driver-stats">
+        <div class="driver-stat">
+          <div class="s-label">Осталось</div>
+          <div class="s-val">${leftPoints} ${plural(leftPoints, "точка", "точки", "точек")}</div>
+          <div class="s-sub">${leftPacks} упаковок</div>
+        </div>
+        <div class="driver-stat">
+          <div class="s-label">Вес в авто</div>
+          <div class="s-val">${leftKg} кг</div>
+          <div class="s-sub ${!isOver ? 'green' : ''}">${!isOver ? "Норма (до 1.5 т)" : "⚠️ Перегруз"}</div>
+        </div>
+        <div class="driver-stat">
+          <div class="s-label">За смену</div>
+          <div class="s-val gold">${rub(rep.total || activePay)}</div>
+          <div class="s-sub">${rub(rep.left || activePay)} к выплате</div>
+        </div>
+      </div>
+    </div>`;
+    const btnR = $("driverHeroReload");
+    if (btnR) btnR.onclick = () => load();
+  }
+
   let rows = TAB === "done" ? ROWS.filter(isDone).reverse()
     : active.filter(r => TAB === "active" || !r.date || r.date === todayStr());
   if (TAB !== "done") rows.sort((a, b) => (toIso(a.date) || "9999").localeCompare(toIso(b.date) || "9999"));
@@ -359,6 +451,34 @@ $("app").addEventListener("submit", async ev => {
   btn.disabled = true; btn.textContent = "Сохраняю…";
   try { await saveEdit(form); } catch (err) { toast(err.message, true); btn.disabled = false; btn.textContent = "Сохранить"; }
 });
+let CURRENT_DONE_POST = "", CURRENT_DONE_BTN = null;
+function openDoneModal(post, btn) {
+  CURRENT_DONE_POST = post;
+  CURRENT_DONE_BTN = btn;
+  const r = ROWS.find(x => x.posting === post);
+  if (!r) return;
+  const ppz = isPpz(r);
+  $("modal-c-title").textContent = ppz ? "Подтверждение сдачи в ППЗ" : "Подтверждение вручения";
+  $("modal-c-desc").textContent = `${r.cb} (${r.address})`;
+  $("chk-intact").checked = true;
+  $("chk-lift").checked = true;
+  $("modal-courier-done").hidden = false;
+}
+function closeDoneModal() {
+  $("modal-courier-done").hidden = true;
+  CURRENT_DONE_POST = "";
+  CURRENT_DONE_BTN = null;
+}
+$("modal-c-confirm").onclick = () => {
+  const post = CURRENT_DONE_POST, btn = CURRENT_DONE_BTN;
+  closeDoneModal();
+  if (!post) return;
+  if (btn) btn.disabled = true;
+  save(post, {status: "Доставлен"}, btn);
+};
+$("modal-c-close").onclick = closeDoneModal;
+$("modal-c-cancel").onclick = closeDoneModal;
+
 $("app").addEventListener("click", ev => {
   const row = ev.target.closest("[data-row]");
   if (row) { OPEN = row.dataset.row; draw(); document.querySelector("#list .order.open")?.classList.add("pop"); return; }
@@ -372,12 +492,8 @@ $("app").addEventListener("click", ev => {
   if (rm) { sendReminder(rm.closest(".order").dataset.posting, KEY).catch(err => toast(err.message, true)); return; }
   const b = ev.target.closest("[data-done]");
   if (!b) return;
-  const post = b.closest(".order").dataset.posting;
-  const curRow = ROWS.find(x => x.posting === post);
-  const ppz = curRow && isPpz(curRow);
-  if (!confirm(ppz ? "Отметить сдачу в ППЗ Ozon?" : "Отметить заказ доставленным?")) return;
-  b.disabled = true;
-  save(post, {status: "Доставлен"}, b);
+  const post = b.dataset.done || b.closest(".order").dataset.posting;
+  openDoneModal(post, b);
 });
 $("app").addEventListener("keydown", ev => {
   if ((ev.key === "Enter" || ev.key === " ") && ev.target.matches("[data-card]")) { ev.preventDefault(); openCSheet(ev.target.dataset.posting); }
