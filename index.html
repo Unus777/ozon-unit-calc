@@ -10,15 +10,25 @@
 <link rel="manifest" href="owner.webmanifest?v=13">
 <meta name="apple-mobile-web-app-title" content="Алмалы">
 <script src="theme.js?v=12"></script>
-<link rel="stylesheet" href="style.css?v=26">
+<link rel="stylesheet" href="style.css?v=27">
 <link rel="icon" href="icons/owner.svg?v=13" type="image/svg+xml">
 <link rel="icon" href="icons/owner-32.png?v=13" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/owner-180.png?v=13" sizes="180x180">
 </head>
 <body>
 <header><div class="bar">
-<div class="brand">Алмалы <span>заказы Ozon</span></div>
-<span class="hbtns"><a class="text" id="dlvLink" href="courier.html?admin=1" hidden><span data-ic="truck"></span>Доставки</a><button class="text" id="gear" aria-expanded="false" aria-controls="settings"><span data-ic="settings"></span>Настройки</button></span>
+<div class="brand-group">
+  <div class="brand-logo">A</div>
+  <div>
+    <div class="brand-title">Алмалы Доставка <span class="version-tag">v2.0</span></div>
+    <div class="brand-sub">Управление заказами и курьером</div>
+  </div>
+</div>
+<span class="hbtns">
+  <div class="courier-status-pill"><span class="status-dot"></span><span>Рашад на связи</span></div>
+  <a class="text" id="dlvLink" href="courier.html?admin=1" hidden><span data-ic="truck"></span>Доставки</a>
+  <button class="text" id="gear" aria-expanded="false" aria-controls="settings"><span data-ic="settings"></span>Настройки</button>
+</span>
 </div></header>
 <main>
 
@@ -248,7 +258,22 @@ function ostate(p) {
   if (d) return d.status === "Доставлен" && (closed || ozState(p) === "wait") ? "done" : "courier";
   return closed ? "done" : "new";
 }
-const OTABS = {new: "Новые", courier: "У курьера", done: "Доставлены"};
+
+function otabCategory(p) {
+  const d = DELIV[p.posting_number];
+  const fbs = isFbs(p);
+  if (p.status === "delivered" || (d && d.status === "Доставлен")) return "done";
+  if (fbs) return "fbs";
+  if (!d) return "new";
+  return "courier";
+}
+const OTABS = {
+  all: "Все",
+  new: "Ждут ЦБ",
+  courier: "У Рашада",
+  fbs: "FBS ППЗ",
+  done: "Доставлены"
+};
 // Ozon меняет статус на «Доставлено» не сразу — помним отправленные заказы и проверяем, пока не подтвердит
 const PENDING_TTL = 2 * 3600e3;
 const pendingGet = () => { try { return JSON.parse(localStorage.getItem("oz_pending") || "{}"); } catch { return {}; } };
@@ -299,21 +324,30 @@ async function checkPending() {
   if (changed && ORDERS.length) drawOrders();
 }
 setInterval(checkPending, 30000);
-let OTAB = "new";
+let OTAB = "all";
 
 function drawOrders(anim) {
-  const counts = {new: 0, courier: 0, done: 0};
-  ORDERS.forEach(p => counts[ostate(p)]++);
-  $("otabs").innerHTML = Object.entries(OTABS).map(([k, v]) =>
-    `<button role="tab" data-otab="${k}" aria-selected="${OTAB === k}">${v}${k !== "done" && counts[k] ? " · " + counts[k] : ""}</button>`).join("");
-  // по порядку: новые сверху, при равной дате — по номеру ЦБ
+  const counts = {all: 0, new: 0, courier: 0, fbs: 0, done: 0};
+  ORDERS.forEach(p => {
+    counts.all++;
+    counts[otabCategory(p)]++;
+  });
+  $("otabs").innerHTML = Object.entries(OTABS).map(([k, v]) => {
+    const cnt = counts[k] || 0;
+    const isHl = k === "new" && cnt > 0;
+    return `<button role="tab" data-otab="${k}" aria-selected="${OTAB === k}" class="${isHl ? 'tab-highlight' : ''}">${v}${cnt ? " (" + cnt + ")" : ""}</button>`;
+  }).join("");
+
   const cbNum = p => parseInt(String(DELIV[p.posting_number]?.cb || "").replace(/\D/g, "")) || 0;
-  const list = ORDERS.map((p, i) => [p, i]).filter(([p]) => ostate(p) === OTAB)
-    .sort(([a], [b]) => new Date(b.in_process_at) - new Date(a.in_process_at) || cbNum(b) - cbNum(a));
+  const list = ORDERS.map((p, i) => [p, i]).filter(([p]) => {
+    if (OTAB === "all") return true;
+    return otabCategory(p) === OTAB;
+  }).sort(([a], [b]) => new Date(b.in_process_at) - new Date(a.in_process_at) || cbNum(b) - cbNum(a));
+
   drawOwnerDash();
-  $("orders").classList.toggle("anim", !!anim);  // появление карточек — только при смене вкладки и загрузке, не при фоновой сверке
+  $("orders").classList.toggle("anim", !!anim);
   $("orders").innerHTML = list.length ? list.map(([p, i], n) => orderCard(p, i, n)).join("")
-    : `<div class="card mut">${OTAB === "new" ? "Новых заказов нет" : OTAB === "courier" ? "У курьера сейчас ничего нет" : "Пока пусто"}</div>`;
+    : `<div class="card mut">${OTAB === "new" ? "Заказов, ожидающих ЦБ, нет ✓" : OTAB === "courier" ? "У курьера сейчас ничего нет" : OTAB === "fbs" ? "Нет FBS заказов" : "Пока пусто"}</div>`;
 }
 
 function drawOwnerDash() {
@@ -369,40 +403,74 @@ function orderCard(p, i, n = 0) {
   const d = DELIV[p.posting_number];
   const fbs = isFbs(p);
   const ppzFee = d && fbs ? (Number(d.delivery) || 0) : 0;
-  const cbBadge = d ? `<button type="button" class="cb-pill" data-edit-cb="${e(p.posting_number)}" data-cur-cb="${e(d.cb)}" title="Нажмите, чтобы изменить номер ЦБ">${e(d.cb)} <span class="edit-pen">✏️</span></button>` : "";
-  const meta = d ? (d.date ? "на " + e(d.date) : e(p.posting_number)) : `${date} · ${e(p.posting_number)}${fbs ? " · ППЗ Реутовская" : ""}`;
+  const isDone = p.status === "delivered" || (d && d.status === "Доставлен");
+
+  let badgeHtml = "";
+  if (isDone) {
+    badgeHtml = `<span class="badge-done">${fbs ? "Сдан в ППЗ" : "Доставлен"}</span>`;
+  } else if (fbs) {
+    badgeHtml = `<span class="badge-fbs">FBS · ППЗ Балашиха</span>`;
+  } else if (d) {
+    badgeHtml = `<span class="badge-way">У курьера</span>`;
+  } else {
+    badgeHtml = `<span class="badge-new">Новый Ozon</span>`;
+  }
+
+  let cbBlock = "";
+  if (d && d.cb) {
+    cbBlock = `<button type="button" class="cb-pill" data-edit-cb="${e(p.posting_number)}" data-cur-cb="${e(d.cb)}" title="Нажмите, чтобы изменить номер ЦБ"><span>${e(d.cb)}</span> <span class="edit-pen">✏️</span></button>`;
+  } else {
+    cbBlock = `<span class="badge-new" style="font-size:11px">Нужен номер ЦБ</span>`;
+  }
+
   let items;
   try {
     items = p.products.map(x => {
       const [, t] = calc({...p, products: [x]}, PRICES, 0, ppzFee);
+      const shortTitle = shortName(x.name).replace(/^Керамогранит\s+/i, "").replace(/\s*60\s*[xх×]\s*(60|120)$/i, "");
       return `<div class="item"><div><b>${x.quantity} уп · ${tileFormat(x.offer_id, x.name) || e(x.offer_id)}</b>` +
-        `<span class="mut">${e(shortName(x.name).replace(/^Керамогранит\s+/i, "").replace(/\s*60\s*[xх×]\s*(60|120)$/i, ""))}</span></div>` +
+        `<span class="mut">${e(shortTitle)}</span></div>` +
         `<div class="price"><div class="v num ${t.status[0]}">${Math.round(t.payout_m2)}</div><div class="mut">₽/м² на руки</div></div></div>`;
     }).join("");
   } catch (err) {
     items = `<div class="err">${e(err.message)}</div>`;
   }
-  return `<div class="card order${p.status === "cancelled" ? " cancelled" : ""}" data-card="${i}" tabindex="0" aria-haspopup="dialog" style="--i:${Math.min(n, 8)}"><div class="top">` +
-    `${d ? courierBadge(p, d, fbs) : (fbs ? '<span class="badge fbs">FBS · ППЗ</span> ' : '') + badge(p.status)}` +
-    (cbBadge ? ` ${cbBadge} ` : "") +
-    `<span class="mut num">${meta}</span>` +
-    `<span class="chev" aria-hidden="true">›</span></div>${items}${primaryActions(p)}</div>`;
-}
 
-// Значок заказа у курьера: у курьера → курьер доставил (ждёт отметки в Ozon) → доставлен
-function courierBadge(p, d, fbs) {
-  if (fbs) {
-    if (d.status !== "Доставлен") return '<span class="badge fbs">В ППЗ</span>';
-    if (p.status === "delivered" || ozState(p) === "wait") return '<span class="badge done">Сдан в ППЗ</span>';
-    return '<span class="badge ship">Сдан в ППЗ</span>';
+  let detailsBlock = "";
+  if (d && (d.address || d.date || d.comment)) {
+    const info = deliveryDetails(d.comment);
+    let foreman = "";
+    try { foreman = foremanPhone(info.foreman); } catch {}
+    detailsBlock = `<div class="order-details-box">
+      <div class="order-addr-line">
+        <span>📍</span>
+        <span>${e(d.address || (fbs ? "ППЗ Ozon (Балашиха, ул. Реутовская, 5)" : "Адрес уточняется"))}</span>
+      </div>
+      <div class="order-tags-row">
+        <span>⏰ ${info.time ? e(info.time) : (d.date ? "Доставка " + e(d.date) : "Сегодня")}</span>
+        ${d.delivery ? `<span style="font-weight:700">Оплата Рашаду: ${rub(d.delivery)}</span>` : ""}
+      </div>
+      ${(foreman || (d.unload && d.unload !== "Нет")) ? `<div class="order-tags-row">
+        ${foreman ? `<span style="color:var(--green);font-weight:600">Прораб: ${e(foreman)}</span>` : "<span></span>"}
+        ${d.unload && d.unload !== "Нет" ? `<span class="tag-pill warn">🛗 Подъём: ${e(d.unload)}</span>` : ""}
+      </div>` : ""}
+      ${info.note ? `<div class="mut" style="font-size:12px;background:var(--yellow-bg);color:var(--yellow);padding:4px 8px;border-radius:6px;margin-top:2px">⚠️ <b>Пометка:</b> ${e(info.note)}</div>` : ""}
+    </div>`;
   }
-  if (d.status !== "Доставлен") return '<span class="badge way">У курьера</span>';
-  if (p.status === "delivered" || ozState(p) === "wait") return '<span class="badge done">Доставлен</span>';
-  return '<span class="badge ship">Курьер доставил</span>';
+
+  return `<div class="card order${p.status === "cancelled" ? " cancelled" : ""}${!d ? " is-new" : ""}" data-card="${i}" tabindex="0" aria-haspopup="dialog" style="--i:${Math.min(n, 8)}">
+    <div class="top">
+      ${cbBlock}
+      <span class="mut num" style="font-size:12px;font-family:monospace;margin-left:4px">${e(p.posting_number)}</span>
+      <span style="margin-left:auto">${badgeHtml}</span>
+      <span class="chev" aria-hidden="true">›</span>
+    </div>
+    ${items}
+    ${detailsBlock}
+    ${primaryActions(p)}
+  </div>`;
 }
 
-// Главная кнопка по этапу: новый → ЦБ + «Отправить курьеру»; у курьера → «Клиенту» + «Доставлено»;
-// курьер доставил → синяя «Отметить доставленным в Ozon»
 function primaryActions(p) {
   const d = DELIV[p.posting_number];
   if (!ADMIN() || !SCRIPT_URL) return "";
@@ -429,10 +497,16 @@ function primaryActions(p) {
   let foreman = "";
   try { foreman = foremanPhone(info.foreman); } catch {}
   const doneLabel = fbs ? "Сдан в ППЗ" : "Доставлено";
-  return `<div class="actions">${tel && needSheet ? `<a class="btn ghost" href="${e(tel)}">${ic("phone")}Клиенту</a>` : ""}` +
-    `${foreman && needSheet ? `<a class="btn ghost foreman-btn" href="tel:${e(foreman)}">${ic("user")}Прорабу</a>` : ""}` +
-    `<button class="${needSheet ? "ok" : ""}" data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">` +
-    `${needSheet ? doneLabel : oz === "late" ? "Повторить в Ozon" : (fbs ? "Подтвердить сдачу в Ozon" : "Отметить доставленным в Ozon")}</button></div>` + line;
+  const callBtn = (foreman && needSheet) ? `<a class="btn-call" href="tel:${e(foreman)}">${ic("phone")}Прорабу</a>`
+    : (tel && needSheet) ? `<a class="btn-call" href="${e(tel)}">${ic("phone")}Клиенту</a>` : "";
+
+  return `<div class="card-actions-grid">
+    <button type="button" class="btn-edit-cb" data-edit-cb="${e(p.posting_number)}" data-cur-cb="${e(d.cb)}">✏️ Изменить ЦБ</button>
+    ${callBtn}
+    <button type="button" class="btn-done${needSheet ? '' : ' is-delivered'}" data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">
+      ${needSheet ? doneLabel : oz === "late" ? "Повторить в Ozon" : (fbs ? "Подтвердить сдачу в Ozon" : "Отметить в Ozon")}
+    </button>
+  </div>` + line;
 }
 
 // Этапы заказа для истории в меню: Ozon → курьеру → дата → курьер доставил → отмечено в Ozon

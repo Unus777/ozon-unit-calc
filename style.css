@@ -317,3 +317,42 @@ a.btn{gap:8px}
 .nav-btn:hover{background:#ca8a04!important}
 .foreman-btn{background:#16a34a!important;color:#fff!important;font-weight:700!important}
 .foreman-btn:hover{background:#15803d!important}
+
+/* --- Премиальный дизайн интерфейса из прототипа v2 --- */
+.brand-group{display:flex;align-items:center;gap:10px}
+.brand-logo{width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,#2563eb,#4f46e5);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;box-shadow:0 4px 12px rgba(37,99,235,.25);flex-shrink:0}
+.brand-title{font-size:16px;font-weight:800;letter-spacing:-.01em;display:flex;align-items:center;gap:6px;line-height:1.2;color:var(--fg)}
+.brand-sub{font-size:12px;color:var(--mut);margin-top:1px;font-weight:400}
+.version-tag{font-size:10px;font-weight:800;text-transform:uppercase;padding:2px 6px;border-radius:999px;background:rgba(37,99,235,.12);color:var(--acc);letter-spacing:.04em}
+.courier-status-pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--mut);padding:4px 10px;border-radius:999px;background:var(--soft)}
+.status-dot{width:7px;height:7px;border-radius:50%;background:#16a34a;box-shadow:0 0 0 2px rgba(22,163,74,.2);animation:pulse-ring 2s infinite}
+
+.badge-way{background:rgba(37,99,235,.12)!important;color:#2563eb!important;border:1px solid rgba(37,99,235,.25)!important;font-size:12px;font-weight:700;padding:2px 8px;border-radius:8px;display:inline-block}
+.badge-new{background:rgba(234,88,12,.12)!important;color:#ea580c!important;border:1px solid rgba(234,88,12,.25)!important;font-size:12px;font-weight:700;padding:2px 8px;border-radius:8px;display:inline-block}
+.badge-fbs{background:rgba(147,51,234,.12)!important;color:#9333ea!important;border:1px solid rgba(147,51,234,.25)!important;font-size:12px;font-weight:700;padding:2px 8px;border-radius:8px;display:inline-block}
+.badge-done{background:rgba(22,163,74,.12)!important;color:#16a34a!important;border:1px solid rgba(22,163,74,.25)!important;font-size:12px;font-weight:700;padding:2px 8px;border-radius:8px;display:inline-block}
+
+.card.order{border-radius:16px;border:1px solid var(--line);padding:14px 16px;background:var(--card);box-shadow:0 2px 8px rgba(0,0,0,.04);transition:all .2s;position:relative}
+.card.order:hover{border-color:rgba(37,99,235,.35);box-shadow:0 4px 16px rgba(0,0,0,.08)}
+.card.order.is-new{border:2px solid rgba(234,88,12,.35)}
+
+.order-details-box{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:13px;display:flex;flex-direction:column;gap:6px}
+.order-addr-line{display:flex;align-items:flex-start;gap:6px;font-weight:600;color:var(--fg);line-height:1.35}
+.order-tags-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;font-size:12px;color:var(--mut)}
+.tag-pill{padding:3px 8px;border-radius:6px;background:var(--soft);color:var(--fg);font-size:11px;font-weight:600}
+.tag-pill.warn{background:var(--yellow-bg);color:var(--yellow)}
+.tag-pill.acc{background:var(--acc-bg);color:var(--acc)}
+
+.card-actions-grid{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.card-actions-grid button,.card-actions-grid a{flex:1;min-width:110px;font-size:13px;font-weight:700;padding:9px 12px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;cursor:pointer;border:0;transition:all .15s}
+.btn-edit-cb{background:var(--soft)!important;color:var(--fg)!important;border:1px solid var(--line)!important}
+.btn-edit-cb:hover{background:var(--line)!important}
+.btn-call{background:var(--green-bg)!important;color:var(--green)!important;border:1px solid rgba(43,138,62,.3)!important}
+.btn-call:hover{filter:brightness(.95)}
+.btn-done{background:var(--acc)!important;color:var(--acc-fg)!important}
+.btn-done.is-delivered{background:var(--green)!important;color:#fff!important}
+
+.otabs{display:flex;gap:4px;background:var(--soft);padding:4px;border-radius:14px;margin:14px 0 12px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.otabs button{flex:1;background:none;border:0;color:var(--mut);font-size:13px;font-weight:600;padding:8px 10px;border-radius:10px;white-space:nowrap;cursor:pointer;transition:all .15s}
+.otabs button[aria-selected="true"]{background:var(--card);color:var(--fg);box-shadow:0 2px 8px rgba(0,0,0,.08);font-weight:700}
+.otabs button.tab-highlight{color:#ea580c}
