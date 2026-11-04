@@ -3,7 +3,7 @@
   "short_name": "Доставки",
   "display": "standalone",
   "scope": "./",
-  "background_color": "#f2f3f5",
+  "background_color": "#f5f4f0",
   "theme_color": "#2f9e44",
   "lang": "ru",
   "icons": [

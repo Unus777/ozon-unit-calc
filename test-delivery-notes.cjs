@@ -34,6 +34,53 @@ assert.ok(card.includes('с 14:00 до 16:00'));
 assert.ok(!context.card({posting: 'demo', comment: '', phone: '', unload: ''}).includes('Позвонить прорабу'));
 console.log('Пометки, дата, время и телефон прораба: проверки пройдены');
 
+const agreementOf = vm.runInContext('agreementOf', context);
+// «Согласовал доставку»: строка «Согласовано: …» в комментарии курьера, старые комментарии не ломаются
+const line = context.agreementLine({who: 'прораб', at: '05.11 14:05', slot: '12–14'});
+assert.equal(line, 'Согласовано: прораб · 05.11 14:05 · интервал 12–14');
+const ag = context.parseAgreement(line);
+assert.equal(ag.who, 'прораб'); assert.equal(ag.day, '05.11'); assert.equal(ag.time, '14:05'); assert.equal(ag.slot, '12–14');
+assert.equal(context.parseAgreement('Согласовано: клиент · 06.11 09:30').slot, '');
+assert.equal(context.parseAgreement('Согласовано: завтра после обеда'), null);
+assert.equal(context.parseAgreement('Позвонить за час'), null);
+const cc = context.courierComment({text: 'Клиент просил позвонить\nЗаезд с торца', agreed: ag});
+assert.equal(cc, 'Клиент просил позвонить\nЗаезд с торца\n' + line);
+assert.equal(context.courierNotes(cc).text, 'Клиент просил позвонить\nЗаезд с торца');
+assert.equal(context.courierNotes(cc).agreed.at, '05.11 14:05');
+assert.deepEqual({...context.courierNotes('Старый комментарий курьера')}, {text: 'Старый комментарий курьера', agreed: null});
+assert.equal(context.courierNotes('').agreed, null);
+assert.equal(context.courierComment({text: '', agreed: null}), '');
+// повторное согласование заменяет прежнюю отметку, а не добавляет вторую
+const again = context.courierComment({text: context.courierNotes(cc).text, agreed: {who: 'клиент', at: '06.11 10:00', slot: ''}});
+assert.equal(again.split('\n').filter(x => x.startsWith('Согласовано:')).length, 1);
+assert.equal(context.courierNotes(again).agreed.who, 'клиент');
+// в комментарии владельца строка тоже распознаётся и не попадает в пометку; покупательский текст сохраняется
+const ownerComment = context.deliveryComment({...details, agreed: ag});
+assert.equal(context.deliveryDetails(ownerComment).note, details.note);
+assert.equal(context.deliveryDetails(ownerComment).time, details.time);
+assert.equal(context.deliveryDetails(ownerComment).agreed.slot, '12–14');
+assert.equal(context.deliveryDetails(encoded).agreed, null);
+assert.equal(context.deliveryDetails('Согласовано: завтра после обеда').note, 'Согласовано: завтра после обеда');
+assert.equal(agreementOf({courier_comment: cc, comment: ''}).who, 'прораб');
+assert.equal(agreementOf({courier_comment: '', comment: ownerComment}).who, 'прораб');
+assert.equal(agreementOf({courier_comment: 'просто текст', comment: 'Старый комментарий'}), null);
+assert.equal(context.agreedLabel(ag, '05.11 18:00'), 'Согласовано · 14:05');
+assert.equal(context.agreedLabel(ag, '06.11 09:00'), 'Согласовано · 05.11');
+assert.equal(context.agreedLabel(null), 'Не согласовано');
+assert.match(context.agreedNow(new Date('2026-11-05T11:05:00Z')), /^05\.11 14:05$/);
+assert.ok(form.includes('data-slot='));
+assert.ok(context.deliveryFields({}, null, true).includes('name="cb"'));
+const agreedCard = context.card({posting: 'demo', cb: 'ЦБ-1', status: 'Согласован', date: '27.10.2026', comment: encoded, courier_comment: cc, phone: '', unload: ''});
+assert.ok(agreedCard.includes('Согласовано с прорабом') && agreedCard.includes('интервал 12–14'));
+assert.ok(agreedCard.includes('Изменить согласование'));
+const pendingCard = context.card({posting: 'demo', cb: 'ЦБ-2', status: 'Новый', comment: '', courier_comment: 'Старый комментарий', phone: '+79990000000', unload: 'Нет'});
+assert.ok(pendingCard.includes('Не согласовано'));
+assert.ok(pendingCard.includes('data-agree="demo"'));
+assert.ok(pendingCard.includes('Согласовал доставку'));
+assert.ok(pendingCard.indexOf('data-agree') < pendingCard.indexOf('Маршрут') && pendingCard.indexOf('Маршрут') < pendingCard.indexOf('data-done'));
+assert.ok(!context.card({posting: 'demo', cb: 'ЦБ-3', status: 'Доставлен', comment: '', phone: '', unload: ''}).includes('data-agree'));
+console.log('«Согласовал доставку»: проверки пройдены');
+
 // Значки подключены к обеим страницам и доступны для установки приложения.
 for (const file of ['manifest.webmanifest', 'owner.webmanifest']) {
   for (const icon of JSON.parse(read(file)).icons) {

@@ -3,7 +3,7 @@
   "short_name": "Алмалы",
   "display": "standalone",
   "scope": "./",
-  "background_color": "#f2f3f5",
+  "background_color": "#f5f4f0",
   "theme_color": "#3b5bdb",
   "lang": "ru",
   "icons": [
