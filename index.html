@@ -350,7 +350,7 @@ function otabCategory(p) {
   const fbs = isFbs(p);
   if (p.status === "delivered" || (d && d.status === "Доставлен")) return "done";
   if (fbs) return "fbs";
-  if (!d) return "new";
+  if (!d) return p.status === "cancelled" ? "cancel" : "new";  // отменённые без ЦБ — только во «Все», не в «Ждут ЦБ»
   return "courier";
 }
 const OTABS = {
@@ -414,7 +414,7 @@ let OTAB = "all";
 
 const CLS = {red: "c-r", yellow: "c-a", green: "c-g"};
 function drawOrders(anim) {
-  const counts = {all: 0, new: 0, courier: 0, fbs: 0, done: 0};
+  const counts = {all: 0, new: 0, courier: 0, fbs: 0, done: 0, cancel: 0};
   ORDERS.forEach(p => {
     counts.all++;
     counts[otabCategory(p)]++;
