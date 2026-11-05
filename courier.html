@@ -8,8 +8,8 @@
 <meta name="robots" content="noindex">
 <meta name="referrer" content="no-referrer">
 <title>Доставки</title>
-<link rel="manifest" href="manifest.webmanifest?v=35">
-<script src="theme.js?v=35"></script>
+<link rel="manifest" href="manifest.webmanifest?v=36">
+<script src="theme.js?v=36"></script>
 <style id="splash-css">/* заставка первой загрузки: стили прямо в странице — видна сразу, до style.css; тема — из theme.js выше */
 html{background:#F5F4F0}:root[data-theme="dark"]{background:#0A0D14}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){background:#0A0D14}}
@@ -44,10 +44,10 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 @media(prefers-reduced-motion:reduce){.sp-logo,.sp-logo::before,.sp-logo::after,.sp-road::before,.sp-truck,.sp-truck svg{animation:none}
 .sp-logo::before,.sp-logo::after{display:none}.sp-truck{transform:translateX(69px)}#splash,.sp-in{transition:none}}
 </style>
-<link rel="stylesheet" href="style.css?v=35">
-<link rel="icon" href="icons/courier.svg?v=35" type="image/svg+xml">
-<link rel="icon" href="icons/courier-32.png?v=35" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" href="icons/courier-180.png?v=35" sizes="180x180">
+<link rel="stylesheet" href="style.css?v=36">
+<link rel="icon" href="icons/courier.svg?v=36" type="image/svg+xml">
+<link rel="icon" href="icons/courier-32.png?v=36" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/courier-180.png?v=36" sizes="180x180">
 </head>
 <body>
 <div id="splash" role="status" aria-live="polite" aria-label="Загрузка"><div class="sp-in">
@@ -106,9 +106,9 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 <button role="tab" aria-selected="false" data-tab="done"><span data-ico="checkc"></span>Готово</button>
 </div></nav>
 
-<script src="config.js?v=35"></script>
-<script src="push.js?v=35"></script>
-<script src="alarm.js?v=35"></script>
+<script src="config.js?v=36"></script>
+<script src="push.js?v=36"></script>
+<script src="alarm.js?v=36"></script>
 <script>
 const $ = id => document.getElementById(id);
 const e = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
@@ -143,11 +143,11 @@ const unloadText = r => r.unload === "Нет" ? "Без разгрузки" : r.
 const whenText = r => { const t = deliveryDetails(r.comment).time || (agreementOf(r) || {}).slot; return [r.date === todayStr() ? "Сегодня" : r.date, t].filter(Boolean).join(" ") || r.status; };
 const isPpz = r => /ППЗ|Реутовская/i.test(r.address || "") || /ППЗ/i.test(r.unload || "");
 
-function parsePacksKg(str) {
-  let p = 0;
-  for (const m of (str || "").matchAll(/(\d+)\s*уп/gi)) p += parseInt(m[1], 10) || 0;
-  if (!p) { const n = parseInt(str, 10); if (!isNaN(n)) p = n; }
-  return {packs: p, kg: p * 28};
+function parsePacksKg(str) {  // «8 уп 60×60, 5 уп 60×120» → упаковки и вес с учётом формата
+  let p = 0, kg = 0;
+  for (const m of (str || "").matchAll(/(\d+)\s*уп\.?([^,;+]*)/gi)) { const n = parseInt(m[1], 10) || 0; p += n; kg += n * packKg(m[2]); }
+  if (!p) { const n = parseInt(str, 10); if (!isNaN(n)) { p = n; kg = n * packKg(str); } }
+  return {packs: p, kg};
 }
 
 function card(r) {

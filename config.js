@@ -86,6 +86,9 @@ function agreedLabel(a, today = agreedNow()) {
 }
 
 // Ночной режим по московскому времени (не по часовому поясу телефона): 23:00–07:59 — без звука, только вибрация
+// Вес упаковки по карточкам Ozon: 60×60 — 34–37 кг, 60×120 — 27–28,8 кг. Неизвестный формат считаем как 60×60 (тяжелее — без недогруза).
+var PACK_KG = {"60×60": 35, "60×120": 28};
+function packKg(fmt) { return /60\s*[xх×]\s*120|612/i.test(String(fmt || "")) ? PACK_KG["60×120"] : PACK_KG["60×60"]; }
 var NIGHT_FROM = 23, NIGHT_TO = 8;
 function mskHour(d = new Date()) {
   return Number(new Intl.DateTimeFormat("en-GB", {timeZone: "Europe/Moscow", hour: "2-digit", hour12: false}).format(d)) % 24;
