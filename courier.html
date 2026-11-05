@@ -8,8 +8,8 @@
 <meta name="robots" content="noindex">
 <meta name="referrer" content="no-referrer">
 <title>Доставки</title>
-<link rel="manifest" href="manifest.webmanifest?v=34">
-<script src="theme.js?v=34"></script>
+<link rel="manifest" href="manifest.webmanifest?v=35">
+<script src="theme.js?v=35"></script>
 <style id="splash-css">/* заставка первой загрузки: стили прямо в странице — видна сразу, до style.css; тема — из theme.js выше */
 html{background:#F5F4F0}:root[data-theme="dark"]{background:#0A0D14}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){background:#0A0D14}}
@@ -44,10 +44,10 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 @media(prefers-reduced-motion:reduce){.sp-logo,.sp-logo::before,.sp-logo::after,.sp-road::before,.sp-truck,.sp-truck svg{animation:none}
 .sp-logo::before,.sp-logo::after{display:none}.sp-truck{transform:translateX(69px)}#splash,.sp-in{transition:none}}
 </style>
-<link rel="stylesheet" href="style.css?v=34">
-<link rel="icon" href="icons/courier.svg?v=34" type="image/svg+xml">
-<link rel="icon" href="icons/courier-32.png?v=34" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" href="icons/courier-180.png?v=34" sizes="180x180">
+<link rel="stylesheet" href="style.css?v=35">
+<link rel="icon" href="icons/courier.svg?v=35" type="image/svg+xml">
+<link rel="icon" href="icons/courier-32.png?v=35" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/courier-180.png?v=35" sizes="180x180">
 </head>
 <body>
 <div id="splash" role="status" aria-live="polite" aria-label="Загрузка"><div class="sp-in">
@@ -106,9 +106,9 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 <button role="tab" aria-selected="false" data-tab="done"><span data-ico="checkc"></span>Готово</button>
 </div></nav>
 
-<script src="config.js?v=34"></script>
-<script src="push.js?v=34"></script>
-<script src="alarm.js?v=34"></script>
+<script src="config.js?v=35"></script>
+<script src="push.js?v=35"></script>
+<script src="alarm.js?v=35"></script>
 <script>
 const $ = id => document.getElementById(id);
 const e = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
@@ -381,6 +381,8 @@ async function mapStyle(name) {
   if (STYLES[name]) return STYLES[name];
   const s = await (await fetch(`https://tiles.openfreemap.org/styles/${name}`)).json();
   for (const l of s.layers) if (l.layout && l.layout["text-field"]) l.layout["text-field"] = ["coalesce", ["get", "name:ru"], ["get", "name"]];
+  s.attribution = "";  // подпись OpenFreeMap убрана с экрана
+  for (const src of Object.values(s.sources || {})) if (src && typeof src === "object") src.attribution = "";
   return STYLES[name] = s;
 }
 const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -442,7 +444,6 @@ function initMap() {
       dragRotate: false, pitchWithRotate: false, touchPitch: false, maxPitch: 0, fadeDuration: 150});
     MAP.touchZoomRotate.disableRotation();
     MAP.keyboard.disableRotation();
-    MAP.addControl(new maplibregl.AttributionControl({compact: false}), "bottom-right");  // «OpenFreeMap © OpenMapTiles Data from OpenStreetMap» — из стиля
     MAP.on("style.load", () => { ROUTE_KEY = ""; addRouteLayers(); if (TAB === "map") drawRoute(routeInfo(MAP_ORDER)); });
     MAP.on("click", ev => { if (SEL && !ev.originalEvent.target.closest(".pin")) { SEL = null; drawMap(); } });  // пустая карта закрывает карточку
     await new Promise(ok => MAP.once("load", ok));

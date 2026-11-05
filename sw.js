@@ -1,8 +1,8 @@
 // Service worker курьера: принимает пуш без содержимого и сам собирает текст из таблицы.
 // Ключ курьера приходит в адресе регистрации: sw.js?k=…
 // Версия меняется вместе с дизайном и config.js — браузер видит новый sw.js и обновляет его (офлайн-кэша здесь нет).
-const SW_VERSION = "v35-load";
-importScripts("config.js?v=34");
+const SW_VERSION = "v36-map";
+importScripts("config.js?v=35");
 const KEY = new URL(self.location).searchParams.get("k");
 const PAGE = `courier.html?k=${encodeURIComponent(KEY || "")}`;
 

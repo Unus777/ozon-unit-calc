@@ -370,8 +370,7 @@ top:calc(56px + env(safe-area-inset-top));bottom:calc(57px + env(safe-area-inset
 #map{position:absolute;inset:0;z-index:0;background:var(--soft)}
 #mapbox .maplibregl-map{font:inherit}
 #mapbox .maplibregl-ctrl-bottom-right{bottom:var(--peek);transition:bottom .32s cubic-bezier(.2,.8,.2,1)}
-#mapbox .maplibregl-ctrl-attrib{font-size:9px;line-height:14px;padding:0 6px;margin:0;border-radius:8px 0 0 0;background:color-mix(in srgb,var(--card) 70%,transparent);color:var(--mut)}
-#mapbox .maplibregl-ctrl-attrib a{color:var(--mut)}
+#mapbox .maplibregl-ctrl-attrib,#mapbox .maplibregl-ctrl-logo{display:none!important}
 #mapbox:has(.mcard.show) .maplibregl-ctrl-bottom-right,#mapbox:has(.msheet[data-state="open"]) .maplibregl-ctrl-bottom-right{bottom:0}
 .map-err{position:absolute;inset:0;z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:24px 24px calc(var(--peek) + 24px);text-align:center;color:var(--mut)}
 .map-err b{color:var(--fg);font-size:15px}.map-err span{font-size:13px}
