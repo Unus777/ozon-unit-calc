@@ -125,9 +125,12 @@ assert.equal(al.title, 'Химки, ул. Тестовая, 2');
 assert.equal(JSON.stringify(al.chips.map(c => c.v)), JSON.stringify(['8 уп 60×60', '~280 кг', '14:00–16:00', 'Лифт, эт. 5']));
 assert.equal(al.okText, 'Принял');
 // alarm.js и страницы подключают одинаковую версию
-for (const f of ['index.html', 'courier.html', 'alarm-test.html']) assert.match(read(f), /alarm\.js\?v=37/);
-assert.match(read('sw.js'), /SW_VERSION = "v38-quiet"/);
-assert.match(read('sw.js'), /config\.js\?v=37/);
+for (const f of ['index.html', 'courier.html', 'alarm-test.html']) assert.match(read(f), /alarm\.js\?v=38/);
+assert.match(read('sw.js'), /SW_VERSION = "v39-desk"/);
+assert.match(read('sw.js'), /config\.js\?v=38/);
+assert.match(read('style.css'), /@media \(min-width: 1100px\)/);
+assert.match(read('index.html'), /desk-split/);
+assert.match(read('courier.html'), /min-width: 1100px/);
 assert.match(read("courier.html"), /maplibre-gl@5\.24\.0\/dist\/maplibre-gl\.js/);
 assert.doesNotMatch(read("courier.html"), /map-widget|api-maps\.yandex/);  // карта без виджета Яндекса и рекламы
 assert.doesNotThrow(() => new vm.Script(read('alarm.js')));

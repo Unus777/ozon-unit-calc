@@ -7,9 +7,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="robots" content="noindex">
 <title>Юнит-экономика</title>
-<link rel="manifest" href="owner.webmanifest?v=37">
+<link rel="manifest" href="owner.webmanifest?v=38">
 <meta name="apple-mobile-web-app-title" content="Алмалы">
-<script src="theme.js?v=37"></script>
+<script src="theme.js?v=38"></script>
 <style id="splash-css">/* заставка первой загрузки: стили прямо в странице — видна сразу, до style.css; тема — из theme.js выше */
 html{background:#F5F4F0}:root[data-theme="dark"]{background:#0A0D14}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){background:#0A0D14}}
@@ -44,10 +44,10 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 @media(prefers-reduced-motion:reduce){.sp-logo,.sp-logo::before,.sp-logo::after,.sp-road::before,.sp-truck,.sp-truck svg{animation:none}
 .sp-logo::before,.sp-logo::after{display:none}.sp-truck{transform:translateX(69px)}#splash,.sp-in{transition:none}}
 </style>
-<link rel="stylesheet" href="style.css?v=37">
-<link rel="icon" href="icons/owner.svg?v=37" type="image/svg+xml">
-<link rel="icon" href="icons/owner-32.png?v=37" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" href="icons/owner-180.png?v=37" sizes="180x180">
+<link rel="stylesheet" href="style.css?v=38">
+<link rel="icon" href="icons/owner.svg?v=38" type="image/svg+xml">
+<link rel="icon" href="icons/owner-32.png?v=38" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/owner-180.png?v=38" sizes="180x180">
 </head>
 <body data-view="orders">
 <div id="splash" role="status" aria-live="polite" aria-label="Загрузка"><div class="sp-in">
@@ -149,10 +149,10 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
   <button type="button" id="gear" data-view="settings" aria-selected="false" aria-expanded="false" aria-controls="settings"><span data-ic="settings"></span>Настройки</button>
 </div></nav>
 
-<script src="calc.js?v=37"></script>
-<script src="config.js?v=37"></script>
-<script src="push.js?v=37"></script>
-<script src="alarm.js?v=37"></script>
+<script src="calc.js?v=38"></script>
+<script src="config.js?v=38"></script>
+<script src="push.js?v=38"></script>
+<script src="alarm.js?v=38"></script>
 <script>
 const API = "https://api-seller.ozon.ru";
 // Статусы Ozon → понятные этапы; неизвестный статус показываем как есть
@@ -807,8 +807,10 @@ ${li("Итого на свою доставку", rub(t.delivery + t.lift), "tot
   <div class="card"><div class="pn">Прибыль на 1 м²</div><div class="v ${t.profit_m2 < 0 ? "c-r" : ""}">${rub(t.profit_m2)}</div></div>
   <div class="card"><div class="pn">Прибыль по заказу</div><div class="v ${t.profit < 0 ? "c-r" : ""}">${rub(t.profit)}</div></div>
 </div>
+<div class="desk-split"><div>
 <div class="sec"><b>Товар</b><span>${t.packs} уп · ${t.m2.toFixed(2)} м²</span></div>
 <div class="list">${goods}</div>
+</div><div>
 <div class="sec"><b>Расклад</b><span>комиссия ${pcts} · ${boost}</span></div>
 <div class="list">
 ${li("Продажи", rub(t.sales))}
@@ -823,6 +825,7 @@ ${li("Себестоимость закупки", "−" + rub(t.cost), "m")}
 <div class="li tot"><div class="k">Чистая прибыль</div><div class="v ${t.profit < 0 ? "c-r" : "c-g"}">${rub(t.profit)}</div></div>
 </div>
 ${logisticsBlock}
+</div></div>
 <div class="actions" style="margin:16px 0 24px">
   <button type="button" class="ghost" data-copycalc>${ic("copy")}Скопировать</button>
   ${canSend ? `<button type="button" data-sendsheet="${e(posting.posting_number)}">${ic("send")}Отправить курьеру</button>` : ""}

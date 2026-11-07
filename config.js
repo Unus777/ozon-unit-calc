@@ -171,7 +171,12 @@ function sheetShow() {
   if (s.classList.contains("show")) return;  // уже открыто — только обновили содержимое
   s.hidden = false;
   document.body.classList.add("noscroll");
-  requestAnimationFrame(() => requestAnimationFrame(() => s.classList.add("show")));
+  const panel = s.querySelector(".sheet-panel");
+  if (panel && !panel.hasAttribute("tabindex")) panel.tabIndex = -1;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    s.classList.add("show");
+    if (panel && !panel.contains(document.activeElement)) panel.focus({preventScroll: true});
+  }));
   buzz();
 }
 function sheetHide() {
@@ -198,6 +203,13 @@ function sheetHide() {
     if (y0 === null) return;
     y0 = null; p.style.transition = "";
     if (dy > 90) sheetHide(); else p.style.transform = "";
+  });
+  addEventListener("keydown", ev => {
+    if (ev.key !== "Escape" || ev.defaultPrevented) return;
+    const modal = document.querySelector(".modal-bg:not([hidden])");
+    if (modal) { (modal.querySelector("[id$='-cancel'], [id$='-close']") || {}).click?.(); return; }
+    const s = document.getElementById("sheet");
+    if (s && !s.hidden) sheetHide();
   });
 })();
 // ---------- загрузка: заставка, скелетоны, крутящаяся кнопка «Обновить» ----------

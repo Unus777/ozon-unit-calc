@@ -10,6 +10,7 @@
 --shadow:var(--sh2);
 --hero1:#1A2860;--hero2:#0F1A3D;--hero3:#2F4AC0;
 --font:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,system-ui,"Segoe UI",Roboto,sans-serif;
+--bar-h:56px;
 color-scheme:light}
 /* тёмная тема: «Авто» — как в телефоне; data-theme=light|dark на <html> перекрывает (theme.js) */
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
@@ -364,7 +365,7 @@ box-shadow:var(--sh2),inset 0 0 0 1px var(--line);border-radius:20px;min-height:
 body.maptab{overflow:hidden}
 body.maptab #driverHero,body.maptab #owed,body.maptab #notif{display:none}
 #mapbox{--peek:150px;--pin-n:#E39A16;--pin-g:#12924A;--pin-p:#6B3FC2;position:fixed;z-index:5;left:0;right:0;margin:0 auto;max-width:600px;
-top:calc(56px + env(safe-area-inset-top));bottom:calc(57px + env(safe-area-inset-bottom));overflow:hidden;background:var(--soft)}
+top:calc(var(--bar-h) + env(safe-area-inset-top));bottom:calc(57px + env(safe-area-inset-bottom));overflow:hidden;background:var(--soft)}
 :root[data-theme="dark"] #mapbox{--pin-n:#F2A93B;--pin-g:#2FB86E;--pin-p:#9B74F0}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]) #mapbox{--pin-n:#F2A93B;--pin-g:#2FB86E;--pin-p:#9B74F0}}
 #map{position:absolute;inset:0;z-index:0;background:var(--soft)}
@@ -596,5 +597,54 @@ display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;b
 .pt .ph .r>.badge{min-width:0;max-width:calc(100% - 92px);display:inline-block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:28px;height:28px}
 .pt .ph .r>.badge .ic{vertical-align:-3px;margin-right:6px}
 .al-ok:focus{outline:none}.al-ok:focus-visible{outline:3px solid rgba(255,255,255,.55);outline-offset:3px}
+button:focus-visible,a:focus-visible,.crow:focus-visible,[tabindex]:focus-visible,summary:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 .al-night{align-self:center;display:inline-flex;align-items:center;gap:6px;margin-top:10px;height:28px;padding:0 12px;border-radius:14px;background:rgba(255,255,255,.1);color:rgba(255,255,255,.85);font-size:13px;font-weight:600;white-space:nowrap}
 .al-night .ic{width:14px;height:14px}
+
+/* Mac в браузере: боковое меню и ширина экрана. Уже 1100px — как телефон. */
+@media (min-width: 1100px) {
+  :root { --bar-h: 64px; --desk-nav: 228px; }
+  body { padding-left: var(--desk-nav); }
+  .tabbar { top: 0; bottom: 0; left: 0; right: auto; width: var(--desk-nav); display: flex; flex-direction: column;
+    border-top: 0; border-right: 1px solid var(--line); padding: 20px 12px 16px; }
+  .tabbar .in { flex-direction: column; align-items: stretch; max-width: none; width: 100%; gap: 4px; }
+  .tabbar .in > a, .tabbar .in > button { flex: 0 0 auto; flex-direction: row; justify-content: flex-start; width: 100%;
+    height: 44px; min-height: 44px; gap: 10px; padding: 0 12px; font-size: 15px; border-radius: 12px; }
+  .tabbar .in > [aria-selected="true"] { background: var(--acc-bg); color: var(--acc); }
+  .tabbar i { position: static; margin-left: auto; box-shadow: none; }
+  .bar { height: var(--bar-h); max-width: 1120px; }
+  .lt, main { max-width: 1120px; }
+  main { padding-bottom: 40px; }
+  .toast { bottom: 24px; }
+  .settings-view, #keys { max-width: 680px; }
+  #orders { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+  #orders > .card { margin: 0; min-width: 0; }
+  #orders > .empty, #orders > .err, #orders > .sk-wrap { grid-column: 1 / -1; }
+  #orders > .sk-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .desk-split { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; align-items: start; }
+  body:has(#driverHero):not(.maptab) #app { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 8px 24px; align-items: start; }
+  body:has(#driverHero):not(.maptab) #driverHero { position: sticky; top: calc(var(--bar-h) + 12px); }
+  body:has(#driverHero):not(.maptab) #list { grid-column: 2; grid-row: 1 / span 8; min-width: 0; }
+  body:has(#driverHero):not(.maptab) #notif, body:has(#driverHero):not(.maptab) #owed { grid-column: 1; }
+  body:has(#driverHero):not(.maptab) #owed:empty { display: none; }
+  body.maptab .bar, body.maptab main { max-width: none; }
+  body.maptab { padding-bottom: 0; }
+  #mapbox { left: var(--desk-nav); right: 0; bottom: 0; max-width: none; margin: 0; display: grid;
+    grid-template-columns: minmax(0, 1fr) 380px; grid-template-rows: minmax(0, 1fr); }
+  #map, #mapbox .map-load, #mapbox .mtop, #mapbox .mcard { grid-column: 1; grid-row: 1; }
+  #map, #mapbox .map-load { left: 0; right: 380px; width: auto; }
+  #mapbox .mtop { right: 392px; }
+  #mapbox .mcard { right: 390px; }
+  #mapbox .msheet, #mapbox .msheet[data-state="peek"], #mapbox .msheet[data-state="open"], #mapbox .msheet[data-state="hide"] {
+    position: relative; grid-column: 2; grid-row: 1; inset: auto; width: auto; height: 100%; max-height: none; border-radius: 0;
+    transform: none !important; box-shadow: none; border-left: 1px solid var(--line); }
+  #mapbox .ms-head { cursor: default; padding-top: 16px; }
+  #mapbox .ms-head .grab, #mapbox .ms-chev { display: none; }
+  .sheet { display: flex; align-items: center; justify-content: center; padding: 32px; }
+  .sheet-panel { position: relative; left: auto; right: auto; bottom: auto; width: min(560px, 100%); max-height: min(84vh, 800px);
+    border-radius: 24px; margin: 0; opacity: 0; transform: translateY(12px); }
+  .sheet.show .sheet-panel { opacity: 1; transform: none; }
+  .sheet .grab, .modal-card::before { display: none; }
+  .modal-bg { align-items: center; padding: 32px; }
+  .modal-card { width: min(480px, 100%); max-height: min(84vh, 760px); overflow: auto; border-radius: 24px; animation: rise .22s ease; }
+}

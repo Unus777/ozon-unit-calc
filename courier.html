@@ -8,8 +8,8 @@
 <meta name="robots" content="noindex">
 <meta name="referrer" content="no-referrer">
 <title>Доставки</title>
-<link rel="manifest" href="manifest.webmanifest?v=37">
-<script src="theme.js?v=37"></script>
+<link rel="manifest" href="manifest.webmanifest?v=38">
+<script src="theme.js?v=38"></script>
 <style id="splash-css">/* заставка первой загрузки: стили прямо в странице — видна сразу, до style.css; тема — из theme.js выше */
 html{background:#F5F4F0}:root[data-theme="dark"]{background:#0A0D14}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){background:#0A0D14}}
@@ -44,10 +44,10 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 @media(prefers-reduced-motion:reduce){.sp-logo,.sp-logo::before,.sp-logo::after,.sp-road::before,.sp-truck,.sp-truck svg{animation:none}
 .sp-logo::before,.sp-logo::after{display:none}.sp-truck{transform:translateX(69px)}#splash,.sp-in{transition:none}}
 </style>
-<link rel="stylesheet" href="style.css?v=37">
-<link rel="icon" href="icons/courier.svg?v=37" type="image/svg+xml">
-<link rel="icon" href="icons/courier-32.png?v=37" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" href="icons/courier-180.png?v=37" sizes="180x180">
+<link rel="stylesheet" href="style.css?v=38">
+<link rel="icon" href="icons/courier.svg?v=38" type="image/svg+xml">
+<link rel="icon" href="icons/courier-32.png?v=38" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/courier-180.png?v=38" sizes="180x180">
 </head>
 <body>
 <div id="splash" role="status" aria-live="polite" aria-label="Загрузка"><div class="sp-in">
@@ -106,9 +106,9 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 <button role="tab" aria-selected="false" data-tab="done"><span data-ico="checkc"></span>Готово</button>
 </div></nav>
 
-<script src="config.js?v=37"></script>
-<script src="push.js?v=37"></script>
-<script src="alarm.js?v=37"></script>
+<script src="config.js?v=38"></script>
+<script src="push.js?v=38"></script>
+<script src="alarm.js?v=38"></script>
 <script>
 const $ = id => document.getElementById(id);
 const e = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
@@ -505,6 +505,7 @@ function drawRoute(info) {
     geometry: {type: "LineString", coordinates: d.line.map(p => [p[1], p[0]])}});
 }
 const sheetPeek = () => ($("msheet").querySelector(".ms-head") || {}).offsetHeight || 150;
+const deskMap = () => matchMedia("(min-width: 1100px)").matches;
 function fitAll(animate) {
   if (!MAP) return;
   const lls = MAP_ORDER.map(p => p.ll).concat(ME ? [ME] : []);
@@ -513,7 +514,8 @@ function fitAll(animate) {
   if (lls.length === 1) { MAP.flyTo({center: [lls[0][1], lls[0][0]], zoom: 13.5, duration}); return; }
   const b = new maplibregl.LngLatBounds();
   lls.forEach(p => b.extend([p[1], p[0]]));
-  MAP.fitBounds(b, {padding: {top: 76, left: 36, right: 36, bottom: (SEL ? $("mcard").offsetHeight : sheetPeek()) + 36}, maxZoom: 14.5, duration});
+  const cover = SEL ? $("mcard").offsetHeight : (deskMap() ? 16 : sheetPeek());
+  MAP.fitBounds(b, {padding: {top: 76, left: 36, right: 36, bottom: cover + 36}, maxZoom: 14.5, duration});
 }
 function flyToStop(ll) {  // метка встаёт выше карточки заказа
   const h = $("mcard").offsetHeight || 280;
@@ -585,7 +587,7 @@ function drawMap() {
   $("mcard").innerHTML = selIdx >= 0 ? mcardHtml(order[selIdx].r, selIdx + 1) : "";
   $("mcard").classList.toggle("show", selIdx >= 0);
   $("msheet").dataset.state = selIdx >= 0 ? "hide" : MS_STATE;
-  $("mapbox").style.setProperty("--peek", sheetPeek() + "px");
+  $("mapbox").style.setProperty("--peek", (deskMap() ? 16 : sheetPeek()) + "px");
   // ---- сама карта ----
   if (info.key && !info.data) Promise.resolve(roadRoute(info.lls)).then(() => { if (TAB === "map" && routeInfo(MAP_ORDER).key === info.key) drawMap(); });
   initMap().then(() => {
@@ -623,6 +625,7 @@ function setSheet(s) { MS_STATE = s; $("msheet").dataset.state = s; $("msheet").
     else sh.style.transform = "";
   });
 })();
+matchMedia("(min-width: 1100px)").addEventListener("change", () => { if (TAB === "map") drawMap(); });
 
 $("mapbox").addEventListener("click", ev => {
   if (ev.target.closest("a")) return;  // «Поехать», «Позвонить», Яндекс Карты — обычные ссылки
