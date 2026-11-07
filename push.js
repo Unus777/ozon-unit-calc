@@ -2,6 +2,23 @@
 // скрипт таблицы только пересылает подпись в службу пушей.
 const b64url = bytes => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const b64json = o => b64url(new TextEncoder().encode(JSON.stringify(o)));
+const KEY_BROKEN = "Ключ уведомлений на этом компьютере повреждён — вставьте ссылку доступа заново в Настройках";
+// base64url без «=», а ещё «+» из ссылки URLSearchParams превращает в пробел — оба случая ломают atob в Chrome
+function b64urlToBytes(s) {
+  let t = String(s ?? "").trim();
+  try { if (/%[0-9a-f]{2}/i.test(t)) t = decodeURIComponent(t); } catch {}
+  t = t.replace(/ /g, "+").replace(/-/g, "+").replace(/_/g, "/").replace(/\s/g, "");
+  if (!t || t.length % 4 === 1 || /[^A-Za-z0-9+/=]/.test(t)) throw new Error(KEY_BROKEN);
+  t += "=".repeat((4 - t.length % 4) % 4);
+  try { return Uint8Array.from(atob(t), c => c.charCodeAt(0)); }
+  catch { throw new Error(KEY_BROKEN); }
+}
+function ownerKey(raw) {
+  if (!raw) throw new Error("На этом компьютере нет ключа уведомлений — вставьте ссылку доступа в Настройках");
+  const jwk = JSON.parse(new TextDecoder().decode(b64urlToBytes(raw)));
+  if (!jwk || !jwk.d) throw new Error(KEY_BROKEN);
+  return jwk;
+}
 
 async function vapidJwt(aud, jwk) {
   const key = await crypto.subtle.importKey("jwk", jwk, {name: "ECDSA", namedCurve: "P-256"}, false, ["sign"]);
@@ -16,8 +33,7 @@ async function sendReminder(posting, adminKey) {
   const text = prompt("Текст напоминания курьеру (можно оставить пустым):", "");
   if (text === null) return null;
   const raw = (() => { try { return localStorage.getItem("dlv_vk"); } catch { return null; } })();
-  if (!raw) throw new Error("На этом устройстве нет ключа уведомлений — вставьте вашу ссылку доступа в ⚙ Настройки");
-  const jwk = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(raw.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0))));
+  const jwk = ownerKey(raw);
   const jwts = {};
   for (const aud of await sheetApi({action: "push_targets", key: adminKey})) jwts[aud] = await vapidJwt(aud, jwk);
   const res = await sheetApi({action: "remind", key: adminKey, posting, text, jwts});
@@ -25,4 +41,4 @@ async function sendReminder(posting, adminKey) {
   return res;
 }
 
-if (typeof module !== "undefined") module.exports = {vapidJwt};
+if (typeof module !== "undefined") module.exports = {vapidJwt, b64urlToBytes, ownerKey, KEY_BROKEN};
