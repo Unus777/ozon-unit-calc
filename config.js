@@ -85,7 +85,7 @@ function agreedLabel(a, today = agreedNow()) {
   return "Согласовано · " + (a.day === today.slice(0, 5) ? a.time : a.day);
 }
 
-// Ночной режим по московскому времени (не по часовому поясу телефона): 23:00–07:59 — без звука, только вибрация
+// Ночные часы по Москве (не по часовому поясу телефона): 23:00–07:59. Звук экрана тревоги от часа не зависит.
 // Вес упаковки по карточкам Ozon: 60×60 — 34–37 кг, 60×120 — 27–28,8 кг. Неизвестный формат считаем как 60×60 (тяжелее — без недогруза).
 var PACK_KG = {"60×60": 35, "60×120": 28};
 function packKg(fmt) { return /60\s*[xх×]\s*120|612/i.test(String(fmt || "")) ? PACK_KG["60×120"] : PACK_KG["60×60"]; }
@@ -171,7 +171,12 @@ function sheetShow() {
   if (s.classList.contains("show")) return;  // уже открыто — только обновили содержимое
   s.hidden = false;
   document.body.classList.add("noscroll");
-  requestAnimationFrame(() => requestAnimationFrame(() => s.classList.add("show")));
+  const panel = s.querySelector(".sheet-panel");
+  if (panel && !panel.hasAttribute("tabindex")) panel.tabIndex = -1;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    s.classList.add("show");
+    if (panel && !panel.contains(document.activeElement)) panel.focus({preventScroll: true});
+  }));
   buzz();
 }
 function sheetHide() {
@@ -198,6 +203,13 @@ function sheetHide() {
     if (y0 === null) return;
     y0 = null; p.style.transition = "";
     if (dy > 90) sheetHide(); else p.style.transform = "";
+  });
+  addEventListener("keydown", ev => {
+    if (ev.key !== "Escape" || ev.defaultPrevented) return;
+    const modal = document.querySelector(".modal-bg:not([hidden])");
+    if (modal) { (modal.querySelector("[id$='-cancel'], [id$='-close']") || {}).click?.(); return; }
+    const s = document.getElementById("sheet");
+    if (s && !s.hidden) sheetHide();
   });
 })();
 // ---------- загрузка: заставка, скелетоны, крутящаяся кнопка «Обновить» ----------

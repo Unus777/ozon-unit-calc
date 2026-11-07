@@ -122,11 +122,15 @@ const al = context.alarmItem({posting: '1-1-1', cb: 'ЦБ-7', status: 'Новы�
 assert.equal(al.id, '1-1-1');
 assert.equal(al.kicker, 'Новый заказ · ЦБ-7');
 assert.equal(al.title, 'Химки, ул. Тестовая, 2');
-assert.equal(JSON.stringify(al.chips.map(c => c.v)), JSON.stringify(['8 уп 60×60', '~224 кг', '14:00–16:00', 'Лифт, эт. 5']));
+assert.equal(JSON.stringify(al.chips.map(c => c.v)), JSON.stringify(['8 уп 60×60', '~280 кг', '14:00–16:00', 'Лифт, эт. 5']));
 assert.equal(al.okText, 'Принял');
 // alarm.js и страницы подключают одинаковую версию
-for (const f of ['index.html', 'courier.html']) assert.match(read(f), /alarm\.js\?v=34/);
-assert.match(read('sw.js'), /SW_VERSION = "v35-load"/);
+for (const f of ['index.html', 'courier.html', 'alarm-test.html']) assert.match(read(f), /alarm\.js\?v=38/);
+assert.match(read('sw.js'), /SW_VERSION = "v39-desk"/);
+assert.match(read('sw.js'), /config\.js\?v=38/);
+assert.match(read('style.css'), /@media \(min-width: 1100px\)/);
+assert.match(read('index.html'), /desk-split/);
+assert.match(read('courier.html'), /min-width: 1100px/);
 assert.match(read("courier.html"), /maplibre-gl@5\.24\.0\/dist\/maplibre-gl\.js/);
 assert.doesNotMatch(read("courier.html"), /map-widget|api-maps\.yandex/);  // карта без виджета Яндекса и рекламы
 assert.doesNotThrow(() => new vm.Script(read('alarm.js')));
@@ -177,7 +181,7 @@ async function swRun(notice, {list = [ROW], hour = '2026-11-05T11:05:00Z', badge
   assert.equal(o.tag, 'order-1-1-1');
   assert.equal(o.requireInteraction, true);
   assert.equal(o.renotify, true);
-  assert.equal(o.silent, false);
+  assert.equal(o.silent, undefined);                                   // обычный пуш: звук решает телефон
   assert.equal(JSON.stringify(o.vibrate), '[500,200,500,200,800]');
   assert.equal(o.icon, 'icons/courier-192.png');
   assert.equal(o.badge, 'icons/badge-96.png');
@@ -190,12 +194,12 @@ async function swRun(notice, {list = [ROW], hour = '2026-11-05T11:05:00Z', badge
   assert.equal(await click(shown[0], 'open'), 'https://unus777.github.io/ozon-unit-calc/courier.html?k=K&o=1-1-1#alert=1-1-1');
   assert.equal(await click(shown[0], 'accept'), 'https://unus777.github.io/ozon-unit-calc/courier.html?k=K&o=1-1-1#alert=1-1-1&accept=1');
   for (const f of ['icons/badge-96.png', 'icons/push-new-order.png']) assert.ok(fs.statSync(path.join(__dirname, f)).size > 500, f);
-  // ночью по Москве: без звука; Chrome не позволяет vibrate у silent — вибрирует экран тревоги в приложении
+  // ночью по Москве пуш тоже обычный (не silent): звук решает телефон, вибрация в пуше остаётся
   ({shown} = await swRun({type: 'new', posting: '1-1-1', cb: 'ЦБ-7', packs: '8 уп', address: 'Химки'}, {hour: '2026-11-05T21:30:00Z'}));
-  assert.equal(shown[0][1].silent, true);
-  assert.equal(shown[0][1].vibrate, undefined);
+  assert.equal(shown[0][1].silent, undefined);
+  assert.equal(JSON.stringify(shown[0][1].vibrate), '[500,200,500,200,800]');
   assert.equal(shown[0][1].requireInteraction, true);
-  assert.match(shown[0][1].body, /Ночной режим · без звука/);
+  assert.match(shown[0][1].body, /Ночной режим · нажмите «✅ Принял»/);
   // нет списка и полей в notice — всё равно понятный пуш
   ({shown, badges} = await swRun({type: 'new', posting: '9-9-9'}, {list: new Error('нет сети')}));
   assert.equal(shown[0][0], '🚨 НОВЫЙ ЗАКАЗ');
@@ -222,9 +226,42 @@ async function swRun(notice, {list = [ROW], hour = '2026-11-05T11:05:00Z', badge
   ({shown} = await swRun({role: 'owner', type: 'accepted', posting: '1-1-1', title: '👍 Рашад принял ЦБ-7', text: 'Химки'}));
   assert.equal(shown[0][0], '👍 Рашад принял ЦБ-7');
   assert.equal(shown[0][1].data.url, './');
-  // страница: «✅ Принял» из уведомления обрабатывается, экран тревоги ночью — без звука, с плашкой
+  // страница: «✅ Принял» из уведомления обрабатывается; экран тревоги без звука в любой час, ночью — с плашкой
   assert.match(courier, /accept=1/);
-  assert.match(read('alarm.js'), /Ночной режим · без звука/);
-  assert.match(read('alarm.js'), /!soundOn\(\) \|\| night\(\)/);
+  const alarmSrc = read('alarm.js');
+  assert.match(alarmSrc, /Ночной режим · без звука/);
+  assert.match(alarmSrc, /Вибрация повторяется/);
+  assert.match(alarmSrc, /data-alok/);
+  assert.doesNotMatch(alarmSrc, /AudioContext|webkitAudioContext|createOscillator|createGain|\.resume\(|HTMLAudioElement|new Audio|soundOn|Коснитесь экрана, чтобы включить звук/);
+  assert.doesNotMatch(read('alarm-test.html'), /со звуком|AudioContext|new Audio/);
+  for (const nightOn of [false, true]) {
+    const calls = [];
+    const el = {setAttribute() {}, addEventListener() {}, querySelector() { return {focus() {}}; }, remove() {}};
+    const vibrated = [];
+    const sandbox = {
+      document: {title: 'Алмалы', body: {appendChild() {}}, documentElement: {classList: {add() {}, remove() {}}}, createElement() { return el; }},
+      navigator: {vibrate(p) { vibrated.push(p); }, userActivation: {hasBeenActive: true}},
+      location: {hash: '', pathname: '/courier.html', search: ''},
+      history: {replaceState() {}},
+      setInterval() { return 1; }, clearInterval() {}, setTimeout(fn) { fn(); return 0; },
+      AudioContext: function () { calls.push('AudioContext'); },
+      webkitAudioContext: function () { calls.push('webkitAudioContext'); },
+      isNight: () => nightOn, ic: () => ''
+    };
+    sandbox.window = sandbox;
+    vm.createContext(sandbox);
+    vm.runInContext(alarmSrc, sandbox);
+    const Alarm = vm.runInContext('Alarm', sandbox);
+    Alarm.unlock();
+    Alarm.show([{id: nightOn ? 'n' : 'd', title: 'Химки', okText: 'Принял'}]);
+    assert.equal(JSON.stringify(calls), '[]');
+    assert.equal(JSON.stringify(vibrated), '[[500,200,500,200,800]]');
+    assert.match(el.innerHTML, /data-alok="(d|n)"/);
+    assert.match(el.innerHTML, /Принял/);
+    assert.match(el.innerHTML, /Вибрация повторяется/);
+    assert.doesNotMatch(el.innerHTML, /включить звук|Сигнал/);
+    if (nightOn) assert.match(el.innerHTML, /Ночной режим · без звука/);
+    else assert.doesNotMatch(el.innerHTML, /al-night/);
+  }
   console.log('Пуш нового заказа, «✅ Принял» и ночной режим: проверки пройдены');
 })().catch(err => { console.error(err); process.exit(1); });
