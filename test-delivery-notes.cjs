@@ -125,15 +125,34 @@ assert.equal(al.title, 'Химки, ул. Тестовая, 2');
 assert.equal(JSON.stringify(al.chips.map(c => c.v)), JSON.stringify(['8 уп 60×60', '~280 кг', '14:00–16:00', 'Лифт, эт. 5']));
 assert.equal(al.okText, 'Принял');
 // alarm.js и страницы подключают одинаковую версию
-for (const f of ['index.html', 'courier.html', 'alarm-test.html']) assert.match(read(f), /alarm\.js\?v=38/);
-assert.match(read('sw.js'), /SW_VERSION = "v39-desk"/);
-assert.match(read('sw.js'), /config\.js\?v=38/);
+for (const f of ['index.html', 'courier.html', 'alarm-test.html']) assert.match(read(f), /alarm\.js\?v=39/);
+assert.match(read('sw.js'), /SW_VERSION = "v40-key"/);
+assert.match(read('sw.js'), /config\.js\?v=39/);
 assert.match(read('style.css'), /@media \(min-width: 1100px\)/);
 assert.match(read('index.html'), /desk-split/);
 assert.match(read('courier.html'), /min-width: 1100px/);
 assert.match(read("courier.html"), /maplibre-gl@5\.24\.0\/dist\/maplibre-gl\.js/);
 assert.doesNotMatch(read("courier.html"), /map-widget|api-maps\.yandex/);  // карта без виджета Яндекса и рекламы
 assert.doesNotThrow(() => new vm.Script(read('alarm.js')));
+
+// ключ уведомлений: base64url без «=» и «+», который ссылка превратила в пробел
+const {b64urlToBytes, ownerKey, KEY_BROKEN} = require('./push.js');
+const jwkObj = {kty: 'EC', crv: 'P-256', d: 'd+d/d', x: 'xx', y: 'yy'};
+const jwkB64 = Buffer.from(JSON.stringify(jwkObj)).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+assert.equal(jwkB64.includes('='), false);
+assert.equal(JSON.parse(Buffer.from(b64urlToBytes(jwkB64)).toString()).d, 'd+d/d');
+const spaced = Buffer.from(JSON.stringify(jwkObj)).toString('base64').replace(/\+/g, ' ');
+assert.equal(JSON.parse(Buffer.from(b64urlToBytes(spaced)).toString()).d, 'd+d/d');
+assert.throws(() => b64urlToBytes('abcde'), new RegExp(KEY_BROKEN));
+assert.equal(ownerKey(jwkB64).d, 'd+d/d');
+const link = 'https://unus777.github.io/ozon-unit-calc/#admin=K&vk=' + Buffer.from(JSON.stringify(jwkObj)).toString('base64');
+const kept = new URLSearchParams(link.replace(/^.*?#/, '').replace(/\+/g, '%2B')).get('vk');
+const lost = new URLSearchParams(link.replace(/^.*?#/, '')).get('vk');
+assert.equal(JSON.parse(Buffer.from(b64urlToBytes(kept)).toString()).d, 'd+d/d');
+assert.equal(JSON.parse(Buffer.from(b64urlToBytes(lost)).toString()).d, 'd+d/d');
+assert.ok(read('index.html').includes('q.replace(/\\+/g, "%2B")'));
+assert.doesNotMatch(read('index.html'), /atob\(/);
+assert.doesNotMatch(read('push.js'), /atob\(raw/);
 
 // Ночной режим по Москве: 23:00–07:59, независимо от часового пояса телефона
 assert.equal(vm.runInContext('NIGHT_FROM', context), 23);

@@ -7,9 +7,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="robots" content="noindex">
 <title>Юнит-экономика</title>
-<link rel="manifest" href="owner.webmanifest?v=38">
+<link rel="manifest" href="owner.webmanifest?v=39">
 <meta name="apple-mobile-web-app-title" content="Алмалы">
-<script src="theme.js?v=38"></script>
+<script src="theme.js?v=39"></script>
 <style id="splash-css">/* заставка первой загрузки: стили прямо в странице — видна сразу, до style.css; тема — из theme.js выше */
 html{background:#F5F4F0}:root[data-theme="dark"]{background:#0A0D14}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){background:#0A0D14}}
@@ -44,10 +44,10 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 @media(prefers-reduced-motion:reduce){.sp-logo,.sp-logo::before,.sp-logo::after,.sp-road::before,.sp-truck,.sp-truck svg{animation:none}
 .sp-logo::before,.sp-logo::after{display:none}.sp-truck{transform:translateX(69px)}#splash,.sp-in{transition:none}}
 </style>
-<link rel="stylesheet" href="style.css?v=38">
-<link rel="icon" href="icons/owner.svg?v=38" type="image/svg+xml">
-<link rel="icon" href="icons/owner-32.png?v=38" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" href="icons/owner-180.png?v=38" sizes="180x180">
+<link rel="stylesheet" href="style.css?v=39">
+<link rel="icon" href="icons/owner.svg?v=39" type="image/svg+xml">
+<link rel="icon" href="icons/owner-32.png?v=39" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/owner-180.png?v=39" sizes="180x180">
 </head>
 <body data-view="orders">
 <div id="splash" role="status" aria-live="polite" aria-label="Загрузка"><div class="sp-in">
@@ -149,10 +149,10 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
   <button type="button" id="gear" data-view="settings" aria-selected="false" aria-expanded="false" aria-controls="settings"><span data-ic="settings"></span>Настройки</button>
 </div></nav>
 
-<script src="calc.js?v=38"></script>
-<script src="config.js?v=38"></script>
-<script src="push.js?v=38"></script>
-<script src="alarm.js?v=38"></script>
+<script src="calc.js?v=39"></script>
+<script src="config.js?v=39"></script>
+<script src="push.js?v=39"></script>
+<script src="alarm.js?v=39"></script>
 <script>
 const API = "https://api-seller.ozon.ru";
 // Статусы Ozon → понятные этапы; неизвестный статус показываем как есть
@@ -182,7 +182,9 @@ const store = {  // localStorage может быть недоступен (пр�
 // Приложение с экрана «Домой» на iPhone хранит данные отдельно от Safari, поэтому ссылку
 // можно и открыть, и вставить в настройках.
 function applyAccess(hash) {
-  const h = new URLSearchParams(hash.replace(/^.*?#/, ""));
+  const q = String(hash || "").replace(/^.*?#/, "").trim();
+  if (!q) return false;
+  const h = new URLSearchParams(q.replace(/\+/g, "%2B"));  // «+» в base64 нельзя отдавать URLSearchParams: он станет пробелом
   if (!h.get("admin") || !h.get("vk")) return false;
   store.set("dlv_admin", h.get("admin"));
   store.set("dlv_vk", h.get("vk"));
@@ -238,10 +240,16 @@ async function sendToCourier(number, cbRaw, details) {
     date: details.date || (fbs ? new Date().toLocaleDateString("ru-RU") : ""),
     comment: deliveryComment({...details, note: [fbs ? "" : a.comment, details.note].filter(Boolean).join("\n")}),
   };
-  const jwk = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(store.get("dlv_vk").replace(/-/g, "+").replace(/_/g, "/")), ch => ch.charCodeAt(0))));
-  const jwts = {};
-  for (const aud of await sheetApi({action: "push_targets", key: ADMIN()})) jwts[aud] = await vapidJwt(aud, jwk);
-  return sheetApi({action: "create", key: ADMIN(), data, jwts});
+  let jwts = {}, keyWarn = "";
+  try {
+    const jwk = ownerKey(store.get("dlv_vk"));
+    for (const aud of await sheetApi({action: "push_targets", key: ADMIN()})) jwts[aud] = await vapidJwt(aud, jwk);
+  } catch (err) {
+    if (!/ключа уведомлений|Ключ уведомлений/.test(err.message || "")) throw err;
+    keyWarn = err.message;  // заказ всё равно записываем: пуш подпишем, когда ссылку вставят заново
+  }
+  const res = await sheetApi({action: "create", key: ADMIN(), data, jwts});
+  return Object.assign({}, res, keyWarn ? {keyWarn} : {});
 }
 
 function show() {
@@ -1041,7 +1049,7 @@ const pushReady = () => "serviceWorker" in navigator && "PushManager" in window;
 async function ownerSubscribe() {
   const reg = await navigator.serviceWorker.register(`sw.js?k=${encodeURIComponent(ADMIN())}`);
   await navigator.serviceWorker.ready;
-  const raw = Uint8Array.from(atob(VAPID_PUBLIC.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+  const raw = b64urlToBytes(VAPID_PUBLIC);
   const sub = await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: raw});
   await sheetApi({action: "subscribe", key: ADMIN(), endpoint: sub.endpoint});
 }
@@ -1112,7 +1120,7 @@ $("app").addEventListener("submit", async ev => {
       setTimeout(() => { btn.innerHTML = label; }, 2000);
       drawOrders();
     } else {
-      toast(r.pushed ? "Отправлено курьеру ✓" : "Заказ у курьера, но пуш не дошёл: курьер не включил уведомления", !r.pushed);
+      toast(r.keyWarn ? "Заказ у курьера. " + r.keyWarn : r.pushed ? "Отправлено курьеру ✓" : "Заказ у курьера, но пуш не дошёл: курьер не включил уведомления", !!(r.keyWarn || !r.pushed));
       closeSheet();
       drawOrders();
     }
