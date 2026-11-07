@@ -579,9 +579,6 @@ padding:calc(env(safe-area-inset-top) + 16px) 20px calc(env(safe-area-inset-bott
 .al-chip b.am{color:#FFC861}
 .al-note{margin-top:12px;padding:12px 14px;border-radius:16px;background:rgba(255,255,255,.08);font-size:14px;line-height:20px;text-align:left;white-space:pre-line;color:rgba(255,255,255,.86)}
 .al-foot{margin-top:auto;padding-top:24px;display:grid;gap:10px}
-.al-hint{display:flex;align-items:center;justify-content:center;gap:8px;font-size:14px;font-weight:500;color:#FFD88A;background:rgba(255,200,97,.12);border-radius:14px;padding:10px 12px;text-align:center}
-.al-hint[hidden]{display:none}
-.al-hint .ic{width:16px;height:16px;flex:0 0 auto}
 .al-ok{appearance:none;border:0;height:64px;border-radius:20px;background:#fff;color:#0F1A3D;font:inherit;font-size:20px;font-weight:700;letter-spacing:-.01em;
 display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;box-shadow:0 12px 30px -10px rgba(0,0,0,.5);animation:al-pulse 2.2s ease-in-out infinite}
 .al-ok .ic{width:22px;height:22px;color:#1F9D55}

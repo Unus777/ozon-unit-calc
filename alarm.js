@@ -1,51 +1,17 @@
-// Экран тревоги: новый заказ на весь экран, со звуком и вибрацией, пока не нажмут «Принял».
+// Экран тревоги: новый заказ на весь экран, с вибрацией, пока не нажмут «Принял». Звука нет ни в какой час.
 // Веб-приложение не может включить экран телефона само — это работает, когда приложение открыто;
 // закрытое приложение будит липкий пуш (sw.js), нажатие на него открывает этот экран (#alert=<номер>).
-// Звук — сгенерированный WebAudio-сигнал без файлов. iOS разрешает звук только после касания экрана,
-// поэтому аудио «разблокируется» первым касанием, а до него показывается подсказка.
 const Alarm = (() => {
-  let AC = null, queue = [], opts = {}, loop = null, titleLoop = null, el = null, baseTitle = document.title;
+  let queue = [], opts = {}, loop = null, titleLoop = null, el = null, baseTitle = document.title;
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
-  const soundOn = () => !!AC && AC.state === "running";
-  // Ночной режим по Москве (isNight из config.js, часы NIGHT_FROM–NIGHT_TO): экран и вибрация есть, звука нет
+  // Ночная плашка по Москве (isNight из config.js). На звук не влияет: звука нет и днём, и ночью.
   const night = () => typeof isNight === "function" && isNight();
 
-  function unlock() {
-    try {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!Ctx) return;
-      AC = AC || new Ctx();
-      if (AC.state !== "running") AC.resume().then(hint, () => {});
-      // iOS: тихий звук внутри касания окончательно разрешает воспроизведение
-      const o = AC.createOscillator(), g = AC.createGain();
-      g.gain.value = 0.0001; o.connect(g).connect(AC.destination); o.start(); o.stop(AC.currentTime + 0.02);
-    } catch {}
-    setTimeout(hint, 60);
-  }
-  addEventListener("pointerdown", unlock, {capture: true, passive: true});
-  addEventListener("keydown", unlock, {capture: true});
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && el && AC) AC.resume().catch(() => {}); });
+  function unlock() {}
 
-  function beep() {
-    if (!soundOn() || night()) return;
-    const t = AC.currentTime;
-    [[988, 0], [1319, .2], [988, .4], [1319, .6]].forEach(([f, dt]) => {
-      const o = AC.createOscillator(), g = AC.createGain();
-      o.type = "triangle"; o.frequency.value = f;
-      g.gain.setValueAtTime(0.0001, t + dt);
-      g.gain.exponentialRampToValueAtTime(0.5, t + dt + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dt + 0.18);
-      o.connect(g).connect(AC.destination); o.start(t + dt); o.stop(t + dt + 0.2);
-    });
-  }
   // Chrome разрешает вибрацию только после первого касания страницы
   function buzz() { try { if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate([500, 200, 500, 200, 800]); } catch {} }
-  function tick() { beep(); buzz(); }
-
-  function hint() {
-    const h = el && el.querySelector(".al-hint");
-    if (h) h.hidden = soundOn() || night();
-  }
+  function tick() { buzz(); }
 
   function chip(c) {
     return `<div class="al-chip"><span>${esc(c.k)}</span><b class="${c.warn ? "am" : ""}">${esc(c.v)}</b></div>`;
@@ -77,9 +43,8 @@ const Alarm = (() => {
         ${it.note ? `<div class="al-note">${esc(it.note)}</div>` : ""}
       </div>
       <div class="al-foot">
-        <div class="al-hint" ${soundOn() || night() ? "hidden" : ""}>${typeof ic === "function" ? ic("bell", "s") : ""}Коснитесь экрана, чтобы включить звук</div>
         <button type="button" class="al-ok" data-alok="${esc(it.id)}">${typeof ic === "function" ? ic("check") : ""}${esc(it.okText || "Принял")}</button>
-        <div class="al-foot-t">${night() ? "Вибрация" : "Сигнал"} повторяется, пока вы не нажмёте «${esc(it.okText || "Принял")}»</div>
+        <div class="al-foot-t">Вибрация повторяется, пока вы не нажмёте «${esc(it.okText || "Принял")}»</div>
       </div>
     </div>`;
     if (!loop) { tick(); loop = setInterval(tick, 2200); }
@@ -117,5 +82,5 @@ const Alarm = (() => {
     if (queue.length) render(); else if (el) close();
   }
   const hashId = () => { const m = /[#&]alert=([^&]+)/.exec(location.hash); return m ? decodeURIComponent(m[1]) : null; };
-  return {show, hashId, get open() { return !!el; }, unlock, soundOn};
+  return {show, hashId, get open() { return !!el; }, unlock};
 })();
