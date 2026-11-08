@@ -647,4 +647,25 @@ button:focus-visible,a:focus-visible,.crow:focus-visible,[tabindex]:focus-visibl
   .sheet .grab, .modal-card::before { display: none; }
   .modal-bg { align-items: center; padding: 32px; }
   .modal-card { width: min(480px, 100%); max-height: min(84vh, 760px); overflow: auto; border-radius: 24px; animation: rise .22s ease; }
+  .fbs-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+  .fbs-list > .card { margin: 0; }
 }
+.fbs-live:empty { display: none; }
+.fbs-live { margin: 0 0 12px; font-size: 14px; font-weight: 600; }
+.fbs-intro p { margin: 8px 0 0; color: var(--ink2); }
+.fbs-wh, .fbs-due { margin: 6px 0; }
+.fbs-note { font-size: 13px; color: var(--mut); margin: 8px 0 0; }
+.fbs-steps { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.fbs-steps button { white-space: normal; text-align: center; height: auto; min-height: 44px; padding: 8px 12px; flex: 1 1 calc(50% - 8px); }
+.fbs-post { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.fbs-post .t2 { font-size: 14px; margin-top: 4px; }
+.fbs-conflict { background: var(--yellow-bg); border-radius: 14px; padding: 12px; display: grid; gap: 8px; margin: 12px 0; }
+.fbs-conflict ul { margin: 0; padding-left: 18px; }
+.fbs-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.fbs-order form { display: grid; gap: 8px; margin-top: 8px; }
+.fbs-order > .top, .fbs-post > .top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.fbs-order > .top b { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.fbs-all button { flex: 1 1 140px; }
+#orders > .fbs-wrap { grid-column: 1 / -1; }
+body.fbs-preview { padding-left: 0 !important; }
+body.fbs-preview main { max-width: 1120px; }
