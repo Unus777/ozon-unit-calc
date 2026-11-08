@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>FBS · проверка на вымышленных данных</title>
+<link rel="stylesheet" href="style.css?v=40">
+<script src="theme.js?v=39"></script>
+</head>
+<body class="fbs-preview" data-view="orders">
+<header class="hdr"><div class="bar"><div class="logo" aria-hidden="true">А</div><div class="grow"><div class="brand">Алмалы Доставка<span>FBS · вымышленные данные, без Ozon и без Рашада</span></div></div></div></header>
+<div class="lt"><h1>FBS склад</h1><div class="sub">Проверка вёрстки. Боевые заказы не читаются и не меняются.</div></div>
+<main>
+<div id="fbsLive" class="fbs-live" role="status" aria-live="polite"></div>
+<div id="orders"></div>
+</main>
+<script src="fbs.js?v=40"></script>
+<script>
+const wh = {warehouse_id: "1020005035230080", warehouse: "FBS Алмалы (Плитка 60×60 Розница)"};
+const eight = Array.from({length: 8}, (_, i) => ({
+  posting_number: "90000001-0001-" + (i + 1),
+  order_id: 424242,
+  order_number: "90000001-0001",
+  delivery_method: wh,
+  products: [{name: i % 2 ? "Тестовый керамогранит 60×60" : "Тестовый Уайт 60×60", quantity: i + 1, offer_id: "TEST-60"}],
+  status: i === 0 ? "awaiting_packaging" : "awaiting_deliver",
+  shipment_date: "2026-11-09T12:00:00Z",
+}));
+const clash = [1, 2].map(i => ({
+  posting_number: "90000009-0009-" + i,
+  order_id: 909090,
+  order_number: "90000009-0009",
+  delivery_method: wh,
+  products: [{name: "Тестовая плитка для конфликта ЦБ", quantity: 2, offer_id: "TEST-60"}],
+  status: "awaiting_deliver",
+  shipment_date: "2026-11-09T15:00:00Z",
+}));
+const orders = eight.concat(clash);
+const deliv = {};
+const storage = {mem: {}, get(k) { return this.mem[k] || null; }, set(k, v) { this.mem[k] = String(v); }};
+storage.set(FBS_LOCAL_KEY, JSON.stringify({
+  "90000001-0001-1": {cb: "", stages: {collect: true, pack: true}, at: {}},
+  "90000009-0009-1": {cb: "ЦБ-101", stages: {}, at: {}},
+  "90000009-0009-2": {cb: "ЦБ-202", stages: {}, at: {}},
+}));
+let pending = null;
+const live = document.getElementById("fbsLive");
+function draw() {
+  document.getElementById("orders").innerHTML = fbsBoardHtml(orders, {deliv, local: loadFbsState(storage), pending});
+}
+draw();
+document.getElementById("orders").addEventListener("click", ev => {
+  const all = ev.target.closest("[data-fbs-stage-all]");
+  if (all) {
+    const group = groupFbsPostings(orders).find(item => item.key === all.dataset.order);
+    setFbsStageAll(storage, group.postings.map(item => item.posting_number), all.dataset.fbsStageAll, all.getAttribute("aria-pressed") !== "true", new Date().toISOString());
+    live.textContent = "Локальная отметка. Статус Ozon не менялся.";
+    draw();
+    return;
+  }
+  const stage = ev.target.closest("[data-fbs-stage]");
+  if (stage) {
+    setFbsStage(storage, stage.dataset.posting, stage.dataset.fbsStage, stage.getAttribute("aria-pressed") !== "true", new Date().toISOString());
+    live.textContent = "Локальная отметка. Статус Ozon не менялся.";
+    draw();
+    return;
+  }
+  const apply = ev.target.closest("[data-fbs-apply]");
+  if (apply) { save(apply.dataset.order, apply.dataset.cb, true); return; }
+  if (ev.target.closest("[data-fbs-cancel]")) { pending = null; live.textContent = "ЦБ оставлены как были."; draw(); return; }
+  const label = ev.target.closest("[data-fbs-label]");
+  if (!label) return;
+  label.disabled = true;
+  label.setAttribute("aria-busy", "true");
+  requestFbsLabel({
+    postingNumber: label.dataset.posting,
+    online: !document.getElementById("offline").checked,
+    cid: "preview", key: "preview",
+    fetchImpl: async () => {
+      if (document.getElementById("fail").checked) return {ok: false, status: 400, text: async () => "POSTING_NOT_READY", headers: {get: () => "application/json"}};
+      return {ok: true, status: 200, headers: {get: () => "application/pdf"}, blob: async () => new Blob(["%PDF-preview"], {type: "application/pdf"})};
+    },
+  }).then(result => {
+    const applied = applyLabelResult(storage, label.dataset.posting, result, new Date().toISOString());
+    live.textContent = applied.ok ? "Этикетка получена от макета. Это не приёмка Ozon и не доставка." : applied.error;
+    draw();
+  });
+});
+document.getElementById("orders").addEventListener("submit", ev => {
+  const form = ev.target.closest("form[data-fbs-cb]");
+  if (!form) return;
+  ev.preventDefault();
+  save(form.dataset.order, form.elements.cb.value, false);
+});
+function save(key, raw, force) {
+  const group = groupFbsPostings(orders).find(item => item.key === key);
+  const plan = sharedCbPlan(group.postings, deliv, loadFbsState(storage), raw);
+  if (plan.error) { live.textContent = plan.error; return; }
+  if (plan.needsConfirm && !force) { pending = {key, cb: plan.cb}; live.textContent = "Разные ЦБ. Ничего не заменено."; draw(); return; }
+  persistSharedCb({numbers: group.postings.map(item => item.posting_number), cb: plan.cb, deliv, storage, allowSheet: false}).then(res => {
+    pending = null;
+    live.textContent = fbsCbSavedText(res);
+    draw();
+  });
+}
+const bar = document.createElement("div");
+bar.className = "card";
+bar.innerHTML = `<p class="mut">Макет печати, сеть наружу не ходит.</p><label><input id="offline" type="checkbox"> Нет подключения</label> <label><input id="fail" type="checkbox"> Ozon отвечает ошибкой</label>`;
+document.getElementById("orders").after(bar);
+</script>
+</body>
+</html>

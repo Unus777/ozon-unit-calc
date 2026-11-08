@@ -44,7 +44,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 @media(prefers-reduced-motion:reduce){.sp-logo,.sp-logo::before,.sp-logo::after,.sp-road::before,.sp-truck,.sp-truck svg{animation:none}
 .sp-logo::before,.sp-logo::after{display:none}.sp-truck{transform:translateX(69px)}#splash,.sp-in{transition:none}}
 </style>
-<link rel="stylesheet" href="style.css?v=39">
+<link rel="stylesheet" href="style.css?v=40">
 <link rel="icon" href="icons/courier.svg?v=39" type="image/svg+xml">
 <link rel="icon" href="icons/courier-32.png?v=39" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/courier-180.png?v=39" sizes="180x180">
@@ -71,7 +71,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 <div id="mapbox" hidden>
 <div id="map" role="region" aria-label="Карта доставок"></div>
 <div class="map-load" id="mapLoad" role="status"><i></i><span>Загружаем карту…</span></div>
-<div class="mtop"><div class="mleg" aria-label="Цвета меток"><span><i class="st-n"></i>Новый</span><span><i class="st-g"></i>Согласован</span><span><i class="st-p"></i>ППЗ</span></div>
+<div class="mtop"><div class="mleg" aria-label="Цвета меток"><span><i class="st-n"></i>Новый</span><span><i class="st-g"></i>Согласован</span></div>
 <div class="mctl"><button type="button" class="mbtn" data-mfit aria-label="Показать все точки" title="Все точки"><span data-ico="fit"></span></button><button type="button" class="mbtn" data-mme aria-label="Где я" title="Где я"><span data-ico="locate"></span></button></div></div>
 <div class="mcard" id="mcard" aria-live="polite"></div>
 <section class="msheet" id="msheet" data-state="peek" aria-label="Остановки маршрута">
@@ -107,6 +107,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 </div></nav>
 
 <script src="config.js?v=39"></script>
+<script src="fbs.js?v=40"></script>
 <script src="push.js?v=39"></script>
 <script src="alarm.js?v=39"></script>
 <script>
@@ -141,7 +142,7 @@ function telOf(r) {
 }
 const unloadText = r => r.unload === "Нет" ? "Без разгрузки" : r.unload ? r.unload : "—";
 const whenText = r => { const t = deliveryDetails(r.comment).time || (agreementOf(r) || {}).slot; return [r.date === todayStr() ? "Сегодня" : r.date, t].filter(Boolean).join(" ") || r.status; };
-const isPpz = r => /ППЗ|Реутовская/i.test(r.address || "") || /ППЗ/i.test(r.unload || "");
+const isPpz = r => isFbsSheetRow(r);
 
 function parsePacksKg(str) {  // «8 уп 60×60, 5 уп 60×120» → упаковки и вес с учётом формата
   let p = 0, kg = 0;
@@ -151,14 +152,14 @@ function parsePacksKg(str) {  // «8 уп 60×60, 5 уп 60×120» → упак�
 }
 
 function card(r) {
+  if (isPpz(r)) return "";
   const done = r.status === "Доставлен" || r.status === "Отменён";
-  const ppz = isPpz(r);
   const {kg} = parsePacksKg(r.packs);
   const a = agreementOf(r);
   if (r.posting !== OPEN) {  // свёрнутая строка: нажатие раскрывает
-    const mark = ppz ? '<span class="n v">ППЗ</span>' : done ? `<span class="n g">${ic("check", "s")}</span>`
+    const mark = done ? `<span class="n g">${ic("check", "s")}</span>`
       : a ? `<span class="n g">${ic("calcheck", "s")}</span>` : `<span class="n a">${ic("clock", "s")}</span>`;
-    const state = done ? (ppz ? "сдан в ППЗ" : r.status.toLowerCase()) : ppz ? "сдача в ППЗ" : a ? agreedLabel(a).toLowerCase() : "не согласовано";
+    const state = done ? r.status.toLowerCase() : a ? agreedLabel(a).toLowerCase() : "не согласовано";
     return `<button class="crow${r.posting === FOCUS ? " hl" : ""}" data-row="${e(r.posting)}">${mark}` +
       `<span class="crow-main"><b>${e(r.cb)} · ${e(r.packs || "—")}</b>` +
       `<span class="mut">${e(r.address)} · ${e(state)}</span></span>` +
@@ -168,25 +169,25 @@ function card(r) {
   let foreman = "";
   try { foreman = foremanPhone(info.foreman); } catch {}
   const note = info.note || (r.comment && !info.note && !info.time && !info.foreman ? r.comment : "");
-  const badgeTxt = done ? (ppz ? "Сдан в ППЗ" : r.status) : (ppz ? "ППЗ Ozon · " + whenText(r) : whenText(r));
-  const agreeRow = done || ppz ? "" : a
+  const badgeTxt = done ? r.status : whenText(r);
+  const agreeRow = done ? "" : a
     ? `<div class="agree">${ic("checkc")}<span class="tx">Согласовано с ${e(a.who)}ом<small>${a.slot ? "интервал " + e(slotLabel(a.slot)) + " · " : ""}${e(a.day === todayStr().slice(0, 5) ? "сегодня в " + a.time : a.day + " в " + a.time)}</small></span></div>`
     : `<div class="agree no"><span class="dot a"></span>Не согласовано<small>до выезда</small></div>`;
   const calls = [foreman ? `<a class="btn ghost" href="tel:${e(foreman)}" aria-label="Позвонить прорабу">${ic("user")}Прорабу</a>` : "",
     tel ? `<a class="btn ghost" href="${e(tel)}" aria-label="Позвонить клиенту">${ic("phone")}Клиенту</a>` : ""].filter(Boolean);
   if (calls.length === 1) calls[0] = calls[0].replace('class="btn ghost"', 'class="btn ghost full"');
   return `<div class="card order open pt${r.posting === FOCUS ? " hl" : ""}" data-posting="${e(r.posting)}" data-card tabindex="0" aria-haspopup="dialog">
-<div class="ph"><div class="r"><span class="badge ${done ? "done" : ppz ? "fbs" : "way plain"}">${done ? ic("check") : ppz ? "" : ic("clock")}${e(badgeTxt)}</span><span class="pay ml">${rub(r.pay)}</span></div>
+<div class="ph"><div class="r"><span class="badge ${done ? "done" : "way plain"}">${done ? ic("check") : ic("clock")}${e(badgeTxt)}</span><span class="pay ml">${rub(r.pay)}</span></div>
 <div class="addr">${e(r.address)}</div><div class="pn" style="margin-top:4px">${e(r.cb)} · ${e(r.posting)}</div></div>
 ${agreeRow}
 <div class="facts"><div><span>Везти</span><b>${e(r.packs || "—")}</b></div><div><span>Вес</span><b>${kg ? `~${kg} кг` : "—"}</b></div>
-<div class="${r.unload && r.unload !== "Нет" && !ppz ? "warn" : ""}"><span>${ppz ? "Сдача" : "Разгрузка"}</span><b>${e(ppz ? "В ППЗ Ozon" : unloadText(r))}</b></div></div>
+<div class="${r.unload && r.unload !== "Нет" ? "warn" : ""}"><span>Разгрузка</span><b>${e(unloadText(r))}</b></div></div>
 ${note ? `<div class="note">${ic("note")}<span>${e(note)}</span></div>` : ""}
-${done ? `<div class="done-line">${ic("checkc")}${ppz ? "Сдан в ППЗ" : "Доставлен"}${r.delivered_at ? " " + e(r.delivered_at) : ""}</div>` : `<div class="pa">
+${done ? `<div class="done-line">${ic("checkc")}Доставлен${r.delivered_at ? " " + e(r.delivered_at) : ""}</div>` : `<div class="pa">
 ${calls.join("")}
-${ppz ? "" : `<button type="button" class="${a ? "soft" : "tint"} full" data-agree="${e(r.posting)}">${ic("calcheck")}${a ? "Изменить согласование" : "Согласовал доставку"}</button>`}
+<button type="button" class="${a ? "soft" : "tint"} full" data-agree="${e(r.posting)}">${ic("calcheck")}${a ? "Изменить согласование" : "Согласовал доставку"}</button>
 <a class="btn ghost" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">${ic("nav")}Маршрут</a>
-<button type="button" class="ok" data-done="${e(r.posting)}">${ic("check")}${ppz ? "Сдал в ППЗ" : "Доставлено"}</button></div>`}
+<button type="button" class="ok" data-done="${e(r.posting)}">${ic("check")}Доставлено</button></div>`}
 </div>`;
 }
 
@@ -240,7 +241,7 @@ ${r.status === "Отменён" ? "" : timelineHtml([
 <div class="sgroup">Доставка</div>
 <div class="field"><label for="sd">Дата доставки</label><input type="date" id="sd" data-date value="${toIso(r.date)}" ${done ? "disabled" : ""}></div>
 ${info.time ? `<div class="sitem">${ic("clock")}Время: ${e(info.time)}</div>` : ""}
-${done || isPpz(r) ? "" : `<button class="sitem" data-agree="${e(r.posting)}">${ic("calcheck")}${agreementOf(r) ? e(agreedLabel(agreementOf(r))) + '<span class="mut">изменить</span>' : "Согласовал доставку"}</button>`}
+${done ? "" : `<button class="sitem" data-agree="${e(r.posting)}">${ic("calcheck")}${agreementOf(r) ? e(agreedLabel(agreementOf(r))) + '<span class="mut">изменить</span>' : "Согласовал доставку"}</button>`}
 <div class="field"><label for="sc">Комментарий</label><input id="sc" data-comment value="${e(courierNotes(r.courier_comment).text)}" placeholder="для владельца" ${done ? "disabled" : ""}></div>
 <div class="sgroup">Связь и маршрут</div>
 ${tel ? `<a class="sitem" href="${e(tel)}">${ic("phone")}Позвонить клиенту${ext ? `<span class="mut">доб. ${e(ext)} — наберётся сам</span>` : ""}</a>` : ""}
@@ -386,8 +387,8 @@ async function mapStyle(name) {
   return STYLES[name] = s;
 }
 const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-const stCls = r => isPpz(r) ? "st-p" : r.status === "Согласован" || agreementOf(r) ? "st-g" : "st-n";
-const stText = r => isPpz(r) ? "Сдача в ППЗ" : agreementOf(r) ? agreedLabel(agreementOf(r)) : r.status === "Согласован" ? "Согласован" : "Не согласован";
+const stCls = r => r.status === "Согласован" || agreementOf(r) ? "st-g" : "st-n";
+const stText = r => agreementOf(r) ? agreedLabel(agreementOf(r)) : r.status === "Согласован" ? "Согласован" : "Не согласован";
 const kmText = m => m >= 10000 ? Math.round(m / 1000) + " км" : (m / 1000).toFixed(1).replace(".", ",") + " км";
 const durText = s => { const m = Math.max(1, Math.round(s / 60)); return m < 60 ? m + " мин" : `${Math.floor(m / 60)} ч${m % 60 ? " " + (m % 60) + " мин" : ""}`; };
 
@@ -530,31 +531,33 @@ function pickStop(posting) {
 }
 
 function mcardHtml(r, n) {
-  const {kg} = parsePacksKg(r.packs), {tel} = telOf(r), ppz = isPpz(r), a = agreementOf(r), info = deliveryDetails(r.comment);
+  if (isPpz(r)) return "";
+  const {kg} = parsePacksKg(r.packs), {tel} = telOf(r), a = agreementOf(r), info = deliveryDetails(r.comment);
   let foreman = "";
   try { foreman = foremanPhone(info.foreman); } catch {}
   const call = tel || (foreman ? "tel:" + foreman : "");
   const fresh = r.status === "Новый" && !isAccepted(r) && !ackGet()[r.posting];
   const note = info.note || (r.comment && !info.note && !info.time && !info.foreman ? r.comment : "");
   const second = fresh ? `<button type="button" class="ok" data-maccept="${e(r.posting)}">${ic("check")}Принял</button>`
-    : ppz ? "" : `<button type="button" class="${a ? "soft" : "tint"}" data-agree="${e(r.posting)}">${ic("calcheck")}${a ? "Изменить" : "Согласовал"}</button>`;
+    : `<button type="button" class="${a ? "soft" : "tint"}" data-agree="${e(r.posting)}">${ic("calcheck")}${a ? "Изменить" : "Согласовал"}</button>`;
   return `<div class="order mc ${stCls(r)}" data-posting="${e(r.posting)}">
 <div class="mc-h"><span class="mc-n">${n}</span><div class="grow"><div class="mc-k"><span class="mc-st">${e(stText(r))}</span><span class="num">${e(shortDate(whenText(r)))}</span></div>
 <div class="mc-a">${e(r.address || "Адрес уточняется")}</div><div class="pn">${e(r.cb)} · ${e(r.posting)}</div></div>
 <button type="button" class="mc-x" data-mclose aria-label="Закрыть карточку">${ic("x")}</button></div>
 <div class="facts"><div><span>Везти</span><b>${e(r.packs || "—")}</b></div><div><span>Вес</span><b>${kg ? `~${kg} кг` : "—"}</b></div>
-<div class="${r.unload && r.unload !== "Нет" && !ppz ? "warn" : ""}"><span>${ppz ? "Сдача" : "Разгрузка"}</span><b>${e(ppz ? "В ППЗ Ozon" : unloadText(r))}</b></div></div>
+<div class="${r.unload && r.unload !== "Нет" ? "warn" : ""}"><span>Разгрузка</span><b>${e(unloadText(r))}</b></div></div>
 ${note ? `<div class="mc-note">${ic("note")}<span>${e(note)}</span></div>` : ""}
 <div class="mc-pay"><span>Оплата за точку</span><b class="num">${rub(r.pay)}</b></div>
 <div class="mc-a1"><a class="btn mc-go" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">${ic("nav")}Поехать</a>
 ${call ? `<a class="btn ghost sq" href="${e(call)}" aria-label="${tel ? "Позвонить клиенту" : "Позвонить прорабу"}">${ic("phone")}</a>` : ""}
 <button type="button" class="ghost sq" data-mmore="${e(r.posting)}" aria-label="Все действия с заказом">${ic("more")}</button></div>
-<div class="mc-a2${second ? "" : " one"}">${second}<button type="button" class="${fresh ? "soft" : "ok"}" data-done="${e(r.posting)}">${ic("check")}${ppz ? "Сдал в ППЗ" : "Доставлено"}</button></div>
+<div class="mc-a2${second ? "" : " one"}">${second}<button type="button" class="${fresh ? "soft" : "ok"}" data-done="${e(r.posting)}">${ic("check")}Доставлено</button></div>
 </div>`;
 }
 function stopHtml(r, n, leg) {
-  const on = r.posting === SEL, ppz = isPpz(r);
-  const meta = [shortDate(whenText(r)), ppz ? "сдача в ППЗ" : r.unload && r.unload !== "Нет" ? "разгрузка: " + r.unload : "без разгрузки"].filter(Boolean).join(" · ");
+  if (isPpz(r)) return "";
+  const on = r.posting === SEL;
+  const meta = [shortDate(whenText(r)), r.unload && r.unload !== "Нет" ? "разгрузка: " + r.unload : "без разгрузки"].filter(Boolean).join(" · ");
   return `<li><button type="button" class="mstop ${n ? stCls(r) : "st-x"}${on ? " on" : ""}" ${n ? `data-mpick` : `data-mmore`}="${e(r.posting)}" aria-pressed="${on}">
 <span class="mn">${n || ic("pin", "s")}</span><span class="ms-main"><b>${e(r.cb)} · ${e(r.packs || "—")}</b><span class="ms-ad">${e(r.address || "Адрес уточняется")}</span><span class="ms-mt">${e(meta)}</span></span>
 <span class="ms-r"><b class="num">${rub(r.pay)}</b>${leg ? `<span>${leg}</span>` : ""}</span></button></li>`;
@@ -562,7 +565,7 @@ function stopHtml(r, n, leg) {
 
 let MAP_ORDER = [];
 function drawMap() {
-  const active = ROWS.filter(r => r.status === "Новый" || r.status === "Согласован");
+  const active = ROWS.filter(r => !isPpz(r) && (r.status === "Новый" || r.status === "Согласован"));
   const pts = active.filter(r => r.lat && r.lon && isFinite(+r.lat) && isFinite(+r.lon)).map(r => ({r, ll: [+r.lat, +r.lon]}));
   const noCoords = active.filter(r => !pts.some(p => p.r === r));
   if (!GEO_ASKED) locate(false);
@@ -640,7 +643,7 @@ $("mapbox").addEventListener("click", ev => {
   if (t.dataset.maccept) {  // тот же «Принял», что на экране тревоги: в телефоне сразу, в таблице — строкой в комментарии курьера
     t.disabled = true;
     acceptOrder(t.dataset.maccept);
-    appBadge(ROWS.filter(r => r.status === "Новый" && !isAccepted(r) && !ackGet()[r.posting]).length);
+    appBadge(ROWS.filter(r => !isPpz(r) && r.status === "Новый" && !isAccepted(r) && !ackGet()[r.posting]).length);
     toast("Принято ✓ Владелец увидит «Принял»");
     drawMap();
   }
@@ -648,7 +651,7 @@ $("mapbox").addEventListener("click", ev => {
 
 async function load() {
   try {
-    ROWS = await api({action: "list"});
+    ROWS = rashadDeliveries(await api({action: "list"}));
     PAYS = await api({action: "payments"}).catch(() => null);
     draw(true);
     splashHide();
@@ -668,12 +671,13 @@ const ackGet = () => { try { return JSON.parse(localStorage.getItem(ACK_KEY) || 
 const ackSet = v => { try { localStorage.setItem(ACK_KEY, JSON.stringify(v)); } catch {} };
 const ACK_SYNC = new Set();
 function alarmItem(r) {
-  const info = deliveryDetails(r.comment), {kg} = parsePacksKg(r.packs), ppz = isPpz(r);
+  if (isPpz(r)) return null;
+  const info = deliveryDetails(r.comment), {kg} = parsePacksKg(r.packs);
   const when = [r.date ? (r.date === todayStr() ? "Сегодня" : r.date.slice(0, 5)) : "", info.time].filter(Boolean).join(", ") || "Дата не назначена";
-  return {id: r.posting, kicker: ppz ? `Сдача в ППЗ · ${r.cb}` : `Новый заказ · ${r.cb}`, icon: ppz ? "box" : "truck",
+  return {id: r.posting, kicker: `Новый заказ · ${r.cb}`, icon: "truck",
     title: r.address || "Адрес уточняется", sub: r.posting,
     chips: [{k: "Везти", v: r.packs || "—"}, {k: "Вес", v: kg ? `~${kg} кг` : "—"},
-      {k: "Когда", v: when, warn: !r.date}, {k: ppz ? "Оплата" : "Разгрузка", v: ppz ? rub(r.pay) : unloadText(r), warn: !ppz && r.unload && r.unload !== "Нет"}],
+      {k: "Когда", v: when, warn: !r.date}, {k: "Разгрузка", v: unloadText(r), warn: !!(r.unload && r.unload !== "Нет")}],
     note: info.note || "", okText: "Принял"};
 }
 async function sendAck(posting, at) {
@@ -700,20 +704,20 @@ function appBadge(n) {  // число непринятых заказов на �
 function checkAlerts() {
   if (IS_ADMIN || !KEY) return;
   const local = ackGet();
-  for (const r of ROWS) if (local[r.posting] && r.status === "Новый" && !ackOf(r)) sendAck(r.posting, local[r.posting]);  // досылаем
+  for (const r of ROWS) if (!isPpz(r) && local[r.posting] && r.status === "Новый" && !ackOf(r)) sendAck(r.posting, local[r.posting]);  // досылаем
   // «✅ Принял» нажали прямо в уведомлении: …#alert=<номер>&accept=1 — принимаем без экрана тревоги
   const direct = /[#&]accept=1(&|$)/.test(location.hash) ? Alarm.hashId() : null;
-  if (direct && ROWS.some(r => r.posting === direct && r.status === "Новый" && !isAccepted(r)) && !local[direct]) {
+  if (direct && ROWS.some(r => !isPpz(r) && r.posting === direct && r.status === "Новый" && !isAccepted(r)) && !local[direct]) {
     acceptOrder(direct);
     toast("Принято ✓ Владелец увидит «Принял»");
   }
   if (direct) history.replaceState(null, "", location.pathname + location.search);
   const acked = ackGet();
-  const fresh = ROWS.filter(r => r.status === "Новый" && !isAccepted(r) && !acked[r.posting]);
+  const fresh = ROWS.filter(r => !isPpz(r) && r.status === "Новый" && !isAccepted(r) && !acked[r.posting]);
   appBadge(fresh.length);
-  Alarm.show(fresh.map(alarmItem), {replace: true, first: Alarm.hashId(), onAccept: it => {
+  Alarm.show(fresh.map(alarmItem).filter(Boolean), {replace: true, first: Alarm.hashId(), onAccept: it => {
     const p = acceptOrder(it.id);
-    appBadge(Math.max(0, ROWS.filter(r => r.status === "Новый" && !isAccepted(r) && !ackGet()[r.posting]).length));
+    appBadge(Math.max(0, ROWS.filter(r => !isPpz(r) && r.status === "Новый" && !isAccepted(r) && !ackGet()[r.posting]).length));
     return p;
   }});
 }
@@ -772,11 +776,10 @@ function openDoneModal(post, btn) {
   CURRENT_DONE_POST = post;
   CURRENT_DONE_BTN = btn;
   const r = ROWS.find(x => x.posting === post);
-  if (!r) return;
-  const ppz = isPpz(r);
-  $("modal-c-title").textContent = ppz ? "Сдача в ППЗ" : "Подтверждение вручения";
+  if (!r || isPpz(r)) return;
+  $("modal-c-title").textContent = "Подтверждение вручения";
   $("modal-c-desc").textContent = `${r.cb} · ${r.address}`;
-  $("chk-lift-label").textContent = ppz ? "Сдано в ППЗ по штрихкоду на коробке" : "Подъём / разгрузка выполнены полностью";
+  $("chk-lift-label").textContent = "Подъём / разгрузка выполнены полностью";
   $("modal-c-sum").innerHTML = `<div class="grow"><div class="k">Оплата за доставку</div><div class="v num">${rub(r.pay)}</div></div><div class="pn" style="text-align:right">владелец получит<br>уведомление</div>`;
   $("chk-intact").checked = true;
   $("chk-lift").checked = true;
@@ -820,7 +823,13 @@ $("app").addEventListener("click", ev => {
   const ed = ev.target.closest("[data-edit], [data-cancel]");
   if (ed) { const f = ed.closest(".order").querySelector("[data-editform]"); f.hidden = !f.hidden; return; }
   const rm = ev.target.closest("[data-remind]");
-  if (rm) { sendReminder(rm.closest(".order").dataset.posting, KEY).catch(err => toast(err.message, true)); return; }
+  if (rm) {
+    const posting = rm.closest(".order").dataset.posting;
+    const row = ROWS.find(x => x.posting === posting);
+    if (isPpz(row)) { toast("FBS не напоминается Рашаду", true); return; }
+    sendReminder(posting, KEY).catch(err => toast(err.message, true));
+    return;
+  }
   const b = ev.target.closest("[data-done]");
   if (!b) return;
   const post = b.dataset.done || b.closest(".order").dataset.posting;

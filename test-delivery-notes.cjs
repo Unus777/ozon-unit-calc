@@ -6,6 +6,7 @@ const read = file => fs.readFileSync(path.join(__dirname, file), 'utf8');
 const context = {};
 vm.createContext(context);
 vm.runInContext(read('config.js'), context);
+vm.runInContext(read('fbs.js'), context);
 const details = {note: 'Позвонить за час\nВъезд со двора', time: 'с 14:00 до 16:00', foreman: '8 (900) 123-45-67'};
 const encoded = context.deliveryComment(details);
 assert.equal(context.deliveryDetails(encoded).note, details.note);
@@ -126,7 +127,7 @@ assert.equal(JSON.stringify(al.chips.map(c => c.v)), JSON.stringify(['8 уп 60�
 assert.equal(al.okText, 'Принял');
 // alarm.js и страницы подключают одинаковую версию
 for (const f of ['index.html', 'courier.html', 'alarm-test.html']) assert.match(read(f), /alarm\.js\?v=39/);
-assert.match(read('sw.js'), /SW_VERSION = "v40-key"/);
+assert.match(read('sw.js'), /SW_VERSION = "v41-fbs"/);
 assert.match(read('sw.js'), /config\.js\?v=39/);
 assert.match(read('style.css'), /@media \(min-width: 1100px\)/);
 assert.match(read('index.html'), /desk-split/);
@@ -182,6 +183,7 @@ async function swRun(notice, {list = [ROW], hour = '2026-11-05T11:05:00Z', badge
   vm.createContext(sw);
   const stub = sw.sheetApi;
   vm.runInContext(read('config.js'), sw);
+  vm.runInContext(read('fbs.js'), sw);
   vm.runInContext('sheetApi = undefined', sw); sw.sheetApi = stub;   // config.js объявляет настоящий sheetApi
   vm.runInContext(read('sw.js'), sw);
   let wait;
@@ -241,6 +243,17 @@ async function swRun(notice, {list = [ROW], hour = '2026-11-05T11:05:00Z', badge
   assert.ok(!shown[0][1].requireInteraction);
   assert.equal(shown[0][1].actions, undefined);
   assert.ok(!shown[0][1].data.url.includes('#alert'));
+  // FBS/ППЗ не становится пушем и значком Рашада, даже если строка лежит в общем списке
+  const ppzRow = {posting: 'ppz-1', status: 'Новый', address: 'ППЗ Ozon (Балашиха, ул. Реутовская, 5)', unload: 'Сдача в ППЗ', cb: 'ЦБ-9', comment: '', courier_comment: '', packs: '1 уп'};
+  ({shown, badges} = await swRun({type: 'new', posting: 'ppz-1', cb: 'ЦБ-9', address: ppzRow.address, unload: ppzRow.unload, packs: '1 уп'}, {list: [ppzRow, ROW]}));
+  assert.equal(shown.length, 0);
+  assert.equal(JSON.stringify(badges), '[1]');
+  ({shown} = await swRun({type: 'new', posting: '1-1-1', cb: 'ЦБ-7', packs: '8 уп', address: 'Химки', unload: 'Нет', more: [{posting: 'ppz-1', cb: 'ЦБ-9', address: ppzRow.address, unload: ppzRow.unload}]}));
+  assert.equal(shown.length, 1);
+  assert.equal(shown[0][0], '🚨 НОВЫЙ ЗАКАЗ · ЦБ-7');
+  assert.ok(!/ППЗ|ЦБ-9/.test(shown.map(x => x[0] + x[1].body).join('\n')));
+  ({shown} = await swRun(new Error('old script'), {list: [ppzRow]}));
+  assert.equal(shown.length, 0);
   // владельцу — как раньше
   ({shown} = await swRun({role: 'owner', type: 'accepted', posting: '1-1-1', title: '👍 Рашад принял ЦБ-7', text: 'Химки'}));
   assert.equal(shown[0][0], '👍 Рашад принял ЦБ-7');

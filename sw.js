@@ -1,8 +1,8 @@
 // Service worker курьера: принимает пуш без содержимого и сам собирает текст из таблицы.
 // Ключ курьера приходит в адресе регистрации: sw.js?k=…
 // Версия меняется вместе с дизайном и config.js — браузер видит новый sw.js и обновляет его (офлайн-кэша здесь нет).
-const SW_VERSION = "v40-key";
-importScripts("config.js?v=39");
+const SW_VERSION = "v41-fbs";
+importScripts("config.js?v=39", "fbs.js?v=40");
 const KEY = new URL(self.location).searchParams.get("k");
 const PAGE = `courier.html?k=${encodeURIComponent(KEY || "")}`;
 
@@ -44,14 +44,14 @@ async function badgeCount(rows) {  // значок на иконке прило�
   try {
     const nav = self.navigator;
     if (!nav || !nav.setAppBadge || !rows) return;
-    const n = rows.filter(r => r.status === "Новый" && !isAccepted(r)).length;
+    const n = rows.filter(r => !isFbsSheetRow(r) && r.status === "Новый" && !isAccepted(r)).length;
     await (n ? nav.setAppBadge(n) : nav.clearAppBadge());
   } catch {}
 }
 
 async function notify() {
   let title = "🚨 НОВЫЙ ЗАКАЗ", opts = courierNote({type: "new"}, null)[1];
-  let rows = null;
+  let rows = null, show = true;
   try {
     const n = await sheetApi({action: "notice", key: KEY});  // что именно случилось: новый заказ или напоминание
     if (n && n.role === "owner") {  // для владельца: что сделал курьер
@@ -60,17 +60,24 @@ async function notify() {
     } else if (n) {
       try { rows = await sheetApi({action: "list", key: KEY}); } catch {}
       const find = p => rows && rows.find(r => String(r.posting) === String(p));
-      for (const m of n.more || []) await self.registration.showNotification(...courierNote(Object.assign({type: n.type}, m), find(m.posting)));
-      [title, opts] = courierNote(n, find(n.posting));
+      const visible = m => m && !isFbsSheetRow(m) && !isFbsSheetRow(find(m.posting));
+      const items = [n, ...(n.more || [])].filter(visible);
+      if (!items.length) show = false;  // пуш про FBS — Рашаду его не показываем
+      else {
+        for (const m of items.slice(1)) await self.registration.showNotification(...courierNote(Object.assign({type: n.type}, m), find(m.posting)));
+        [title, opts] = courierNote(items[0], find(items[0].posting));
+      }
     }
   } catch {
-    try {  // скрипт таблицы старой версии без «notice» — как раньше, по последнему новому заказу
+    try {  // скрипт таблицы старой версии без «notice» — как раньше, по последнему новому заказу, кроме FBS
       rows = await sheetApi({action: "list", key: KEY});
-      const fresh = rows.filter(r => r.status === "Новый").pop();
+      const fresh = rows.filter(r => r.status === "Новый" && !isFbsSheetRow(r)).pop();
       if (fresh) [title, opts] = courierNote({type: "new", posting: fresh.posting, cb: fresh.cb, packs: fresh.packs, address: fresh.address}, fresh);
-    } catch {}  // нет сети — всё равно показываем уведомление: iOS требует его на каждый пуш
+      else show = false;
+    } catch {}  // нет сети и неясно, чей пуш — iOS всё равно требует уведомление
   }
   await badgeCount(rows);
+  if (!show) return;
   return self.registration.showNotification(title, opts);
 }
 
