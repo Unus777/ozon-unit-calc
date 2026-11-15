@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Прототип · Алмалы Доставка</title>
+<link rel="icon" href="icons/owner.svg?v=39" type="image/svg+xml">
+<link rel="stylesheet" href="style.css?v=40">
+<script src="theme.js?v=39"></script>
+<style>
+.pwrap{max-width:600px;margin:0 auto;padding:8px 16px 0;display:flex;gap:8px;align-items:center}
+.pnote{max-width:600px;margin:6px auto 0;padding:0 16px;font-size:12px;line-height:1.35;color:var(--mut)}
+.pwrap .seg{flex:1}
+#netBtn{height:36px;min-height:36px;padding:0 12px;border-radius:12px;font-size:13px}
+.slim{display:flex;align-items:baseline;gap:8px;margin:0 0 12px;font-size:13px;font-weight:600;color:var(--mut)}
+.slim b{font-size:22px;letter-spacing:-.03em;color:var(--fg)}
+.slim .over{color:var(--yellow)}
+.card.day{box-shadow:var(--sh2),inset 4px 0 0 var(--mut2),inset 0 0 0 1px var(--line)}
+.card.day.late{box-shadow:var(--sh2),inset 4px 0 0 var(--red),inset 0 0 0 1px var(--line)}
+.card.day.now,.card.day.later{box-shadow:var(--sh2),inset 4px 0 0 var(--acc),inset 0 0 0 1px var(--line)}
+.card.day.wait{box-shadow:var(--sh2),inset 4px 0 0 var(--yellow),inset 0 0 0 1px var(--line)}
+.day .addr,.next .addr{font-weight:700;letter-spacing:-.03em;overflow-wrap:anywhere}
+.day .addr{font-size:18px;line-height:24px;margin-top:10px}
+.next .addr{font-size:28px;line-height:34px;margin-top:8px}
+.day .meta{margin-top:4px;color:var(--ink2);font-size:14px}
+.day .acts{display:flex;gap:8px;margin-top:14px}
+.day .acts>.f1{flex:1}
+.day .acts button,.day .acts a.btn{min-height:56px;border-radius:16px}
+.slothead{margin:18px 4px 8px;font-size:13px;font-weight:650;color:var(--mut)}
+.slothead.late{color:var(--red)}
+.push{display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:center;width:100%;margin:0 0 12px;padding:14px 16px;border-radius:20px;
+background:var(--card);color:var(--fg);text-align:left;white-space:normal;font-weight:400;box-shadow:var(--sh2),inset 3px 0 0 var(--yellow),inset 0 0 0 1px var(--line)}
+.push .k{grid-column:1/-1;font-size:12px;font-weight:700;color:var(--yellow)}
+.push b{font-size:16px;letter-spacing:-.02em}
+.push .sub{color:var(--mut);font-size:13px}
+.push .pill{height:32px;padding:0 12px;border-radius:999px;background:var(--acc-bg);color:var(--acc);font-size:13px;font-weight:700;display:grid;place-items:center}
+.warnbox,.okbox{border-radius:16px;padding:12px 14px;font-size:14px;font-weight:600;line-height:1.4;margin-bottom:16px}
+.warnbox{background:var(--red-bg);color:var(--red)}
+.okbox{background:var(--green-bg);color:var(--green)}
+.out3{display:grid;gap:8px}
+.out3 button{justify-content:flex-start;min-height:56px;border-radius:16px;background:var(--soft);color:var(--fg);box-shadow:none;font-size:16px}
+.out3 button[aria-pressed="true"]{background:var(--acc-bg);color:var(--acc);box-shadow:inset 0 0 0 1.5px var(--acc)}
+.photo{display:flex;align-items:center;gap:12px;min-height:88px;margin-top:8px;padding:12px;border-radius:16px;background:var(--soft);color:var(--ink2);font-weight:600;cursor:pointer}
+.photo input{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.photo img{width:64px;height:64px;object-fit:cover;border-radius:12px}
+.qstrip{margin:0 0 12px;padding:12px 14px;border-radius:16px;background:var(--yellow-bg);color:var(--yellow);font-size:14px;font-weight:600;line-height:1.4}
+.qstrip button{min-height:36px;height:36px;margin-top:8px;background:var(--card);color:var(--fg);box-shadow:none}
+.route{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.route li{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:16px;background:var(--card);box-shadow:var(--sh2),inset 0 0 0 1px var(--line)}
+.route .n{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;font-weight:750;background:var(--acc-bg);color:var(--acc);flex:0 0 auto}
+.route li.late .n{background:var(--red-bg);color:var(--red)}
+.route li.wait .n{background:var(--yellow-bg);color:var(--yellow)}
+.route .tx{flex:1;min-width:0}
+.route .tx b{display:block}
+.route .tx span{display:block;color:var(--mut);font-size:13px;overflow-wrap:anywhere}
+.route em{font-style:normal;font-size:13px;font-weight:650;color:var(--ink2);white-space:nowrap}
+.wa{width:100%;min-height:120px;font-size:15px;line-height:1.4}
+</style>
+</head>
+<body>
+<header class="hdr"><div class="bar">
+<div class="logo" aria-hidden="true">А</div>
+<div class="grow"><div class="brand">Алмалы Доставка<span id="brandSub">Прототип</span></div></div>
+<span class="presence" id="presence"><span class="dot a"></span>12 мин назад</span>
+</div></header>
+<div class="pwrap">
+<div class="seg" id="roles">
+<button type="button" data-role="owner" aria-pressed="true">Владелец</button>
+<button type="button" data-role="courier" aria-pressed="false">Курьер</button>
+</div>
+<button type="button" class="soft" id="netBtn" hidden>Сеть есть</button>
+</div>
+<p class="pnote">Прототип на вымышленных заказах. Сейчас в нём 13:10, Ozon и таблица не подключены.</p>
+<div class="lt"><h1 id="ltTitle">Сегодня</h1><div class="sub" id="ltSub"></div></div>
+<main id="main"></main>
+<nav class="tabbar" aria-label="Разделы"><div class="in" id="tabs"></div></nav>
+<div id="sheet" class="sheet" hidden><div class="sheet-bg" data-close></div><section class="sheet-panel" id="sheetPanel" role="dialog" aria-modal="true" aria-label="Действие"></section></div>
+<script src="config.js?v=39"></script>
+<script>
+const $ = id => document.getElementById(id);
+const e = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
+const rub = n => Math.round(n).toLocaleString("ru-RU").replace(/\u00a0/g, " ") + " ₽";
+const kgText = n => n >= 1000 ? (n / 1000).toFixed(1).replace(".", ",") + " т" : n + " кг";
+const LIMIT = 1500;
+const CLOCK = 13; // ponytail: часы прототипа застыли на 13:10, чтобы «окно прошло» не зависело от времени открытия
+const DEMO = "2026-11-15";
+
+const ORDERS = [
+  {id: "n1", status: "cb", posting: "01643271-0123-1", address: "Коломенская наб., 12, подъезд 2", floor: "лифт, 4 этаж", packs: "8 уп 60×60", kg: 280, slot: "", pay: 1600, foreman: "+79001112233", note: "прораб просил после 16", red: "−80 ₽ ниже порога", agreed: false, accepted: false},
+  {id: "n2", status: "cb", posting: "01643271-0144-1", address: "ул. Академика Королёва, 5", floor: "без подъёма", packs: "3 уп 60×120", kg: 84, slot: "", pay: 900, foreman: "+79007654321", note: "", red: "", agreed: false, accepted: false},
+  {id: "a968", status: "today", cb: "ЦБ-968", posting: "01550111-0042-1", address: "ул. Ленина, 14", floor: "лифт, 7 этаж", packs: "10 уп 60×60", kg: 350, slot: "10:00–12:00", pay: 1800, foreman: "+79005551234", note: "домофон 142, во двор со стороны арки", red: "", agreed: true, accepted: true},
+  {id: "a971", status: "today", cb: "ЦБ-971", posting: "01550111-0048-1", address: "ул. Бутлерова, 17к1", floor: "лифт, 9 этаж", packs: "8 уп 60×60", kg: 280, slot: "12:00–14:00", pay: 1500, foreman: "+79002223344", note: "", red: "", agreed: true, accepted: true},
+  {id: "a972", status: "today", cb: "ЦБ-972", posting: "01550111-0049-1", address: "ул. Бутлерова, 17к1", floor: "лифт, 9 этаж", packs: "4 уп 60×120", kg: 112, slot: "12:00–14:00", pay: 700, foreman: "+79002223344", note: "вторая партия, тот же прораб", red: "", agreed: true, accepted: true},
+  {id: "a975", status: "today", cb: "ЦБ-975", posting: "01550111-0055-1", address: "ул. Свободы, 4", floor: "лестница, 3 этаж", packs: "12 уп 60×60", kg: 420, slot: "14:00–16:00", pay: 2200, foreman: "+79006667788", note: "лифта нет", red: "", agreed: false, accepted: true},
+  {id: "a980", status: "today", cb: "ЦБ-980", posting: "01550111-0060-1", address: "пр-д Серебрякова, 6", floor: "лифт, 2 этаж", packs: "4 уп 60×60", kg: 140, slot: "", pay: 900, foreman: "", note: "клиент сам перезвонит", red: "", agreed: false, accepted: true},
+];
+let role = "owner", tab = "today", offline = false, pushOn = true, photoUrl = "";
+
+const live = () => ORDERS.filter(o => o.status === "today" && !o.done);
+const held = () => ORDERS.filter(o => o.hold);
+const kgOf = list => list.reduce((s, o) => s + o.kg, 0);
+const payOf = list => list.reduce((s, o) => s + o.pay, 0);
+function band(o) {
+  const m = /^(\d+)/.exec(o.slot || "");
+  if (!m) return o.slot ? "wait" : "none";
+  const start = +m[1], end = start + 2;
+  if (end <= CLOCK) return "late";
+  if (start <= CLOCK) return "now";
+  return "later";
+}
+const RANK = {late: 0, now: 1, later: 2, wait: 3, none: 4};
+const BAND_TITLE = {late: "Окно прошло", now: "Сейчас, до 14:00", later: "Дальше сегодня", wait: "В течение дня", none: "Дата не назначена"};
+function stops(list) {
+  const map = new Map();
+  for (const o of list) {
+    const k = o.address + "|" + (o.slot || "");
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(o);
+  }
+  const start = o => { const m = /^(\d+)/.exec(o.slot || ""); return m ? +m[1] : 99; };
+  return [...map.values()].sort((a, b) => RANK[band(a[0])] - RANK[band(b[0])] || start(a[0]) - start(b[0]));
+}
+const idsOf = g => g.map(o => o.id).join(",");
+const byIds = s => String(s).split(",").map(id => ORDERS.find(o => o.id === id)).filter(Boolean);
+const cbs = g => g.map(o => o.cb || "без ЦБ").join(" + ");
+const slotNice = s => s ? slotLabel(s) : "дата не назначена";
+
+function waText(g) {
+  const o = g[0];
+  const when = o.slot ? "интервал " + slotNice(o.slot) : "время ещё не назначено";
+  return `Алмалы, ${cbs(g)}. ${g.map(x => x.packs).join(", ")}. ${o.floor}. Курьер Рашад, ${when}. Если время сдвинулось — напишите.`;
+}
+function openSheet(html) {
+  $("sheetPanel").innerHTML = html;
+  if ($("sheet").hidden) sheetShow();
+}
+function flags(g) {
+  const o = g[0];
+  const bits = [
+    o.accepted ? `<span class="badge ok">${ic("check")}Принял</span>` : `<span class="badge warn">Не принят</span>`,
+    o.done ? "" : o.agreed ? `<span class="badge ok">${ic("check")}Согласовано</span>` : `<span class="badge warn">Не согласовано</span>`,
+    g.length > 1 ? `<span class="badge way">Один заезд</span>` : "",
+  ];
+  return bits.join("");
+}
+function ownerCard(g) {
+  const o = g[0], kg = kgOf(g), red = g.find(x => x.red);
+  return `<article class="card day ${band(o)}">
+    <div class="top">${o.cb ? `<span class="cb-pill">${e(cbs(g))}</span>` : `<span class="cb-pill need">Нужен ЦБ</span>`}${o.status === "today" ? `<span class="ml">${flags(g)}</span>` : ""}</div>
+    <div class="addr">${e(o.address)}</div>
+    <div class="meta">${e(o.floor)} · ${e(g.map(x => x.packs).join(", "))} · ${kg} кг</div>
+    ${o.note ? `<div class="note-line" style="margin-top:6px">${e(o.note)}</div>` : ""}
+    <div class="tagrow" style="margin-top:10px">
+      <span class="tag">${o.slot ? e(slotNice(o.slot)) : "Дата не назначена"}</span>
+      <span class="tag">Рашаду ${rub(payOf(g))}</span>
+      ${red ? `<span class="tag warn">${e(red.red)}</span>` : ""}
+    </div>
+    <div class="acts">
+      ${o.foreman ? `<a class="btn ghost sq" href="tel:${e(o.foreman)}" aria-label="Позвонить прорабу">${ic("user")}</a>` : ""}
+      <button type="button" class="ghost" data-wa="${idsOf(g)}">${ic("send")}Написать</button>
+      ${o.status === "cb"
+        ? `<button type="button" class="f1" data-send="${o.id}">${ic("send")}Курьеру</button>`
+        : `<button type="button" class="f1 ok" data-done="${idsOf(g)}">${ic("check")}Доставлено</button>`}
+    </div>
+  </article>`;
+}
+function crow(g, n) {
+  const o = g[0];
+  const mark = band(o) === "late" || !o.agreed ? "a" : "g";
+  return `<div class="card" style="padding:0"><button type="button" class="crow" data-peek="${idsOf(g)}" style="box-shadow:none">
+    <span class="n ${mark}">${n}</span>
+    <span class="crow-main"><b>${e(cbs(g))} · ${e(slotNice(o.slot))}</b><span class="mut">${e(o.address)}</span></span>
+    <span class="crow-pay">${kgText(kgOf(g))}</span>
+  </button></div>`;
+}
+
+function render() {
+  const rows = live(), trip = stops(rows), load = kgOf(rows), cb = ORDERS.filter(o => o.status === "cb");
+  const owner = role === "owner";
+  $("brandSub").textContent = owner ? "План дня" : "Следующая точка";
+  $("presence").hidden = !owner;
+  $("netBtn").hidden = owner;
+  $("netBtn").textContent = offline ? "Без сети" : "Сеть есть";
+  $("roles").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.role === role));
+  $("ltTitle").textContent = owner
+    ? (tab === "cb" ? "Ждут ЦБ" : tab === "fbs" ? "Склад" : "Сегодня")
+    : (tab === "rest" ? "Дальше" : tab === "route" ? "Объезд" : "Сейчас");
+  $("ltSub").textContent = "Воскресенье, 15 ноября · 13:10";
+  const tabs = owner
+    ? [["today", "Сегодня", "today"], ["cb", "Ждут ЦБ", "orders"], ["fbs", "Склад", "box"]]
+    : [["today", "Сейчас", "nav"], ["rest", "Дальше", "orders"], ["route", "Объезд", "map"]];
+  $("tabs").innerHTML = tabs.map(([id, name, icon]) => {
+    const badge = owner && id === "cb" && cb.length ? `<i>${cb.length}</i>` : (!owner && id === "today" && trip.some(g => band(g[0]) === "late") ? "<i>!</i>" : "");
+    return `<button type="button" data-tab="${id}" aria-selected="${tab === id}">${ic(icon)}${name}${badge}</button>`;
+  }).join("");
+
+  const queue = held().length ? `<div class="qstrip">${held().length} вручение на телефоне. В таблицу уйдёт, когда появится сеть.<br><button type="button" data-net>Сеть появилась</button></div>` : "";
+  const off = !owner && offline ? `<div class="qstrip">Сети нет. «Доставлено» и «Согласовано» сохранятся на этом телефоне.</div>` : "";
+
+  if (owner && tab === "fbs") {
+    $("main").innerHTML = `<div class="fbs-banner"><b>FBS остаётся на складе.</b> Рашаду эти заказы не уходят.</div>
+      <article class="card day"><div class="top"><span class="cb-pill">ЦБ-1021</span><span class="badge fbs ml">FBS</span></div>
+      <div class="addr">Склад Алмалы, не адрес клиента</div><div class="meta">6 уп 60×60 · этикетка Ozon</div></article>`;
+    return;
+  }
+  if (owner && tab === "cb") {
+    $("main").innerHTML = cb.length ? cb.map(o => ownerCard([o])).join("") : `<div class="card empty">${ic("checkc")}Заказов без ЦБ нет</div>`;
+    return;
+  }
+  if (owner) {
+    const bands = ["late", "now", "later", "wait", "none"].map(k => {
+      const gs = trip.filter(g => band(g[0]) === k);
+      return gs.length ? `<div class="slothead ${k}">${BAND_TITLE[k]}</div>${gs.map(ownerCard).join("")}` : "";
+    }).join("");
+    const hero = `<div class="hero"><div class="r"><span class="lbl">Курьеру за точки в работе</span><span class="hchip ml"><span class="dot sm" style="background:#E39A16"></span>12 мин назад</span></div>
+      <div class="big money">${rub(payOf(rows)).replace(" ₽", "")}<small>₽</small></div>
+      <div class="hstats"><div><span>Заезды</span><b>${trip.length}</b></div><div><span>Ждут ЦБ</span><b class="${cb.length ? "am" : "gr"}">${cb.length || "0"}</b></div>
+      <div><span>Груз · до 1,5 т</span><b class="${load > LIMIT ? "am" : ""}">${kgText(load)}</b></div></div></div>`;
+    const push = pushOn && cb[0] ? `<button type="button" class="push" data-ack><span class="k">Пуш · новый заказ Ozon</span><b>${e(cb[0].address)}</b><span class="pill">Принял</span><span class="sub">${e(cb[0].packs)} · нужен ЦБ</span></button>` : "";
+    $("main").innerHTML = hero + push + queue + (bands || `<div class="card empty">${ic("checkc")}На сегодня точек не осталось</div>`);
+    return;
+  }
+
+  const hero = `<div class="slim"><b>${rub(payOf(rows))}</b><span>${offline ? "без сети" : "вам должны"}</span><span class="ml${load > LIMIT ? " over" : ""}">${plural(trip.length, "заезд", "заезда", "заездов")} · ${load > LIMIT ? "перегруз " : ""}${load} кг</span></div>`;
+  if (tab === "route") {
+    const legs = [6, 11, 8, 4];
+    $("main").innerHTML = off + queue + hero + `<ol class="route">${trip.map((g, i) => {
+      const o = g[0], b = band(o);
+      const why = b === "late" ? "окно уже прошло — ехать первым" : g.length > 1 ? "один двор, два ЦБ" : !o.slot ? "без окна, в конец дня" : !o.agreed ? "окно " + slotNice(o.slot) + ", не согласовано" : "окно ещё впереди";
+      return `<li class="${b}"><span class="n">${i + 1}</span><span class="tx"><b>${e(cbs(g))}</b><span>${e(o.address)} · ${why}</span></span><em>${legs[i] || "—"} км</em></li>`;
+    }).join("")}</ol><p class="mut" style="margin-top:12px">Порядок по окнам, не по прямой. Километры здесь для примера: в приложении их посчитает маршрут по дорогам.</p>`;
+    return;
+  }
+  if (tab === "rest") {
+    const rest = trip.slice(1);
+    $("main").innerHTML = off + queue + (rest.length ? `<div class="sec"><b>После текущей</b></div>${rest.map((g, i) => crow(g, i + 2)).join("")}` : `<div class="card empty">${ic("checkc")}Дальше точек нет</div>`);
+    return;
+  }
+  const g = trip[0];
+  if (!g) { $("main").innerHTML = off + queue + hero + `<div class="card empty">${ic("checkc")}На сегодня точек не осталось</div>`; return; }
+  const o = g[0], b = band(o);
+  const kicker = b === "late" ? `<span class="badge warn">Окно ${e(slotNice(o.slot))} прошло</span>` : `<span class="badge way">${e(slotNice(o.slot))}</span>`;
+  $("main").innerHTML = off + queue + hero + `<div class="card order open pt next">
+    <div class="ph"><div class="r">${kicker}<span class="pay ml">${rub(payOf(g))}</span></div>
+    <div class="addr">${e(o.address)}</div><div class="pn" style="margin-top:6px">${e(cbs(g))}${g.length > 1 ? " · один заезд" : ""}</div></div>
+    <div class="facts"><div><span>Везти</span><b>${e(g.map(x => x.packs).join(", "))}</b></div><div><span>Вес</span><b>${kgOf(g)} кг</b></div>
+    <div class="${o.floor.startsWith("лест") ? "warn" : ""}"><span>Подъём</span><b>${e(o.floor)}</b></div></div>
+    ${o.note ? `<div class="note">${ic("note")}<span>${e(o.note)}</span></div>` : ""}
+    ${o.agreed ? "" : `<div class="agree no"><span class="dot a"></span>Не согласовано<small>до выезда</small></div>`}
+    <div class="pa">
+      <button type="button" class="big full" data-go>${ic("nav")}Поехали</button>
+      ${o.foreman ? `<a class="btn ghost" href="tel:${e(o.foreman)}">${ic("user")}Прорабу</a>` : ""}
+      <button type="button" class="ghost${o.foreman ? "" : " full"}" data-wa="${idsOf(g)}">${ic("send")}Написать</button>
+      <button type="button" class="ok full" data-done="${idsOf(g)}">${ic("check")}Доставлено</button>
+    </div></div>`;
+}
+
+function openSend(id) {
+  const o = ORDERS.find(x => x.id === id);
+  const have = kgOf(live()), after = have + o.kg, over = after > LIMIT;
+  const box = over
+    ? `<div class="warnbox">На сегодня уже ${kgText(have)}. Эта точка +${o.kg} кг = ${kgText(after)}. Лимит машины 1,5 т, не влезает ${after - LIMIT} кг.</div>`
+    : `<div class="okbox">После этой точки будет ${kgText(after)} из 1,5 т. Место есть.</div>`;
+  openSheet(`<div class="grab"></div><div class="shead"><div><h2>Отправить курьеру</h2><div class="mut">${e(o.address)} · ${e(o.packs)}</div></div></div>
+    <form data-send="${o.id}">${box}
+    <div class="delivery-fields">
+      <div class="g2"><label>Номер ЦБ<span class="pref">ЦБ-<input name="cb" inputmode="numeric" required placeholder="981" aria-label="Номер ЦБ"></span></label>
+      <label>Оплата, ₽<input name="pay" inputmode="numeric" value="${o.pay}"></label></div>
+      <label>Дата<input name="date" type="date" value="${DEMO}"></label>
+      <label>Время<span class="slots">${DELIVERY_SLOTS.map(x => `<button type="button" data-slot="${x}" aria-pressed="${x === "16:00–18:00"}">${slotLabel(x)}</button>`).join("")}</span>
+      <input name="slot" value="16:00–18:00" aria-label="Интервал"></label>
+    </div>
+    <div class="sdock"><button type="button" class="soft" data-close style="flex:0 0 112px">Отмена</button><button class="f1">${over ? "Всё равно отправить" : "Отправить"}</button></div>
+    </form>`);
+}
+function openWa(g) {
+  const text = waText(g), phone = (g[0].foreman || "").replace(/\D/g, "");
+  const href = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : "";
+  openSheet(`<div class="grab"></div><div class="shead"><div><h2>Написать прорабу</h2><div class="mut">${e(cbs(g))} · ${phone ? e(g[0].foreman) : "номер не указан"}</div></div></div>
+    <textarea class="wa" readonly>${e(text)}</textarea>
+    <div class="sdock"><button type="button" class="soft" data-close style="flex:0 0 112px">Закрыть</button>
+    <button type="button" class="ghost" data-copy="${e(text)}">Скопировать</button>
+    ${href ? `<a class="btn f1" href="${href}" target="_blank" rel="noopener">WhatsApp</a>` : ""}</div>`);
+}
+function openGo() {
+  const trip = stops(live()), g = trip[0];
+  if (!g) return;
+  const nxt = trip[1];
+  const y = `https://yandex.ru/maps/?rtext=~${encodeURIComponent(g[0].address)}&rtt=auto`;
+  const why = band(g[0]) === "late" ? "Это окно уже прошло, поэтому оно первое." : "Это ближайшее окно.";
+  openSheet(`<div class="grab"></div><div class="shead"><div><h2>Поехали</h2><div class="mut">${e(g[0].address)}</div></div></div>
+    <div class="sum"><div class="grow"><div class="k">${why}</div><div class="v">${nxt ? "Дальше " + e(cbs(nxt)) + " · " + e(nxt[0].address) : "Это последняя точка"}</div></div></div>
+    <a class="btn big wide" href="${y}" target="_blank" rel="noopener">${ic("nav")}Маршрут в Яндекс Картах</a>
+    <button type="button" class="text wide" data-close>Закрыть</button>`);
+}
+function openPeek(g) {
+  const o = g[0];
+  openSheet(`<div class="grab"></div><div class="shead"><div><h2>${e(cbs(g))}</h2><div class="mut">${e(o.address)} · ${e(slotNice(o.slot))}</div></div></div>
+    <div class="sum"><div class="grow"><div class="k">Порядок дня</div><div class="v">Сначала текущее окно. Эта точка стоит дальше.</div></div></div>
+    <button type="button" class="text wide" data-close>Закрыть</button>`);
+}
+function openDone(g) {
+  photoUrl = "";
+  openSheet(`<div class="grab"></div><div class="shead"><div><h2>Как вручили</h2><div class="mut">${e(cbs(g))} · ${e(g[0].address)}</div></div></div>
+    <div class="out3">
+      <button type="button" data-out="ok">Всё приняли</button>
+      <button type="button" data-out="damage">Есть бой</button>
+      <button type="button" data-out="partial">Часть не взяли</button>
+    </div>
+    <div id="outExtra" hidden>
+      <label class="field" style="margin-top:12px">Сколько упаковок<input id="outQty" inputmode="numeric" placeholder="2"></label>
+      <label class="photo"><input id="outPhoto" type="file" accept="image/*"><img id="outImg" alt="" hidden><span id="outPhotoName">Фото коробок у двери</span></label>
+      <p class="mut" style="margin:8px 0 0">Без фото такое вручение не закрывается: спор с клиентом потом не на слово.</p>
+    </div>
+    <div class="sdock"><button type="button" class="soft" data-close style="flex:0 0 112px">Отмена</button>
+    <button type="button" class="f1" id="outOk" data-commit="${idsOf(g)}" disabled>${offline && role === "courier" ? "Сохранить на телефон" : "Подтвердить"}</button></div>`);
+}
+function commitDone(g) {
+  const out = $("sheetPanel").querySelector(".out3 button[aria-pressed=true]")?.dataset.out;
+  if (!out) return;
+  if (out !== "ok" && !photoUrl) { toast("Нужно фото коробок", true); return; }
+  const hold = offline && role === "courier";
+  for (const o of g) { o.done = true; o.hold = hold; o.outcome = out; }
+  sheetHide();
+  const word = out === "ok" ? "Всё приняли" : out === "damage" ? "Бой отмечен" : "Часть не взяли";
+  toast(hold ? word + " · на телефоне, пока нет сети" : word + " · ушло бы в таблицу и в Ozon");
+  render();
+}
+
+document.addEventListener("click", ev => {
+  const t = ev.target.closest("button, a");
+  if (ev.target.closest("[data-close]")) { sheetHide(); return; }
+  const roleBtn = ev.target.closest("[data-role]");
+  if (roleBtn) { role = roleBtn.dataset.role; tab = "today"; sheetHide(); render(); return; }
+  const tabBtn = ev.target.closest("[data-tab]");
+  if (tabBtn) { tab = tabBtn.dataset.tab; render(); return; }
+  if (ev.target.closest("#netBtn, [data-net]")) {
+    if (ev.target.closest("[data-net]")) { offline = false; held().forEach(o => { o.hold = false; }); toast("Сеть есть · отметки ушли бы в таблицу"); }
+    else offline = !offline;
+    render(); return;
+  }
+  if (ev.target.closest("[data-ack]")) { pushOn = false; tab = "cb"; toast("Заказ открыт · нужен ЦБ"); render(); return; }
+  const send = ev.target.closest("button[data-send]");
+  if (send) { openSend(send.dataset.send); return; }
+  const wa = ev.target.closest("button[data-wa]");
+  if (wa) { openWa(byIds(wa.dataset.wa)); return; }
+  if (ev.target.closest("button[data-go]")) { openGo(); return; }
+  const done = ev.target.closest("button[data-done]");
+  if (done) { openDone(byIds(done.dataset.done)); return; }
+  const peek = ev.target.closest("button[data-peek]");
+  if (peek) { openPeek(byIds(peek.dataset.peek)); return; }
+  const slot = ev.target.closest("[data-slot]");
+  if (slot) {
+    const form = slot.closest("form");
+    form.elements.slot.value = slot.dataset.slot;
+    form.querySelectorAll("[data-slot]").forEach(b => b.setAttribute("aria-pressed", b === slot));
+    return;
+  }
+  const out = ev.target.closest("[data-out]");
+  if (out) {
+    out.parentElement.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b === out));
+    $("outExtra").hidden = out.dataset.out === "ok";
+    $("outOk").disabled = false;
+    return;
+  }
+  const copy = ev.target.closest("[data-copy]");
+  if (copy) { navigator.clipboard?.writeText(copy.dataset.copy).then(() => toast("Текст скопирован")).catch(() => toast("Не удалось скопировать", true)); return; }
+  if (t && t.id === "outOk") commitDone(byIds(t.dataset.commit));
+});
+document.addEventListener("submit", ev => {
+  const f = ev.target.closest("form[data-send]");
+  if (!f) return;
+  ev.preventDefault();
+  const o = ORDERS.find(x => x.id === f.dataset.send);
+  const cb = String(f.elements.cb.value).replace(/\D/g, "");
+  if (!cb) { toast("Введите номер ЦБ", true); return; }
+  o.cb = "ЦБ-" + cb;
+  o.pay = parseInt(f.elements.pay.value, 10) || o.pay;
+  o.slot = f.elements.slot.value;
+  o.status = "today";
+  o.accepted = false;
+  o.agreed = false;
+  sheetHide();
+  tab = "today";
+  toast(o.cb + " у курьера · он увидел бы тревогу «Принял»");
+  render();
+});
+document.addEventListener("change", ev => {
+  if (ev.target.id !== "outPhoto" || !ev.target.files[0]) return;
+  photoUrl = URL.createObjectURL(ev.target.files[0]);
+  $("outImg").src = photoUrl;
+  $("outImg").hidden = false;
+  $("outPhotoName").textContent = "Фото приложено";
+});
+render();
+</script>
+</body>
+</html>
