@@ -16,6 +16,12 @@ assert.equal(context.deliveryDetails('Старый комментарий').note
 assert.equal(context.foremanPhone(''), '');
 assert.throws(() => context.foremanPhone('123'), /Проверьте телефон/);
 assert.equal(context.deliveryComment({note: 'Без времени'}), 'Без времени');
+const ozon = {customer: 'Получатель', weight: 345.6, products: [{name: 'Товар', qty: 12, kg: 345.6}]};
+const enriched = context.deliveryComment({...details, ozon});
+assert.equal(JSON.stringify(context.deliveryDetails(enriched).ozon), JSON.stringify(ozon));
+assert.equal(context.deliveryDetails(enriched).note, details.note);
+assert.ok(context.ozonInfoHtml(ozon).includes('квартал Щитниково, 3Ж'));
+assert.ok(!JSON.stringify(ozon).includes('financial_data'));
 const owner = read('index.html');
 vm.runInContext(owner.match(/^const e = .*;$/m)[0], context);
 vm.runInContext(owner.slice(owner.indexOf('function deliveryFields('), owner.indexOf('\nfunction render(')), context);

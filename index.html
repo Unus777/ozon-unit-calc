@@ -9,7 +9,7 @@
 <title>Юнит-экономика</title>
 <link rel="manifest" href="owner.webmanifest?v=39">
 <meta name="apple-mobile-web-app-title" content="Алмалы">
-<script src="theme.js?v=39"></script>
+<script src="theme.js?v=41"></script>
 <style id="splash-css">/* заставка первой загрузки: стили прямо в странице — видна сразу, до style.css; тема — из theme.js выше */
 html{background:#F5F4F0}:root[data-theme="dark"]{background:#0A0D14}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){background:#0A0D14}}
@@ -44,7 +44,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 @media(prefers-reduced-motion:reduce){.sp-logo,.sp-logo::before,.sp-logo::after,.sp-road::before,.sp-truck,.sp-truck svg{animation:none}
 .sp-logo::before,.sp-logo::after{display:none}.sp-truck{transform:translateX(69px)}#splash,.sp-in{transition:none}}
 </style>
-<link rel="stylesheet" href="style.css?v=40">
+<link rel="stylesheet" href="style.css?v=41">
 <link rel="icon" href="icons/owner.svg?v=39" type="image/svg+xml">
 <link rel="icon" href="icons/owner-32.png?v=39" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/owner-180.png?v=39" sizes="180x180">
@@ -113,7 +113,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 <div id="fbsLive" class="fbs-live" role="status" aria-live="polite"></div>
 <div class="otabs" role="tablist" aria-label="Заказы" id="otabs"></div>
 <div id="orders" class="mut"></div>
-<p id="reloadP" style="text-align:center;margin:8px 0 0"><button class="text" id="reload"><span data-ic="refresh"></span>Обновить список</button></p>
+<p id="reloadP" style="text-align:center;margin:8px 0 0"><button class="text" id="reload"><span data-ic="refresh"></span>Обновить список</button> <button class="text" id="export">Выгрузить CSV</button> <a class="text" href="design.html" target="_blank" rel="noopener">Новый дизайн</a></p>
 <div id="sheet" class="sheet" hidden><div class="sheet-bg" data-close></div><section class="sheet-panel" role="dialog" aria-modal="true" aria-label="Действия с заказом" id="sheetPanel"></section></div>
 <div id="modal-edit-cb" class="modal-bg" hidden>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-cb-title">
@@ -151,7 +151,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 </div></nav>
 
 <script src="calc.js?v=39"></script>
-<script src="config.js?v=39"></script>
+<script src="config.js?v=41"></script>
 <script src="fbs.js?v=40"></script>
 <script src="push.js?v=39"></script>
 <script src="alarm.js?v=39"></script>
@@ -213,6 +213,25 @@ function unloadText(prr) {
   return ({lift: "Лифт", stairs: "Лестница"})[prr.code] ? ({lift: "Лифт", stairs: "Лестница"})[prr.code] + floor : prr.code + floor;
 }
 
+function courierOzonData(p) {
+  const c = p.customer || {}, a = c.address || {}, an = p.analytics_data || {}, dm = p.delivery_method || {};
+  const attrs = Object.fromEntries((p.product_attributes || []).map(x => [x.offer_id, x]));
+  const products = p.products.map(x => {
+    const at = attrs[x.offer_id] || {}, unit = at.weight_unit || "g";
+    const kg = at.weight ? Math.round((Number(at.weight) * ({kg: 1, g: .001, lb: .453592, oz: .0283495}[unit] || 1)) * x.quantity * 10) / 10 : null;
+    const dimUnit = at.dimension_unit || "mm", dimFactor = {mm: .1, cm: 1, in: 2.54}[dimUnit] || 1;
+    return {name: x.name, sku: String(x.sku || ""), offer: x.offer_id, qty: x.quantity,
+      kg, dimensions: at.width ? [at.width, at.height, at.depth].map(v => Math.round(v * dimFactor * 10) / 10).join("×") + " см" : ""};
+  });
+  const barcodes = p.barcodes ? Object.values(p.barcodes).filter(Boolean).join(", ") : "";
+  return {customer: c.name || (p.addressee || {}).name || "", order: p.order_number || "",
+    created: p.in_process_at || "", shipment: p.shipment_date || "", delivery: dm.name || "",
+    window: [an.delivery_date_begin, an.delivery_date_end].filter(Boolean).map(x => new Date(x).toLocaleString("ru-RU")).join(" — "),
+    region: [an.region, an.city].filter(Boolean).join(", "), address_comment: a.comment || "",
+    related: (p.related_postings || []).join(", "), barcodes, products,
+    weight: Math.round(products.reduce((sum, x) => sum + (x.kg || 0), 0) * 10) / 10};
+}
+
 async function sendToCourier(number, cbRaw, details) {
   const [posting] = await fetchPosting(number);
   assertRashadPath(posting, null);
@@ -234,7 +253,7 @@ async function sendToCourier(number, cbRaw, details) {
     packs: posting.products.map(p => `${p.quantity} уп ${tileFormat(p.offer_id, p.name) || p.offer_id}`).join(", "),
     unload, delivery, lift,
     date: details.date || "",
-    comment: deliveryComment({...details, note: [a.comment, details.note].filter(Boolean).join("\n")}),
+    comment: deliveryComment({...details, ozon: courierOzonData(posting), note: [a.comment, details.note].filter(Boolean).join("\n")}),
   };
   let jwts = {}, keyWarn = "";
   try {
@@ -268,11 +287,15 @@ async function ozon(path, payload) {
 }
 
 async function fetchPosting(number) {
-  const posting = (await ozon("/v3/posting/fbs/get", {posting_number: number})).result;
+  const posting = (await ozon("/v3/posting/fbs/get", {posting_number: number,
+    with: {analytics_data: true, barcodes: true, related_postings: true}})).result;
   const offers = posting.products.map(p => p.offer_id);
-  const items = (await ozon("/v5/product/info/prices",
-    {filter: {offer_id: offers, visibility: "ALL"}, limit: 100})).items;
-  return [posting, Object.fromEntries(items.map(i => [i.offer_id, i]))];
+  const [items, attributes] = await Promise.all([
+    ozon("/v5/product/info/prices", {filter: {offer_id: offers, visibility: "ALL"}, limit: 100}),
+    ozon("/v4/product/info/attributes", {filter: {offer_id: offers, visibility: "ALL"}, limit: 100, sort_by: "id", sort_dir: "ASC", last_id: ""}),
+  ]);
+  posting.product_attributes = attributes.result?.items || [];
+  return [posting, Object.fromEntries(items.items.map(i => [i.offer_id, i]))];
 }
 
 let ORDERS = [], PRICES = {};
@@ -651,6 +674,8 @@ ${p.status === "cancelled" ? "" : timelineHtml(orderSteps(p, d))}
 ${d && courierNotes(d.courier_comment).text ? `<div class="sum" style="margin:8px 0 0"><div class="grow"><div class="k">Комментарий курьера</div><div style="white-space:pre-line">${e(courierNotes(d.courier_comment).text)}</div></div></div>` : ""}
 ${callRow || foremanRow || (d && !done) ? `<div class="sgroup">Связь</div>${callRow}${foremanRow}${d && !done ? `<button class="sitem" data-remind="${e(p.posting_number)}">${ic("bell")}Напомнить курьеру</button>` : ""}` : ""}
 <div class="sgroup">Заказ</div>
+${ozonInfoHtml(info.ozon)}
+<button class="sitem" data-ozon-info="${e(p.posting_number)}">${ic("truck")}Обновить данные из Ozon</button>
 ${d && ADMIN() && SCRIPT_URL ? `<details class="sitem-details"><summary class="sitem">${ic("edit")}Пометка, время и прораб · оплата</summary>` +
   `<form data-schedule="${e(p.posting_number)}">${deliveryFields(d, p)}<button>Сохранить изменения</button></form></details>` : ""}
 <button class="sitem" data-open="${e(p.posting_number)}">${ic("chart")}Расчёт ₽/м²</button>
@@ -1135,6 +1160,40 @@ $("app").addEventListener("click", async ev => {
   }
 });
 $("reload").onclick = () => busyBtn($("reload"), () => loadOrders());
+$("export").onclick = () => {
+  const cell = value => '"' + String(value ?? "").replace(/"/g, '""') + '"';
+  const rows = [["Отправление", "Заказ Ozon", "Статус", "Создан", "Отгрузка до", "ЦБ", "Получатель", "Телефон", "Адрес", "Товары", "Вес, кг", "Доставка", "Окно доставки", "Склад"]];
+  for (const p of ORDERS) {
+    const d = DELIV[p.posting_number] || {}, info = deliveryDetails(d.comment).ozon || {}, a = p.customer?.address || {};
+    rows.push([p.posting_number, p.order_number || info.order, p.status, p.in_process_at, p.shipment_date || info.shipment,
+      d.cb, p.customer?.name || info.customer, d.phone || p.customer?.phone, d.address || a.address_tail,
+      p.products.map(x => `${x.quantity} уп · ${x.name} · SKU ${x.sku} · ${x.offer_id}`).join("; "), info.weight,
+      p.delivery_method?.name || info.delivery, info.window, "квартал Щитниково, 3Ж"]);
+  }
+  const blob = new Blob(["﻿" + rows.map(row => row.map(cell).join(";")).join("\r\n")], {type: "text/csv;charset=utf-8"});
+  const link = document.createElement("a"); link.href = URL.createObjectURL(blob);
+  link.download = `almaly-orders-${new Date().toISOString().slice(0, 10)}.csv`; link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000); toast("CSV со всеми заказами выгружен ✓");
+};
+$("app").addEventListener("click", async ev => {
+  const b = ev.target.closest("[data-ozon-info]");
+  if (!b) return;
+  b.disabled = true;
+  try {
+    const [p] = await fetchPosting(b.dataset.ozonInfo), d = DELIV[p.posting_number];
+    const info = courierOzonData(p);
+    if (d && ADMIN()) {
+      const old = deliveryDetails(d.comment);
+      DELIV[p.posting_number] = await sheetApi({action: "update", key: ADMIN(), posting: p.posting_number,
+        data: {comment: deliveryComment({...old, ozon: info})}});
+      closeSheet(); openSheet(ORDERS.findIndex(x => x.posting_number === p.posting_number));
+    } else {
+      b.insertAdjacentHTML("beforebegin", ozonInfoHtml(info));
+      b.hidden = true;
+    }
+    toast("Данные Ozon обновлены ✓");
+  } catch (err) { toast(err.message, true); b.disabled = false; }
+});
 $("app").addEventListener("click", async ev => {
   const b = ev.target.closest("[data-remind]");
   if (b) {
@@ -1229,8 +1288,8 @@ $("app").addEventListener("submit", async ev => {
     const details = readDeliveryFields(f);
     let r;
     if (f.dataset.schedule) {
-      // отметка «Согласовано», если она когда-то записана в комментарий владельца, не теряется при правке
-      const updData = {date: details.date, comment: deliveryComment({...details, agreed: deliveryDetails(DELIV[f.dataset.schedule]?.comment).agreed})};
+      const currentInfo = deliveryDetails(DELIV[f.dataset.schedule]?.comment);
+      const updData = {date: details.date, comment: deliveryComment({...details, agreed: currentInfo.agreed, ozon: currentInfo.ozon})};
       if (details.cb) {
         updData.cb = /^\d+$/.test(details.cb) ? `ЦБ-${details.cb}` : details.cb.toUpperCase().replace(/^ЦБ\s*-?\s*/, "ЦБ-");
       }

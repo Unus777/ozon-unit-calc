@@ -669,3 +669,8 @@ button:focus-visible,a:focus-visible,.crow:focus-visible,[tabindex]:focus-visibl
 #orders > .fbs-wrap { grid-column: 1 / -1; }
 body.fbs-preview { padding-left: 0 !important; }
 body.fbs-preview main { max-width: 1120px; }
+
+/* Расширенная операционная информация Ozon */
+.sitem>span:first-child{min-width:0;overflow-wrap:anywhere}
+.sitem>b{margin-left:auto;text-align:right;max-width:62%;overflow-wrap:anywhere}
+#export,#reload{margin:4px}

@@ -15,11 +15,12 @@ async function sheetApi(payload) {
 // Подробности хранятся читаемыми строками в существующем комментарии таблицы.
 // «Согласовано: прораб · 05.11 14:05 · интервал 12–14» — отметка курьера «Согласовал доставку».
 function deliveryDetails(comment) {
-  const out = {note: [], time: "", foreman: "", agreed: null};
+  const out = {note: [], time: "", foreman: "", agreed: null, ozon: null};
   for (const line of String(comment || "").split("\n")) {
     if (line.startsWith("Время доставки: ")) out.time = line.slice("Время доставки: ".length).trim();
     else if (line.startsWith("Телефон прораба: ")) out.foreman = line.slice("Телефон прораба: ".length).trim();
     else if (parseAgreement(line)) out.agreed = parseAgreement(line);
+    else if (line.startsWith("Ozon: ")) { try { out.ozon = JSON.parse(line.slice(6)); } catch {} }
     else out.note.push(line);
   }
   out.note = out.note.join("\n").trim();
@@ -107,9 +108,20 @@ function foremanPhone(value) {
   return "+" + phone;
 }
 
-function deliveryComment({note, time, foreman, agreed}) {
+function deliveryComment({note, time, foreman, agreed, ozon}) {
   return [String(note || "").trim(), time && "Время доставки: " + String(time).trim(),
-    foreman && "Телефон прораба: " + foremanPhone(foreman), agreementLine(agreed)].filter(Boolean).join("\n");
+    foreman && "Телефон прораба: " + foremanPhone(foreman), agreementLine(agreed),
+    ozon && "Ozon: " + JSON.stringify(ozon)].filter(Boolean).join("\n");
+}
+
+function ozonInfoHtml(info) {
+  if (!info) return "";
+  const esc = x => String(x ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
+  const rows = [["Получатель", info.customer], ["Заказ Ozon", info.order], ["Создан", info.created],
+    ["Отгрузка до", info.shipment], ["Окно доставки", info.window], ["Служба", info.delivery],
+    ["Связанные отправления", info.related], ["Штрихкоды", info.barcodes], ["Склад", "квартал Щитниково, 3Ж"]]
+    .filter(([, value]) => value).map(([label, value]) => `<div class="sitem"><span>${esc(label)}</span><b>${esc(value)}</b></div>`).join("");
+  return `<div class="sgroup">Данные Ozon</div>${rows || '<p class="mut">Дополнительные данные появятся после обновления заказа.</p>'}`;
 }
 
 // Расчёт с курьером по строкам листа «Доставки»: доставленные — к выплате, «Новый»/«Согласован» — в работе.

@@ -8,8 +8,8 @@
 <meta name="robots" content="noindex">
 <meta name="referrer" content="no-referrer">
 <title>Доставки</title>
-<link rel="manifest" href="manifest.webmanifest?v=39">
-<script src="theme.js?v=39"></script>
+<link rel="manifest" href="manifest.webmanifest?v=41">
+<script src="theme.js?v=41"></script>
 <style id="splash-css">/* заставка первой загрузки: стили прямо в странице — видна сразу, до style.css; тема — из theme.js выше */
 html{background:#F5F4F0}:root[data-theme="dark"]{background:#0A0D14}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){background:#0A0D14}}
@@ -44,7 +44,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 @media(prefers-reduced-motion:reduce){.sp-logo,.sp-logo::before,.sp-logo::after,.sp-road::before,.sp-truck,.sp-truck svg{animation:none}
 .sp-logo::before,.sp-logo::after{display:none}.sp-truck{transform:translateX(69px)}#splash,.sp-in{transition:none}}
 </style>
-<link rel="stylesheet" href="style.css?v=40">
+<link rel="stylesheet" href="style.css?v=41">
 <link rel="icon" href="icons/courier.svg?v=39" type="image/svg+xml">
 <link rel="icon" href="icons/courier-32.png?v=39" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/courier-180.png?v=39" sizes="180x180">
@@ -106,7 +106,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 <button role="tab" aria-selected="false" data-tab="done"><span data-ico="checkc"></span>Готово</button>
 </div></nav>
 
-<script src="config.js?v=39"></script>
+<script src="config.js?v=41"></script>
 <script src="fbs.js?v=40"></script>
 <script src="push.js?v=39"></script>
 <script src="alarm.js?v=39"></script>
@@ -144,17 +144,17 @@ const unloadText = r => r.unload === "Нет" ? "Без разгрузки" : r.
 const whenText = r => { const t = deliveryDetails(r.comment).time || (agreementOf(r) || {}).slot; return [r.date === todayStr() ? "Сегодня" : r.date, t].filter(Boolean).join(" ") || r.status; };
 const isPpz = r => isFbsSheetRow(r);
 
-function parsePacksKg(str) {  // «8 уп 60×60, 5 уп 60×120» → упаковки и вес с учётом формата
+function parsePacksKg(str, info) {  // Сначала точный вес Ozon, иначе расчёт по формату упаковки
   let p = 0, kg = 0;
   for (const m of (str || "").matchAll(/(\d+)\s*уп\.?([^,;+]*)/gi)) { const n = parseInt(m[1], 10) || 0; p += n; kg += n * packKg(m[2]); }
   if (!p) { const n = parseInt(str, 10); if (!isNaN(n)) { p = n; kg = n * packKg(str); } }
-  return {packs: p, kg};
+  return {packs: p, kg: info?.ozon?.weight || kg};
 }
 
 function card(r) {
   if (isPpz(r)) return "";
   const done = r.status === "Доставлен" || r.status === "Отменён";
-  const {kg} = parsePacksKg(r.packs);
+  const {kg} = parsePacksKg(r.packs, deliveryDetails(r.comment));
   const a = agreementOf(r);
   if (r.posting !== OPEN) {  // свёрнутая строка: нажатие раскрывает
     const mark = done ? `<span class="n g">${ic("check", "s")}</span>`
@@ -242,6 +242,8 @@ ${r.status === "Отменён" ? "" : timelineHtml([
 <div class="field"><label for="sd">Дата доставки</label><input type="date" id="sd" data-date value="${toIso(r.date)}" ${done ? "disabled" : ""}></div>
 ${info.time ? `<div class="sitem">${ic("clock")}Время: ${e(info.time)}</div>` : ""}
 ${done ? "" : `<button class="sitem" data-agree="${e(r.posting)}">${ic("calcheck")}${agreementOf(r) ? e(agreedLabel(agreementOf(r))) + '<span class="mut">изменить</span>' : "Согласовал доставку"}</button>`}
+${ozonInfoHtml(info.ozon)}
+${(info.ozon?.products || []).map(x => `<div class="sitem"><span>${e(x.qty)} уп · ${e(x.name)}${x.kg ? `<span class="mut">${e(x.kg)} кг${x.dimensions ? " · " + e(x.dimensions) : ""}</span>` : ""}</span></div>`).join("")}
 <div class="field"><label for="sc">Комментарий</label><input id="sc" data-comment value="${e(courierNotes(r.courier_comment).text)}" placeholder="для владельца" ${done ? "disabled" : ""}></div>
 <div class="sgroup">Связь и маршрут</div>
 ${tel ? `<a class="sitem" href="${e(tel)}">${ic("phone")}Позвонить клиенту${ext ? `<span class="mut">доб. ${e(ext)} — наберётся сам</span>` : ""}</a>` : ""}
@@ -292,7 +294,7 @@ async function saveEdit(form) {
   const data = {cb: v.cb.trim(), status: v.status, courier: v.courier.trim(), date: fromIso(v.date), address: v.address.trim(),
     phone: v.phone.trim() ? "+" + v.phone.replace(/\D/g, "").replace(/^8(?=\d{10}$)/, "7") : "", ext: v.ext.replace(/\D/g, ""),
     packs: v.packs.trim(), unload: v.unload.trim(), delivery: v.delivery.replace(/\D/g, "") || "0", lift: v.lift.replace(/\D/g, "") || "0",
-    comment: deliveryComment({note: v.note, time: v.time, foreman: v.foreman}), courier_comment: v.courier_comment.trim()};
+    comment: deliveryComment({note: v.note, time: v.time, foreman: v.foreman, agreed: info.agreed, ozon: info.ozon}), courier_comment: v.courier_comment.trim()};
   if (data.address !== r.address || !(r.lat && r.lon)) Object.assign(data, await geocode(data.address).catch(() => ({lat: "", lon: ""})));
   await save(r.posting, data);
 }
@@ -312,7 +314,7 @@ function draw(anim) {
   if (heroEl) {
     let leftPacks = 0, leftKg = 0, activePay = 0;
     for (const r of active) {
-      const {packs, kg} = parsePacksKg(r.packs);
+      const {packs, kg} = parsePacksKg(r.packs, deliveryDetails(r.comment));
       leftPacks += packs;
       leftKg += kg;
       activePay += Number(String(r.pay || 0).replace(/\D/g, "")) || 0;

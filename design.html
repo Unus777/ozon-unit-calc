@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#10251f">
+  <title>Алмалы Доставка — новый дизайн</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="design.css?v=1">
+  <script src="design.js?v=1" defer></script>
+</head>
+<body>
+  <div class="sync-bar" id="syncBar"></div>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Основная навигация">
+      <div class="brand">
+        <div class="brand-mark"><span>A</span><i></i></div>
+        <div><strong>ALMALY</strong><span>доставка</span></div>
+      </div>
+      <div class="demo-label"><span></span> DESIGN CONCEPT · V2</div>
+      <div class="nav-caption">Рабочее пространство</div>
+      <nav class="side-nav" id="sideNav"></nav>
+      <div class="sidebar-bottom">
+        <button class="driver-mini" data-view="couriers" id="driverMini">
+          <span class="avatar driver-avatar">Р</span>
+          <span><strong>Рашад</strong><small><i class="online-dot"></i> На смене · в пути</small></span>
+          <span data-icon="chevron-right"></span>
+        </button>
+        <div class="role-panel">
+          <span class="role-caption">Показать интерфейс</span>
+          <div class="role-switch" id="roleSwitch">
+            <button data-role="owner" class="active"><span data-icon="grid"></span>Менеджер</button>
+            <button data-role="courier"><span data-icon="navigation"></span>Курьер</button>
+          </div>
+        </div>
+        <div class="demo-note"><span data-icon="shield"></span>Демо-данные · без отправки в Ozon</div>
+      </div>
+    </aside>
+
+    <section class="workspace">
+      <header class="topbar">
+        <button class="mobile-brand" data-action="toggle-role" aria-label="Сменить интерфейс">
+          <span class="brand-mark"><span>A</span><i></i></span>
+          <strong>ALMALY</strong>
+        </button>
+        <form class="global-search" id="globalSearchForm" role="search">
+          <span data-icon="search"></span>
+          <input id="globalSearch" type="search" placeholder="Заказ, ЦБ, адрес или товар" aria-label="Поиск по заказам" autocomplete="off">
+          <kbd>⌘ K</kbd>
+        </form>
+        <div class="topbar-actions">
+          <span class="sync-state"><i></i><span>Всё синхронизировано</span></span>
+          <button class="icon-button" data-action="refresh" aria-label="Обновить данные" title="Обновить"><span data-icon="refresh"></span></button>
+          <button class="icon-button" data-action="theme" aria-label="Сменить тему" title="Сменить тему"><span data-icon="moon"></span></button>
+          <button class="icon-button notification-button" data-action="notifications" aria-label="Уведомления" title="Уведомления"><span data-icon="bell"></span><i></i></button>
+          <button class="icon-button mobile-role" data-action="toggle-role" aria-label="Сменить интерфейс" title="Менеджер / курьер"><span data-icon="switch"></span></button>
+          <button class="profile" data-action="toggle-role" title="Переключить интерфейс">
+            <span class="avatar" id="profileAvatar">Ю</span>
+            <span><strong id="profileName">Юнус</strong><small id="profileRole">Менеджер</small></span>
+            <span data-icon="chevron-down"></span>
+          </button>
+        </div>
+      </header>
+      <main id="main" tabindex="-1"></main>
+    </section>
+  </div>
+
+  <nav class="bottom-nav" id="bottomNav" aria-label="Мобильная навигация"></nav>
+  <div id="drawerRoot"></div>
+  <div id="modalRoot"></div>
+  <div id="successRoot" class="success-root" aria-live="polite"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
