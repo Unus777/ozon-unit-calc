@@ -406,6 +406,11 @@ box-shadow:0 0 0 2.5px #fff,0 8px 16px -6px rgba(11,18,32,.55);display:grid;plac
 .me{position:relative;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 2px 8px rgba(11,18,32,.35)}
 .me i{position:absolute;inset:4px;border-radius:50%;background:#2F7BF6}
 .me::after{content:"";position:absolute;inset:-6px;border-radius:50%;background:rgba(47,123,246,.25);animation:mepulse 2s ease-out infinite;z-index:-1}
+.rashad{position:relative;width:18px;height:18px}
+.rashad i{position:absolute;inset:2px;border-radius:50%;background:#2F7BF6;box-shadow:0 0 0 3px #fff}
+.rashad i::after{content:"";position:absolute;inset:-8px;border-radius:50%;background:rgba(47,123,246,.35);animation:mepulse 1.8s ease-out infinite}
+.rashad-pop{position:absolute;left:24px;top:-10px;width:max-content;max-width:210px;white-space:normal;background:var(--card);color:var(--fg);font:650 12px/1.3 var(--font);padding:6px 8px;border-radius:10px;box-shadow:var(--sh2)}
+.geo-on{font-size:12px;font-weight:650;color:var(--acc);white-space:nowrap}
 @keyframes mepulse{0%{transform:scale(.5);opacity:.9}100%{transform:scale(1.8);opacity:0}}
 /* шторка остановок */
 .msheet{position:absolute;z-index:4;left:0;right:0;bottom:0;height:min(68%,600px);display:flex;flex-direction:column;background:var(--card);border-radius:24px 24px 0 0;
@@ -467,7 +472,7 @@ button.mc-x .ic{width:16px;height:16px}
 a.btn.mc-go{flex:1}
 .mc-a2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
 .mc-a2.one{grid-template-columns:1fr}
-@media(prefers-reduced-motion:reduce){.msheet,.mcard,.pin{transition:none}.pin-pulse,.me::after{animation:none}}
+@media(prefers-reduced-motion:reduce){.msheet,.mcard,.pin{transition:none}.pin-pulse,.me::after,.rashad i::after{animation:none}}
 /* форма правки владельца (courier.html?admin) */
 .editform{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;padding-top:16px;border-top:1px solid var(--line)}
 .editform .wide{grid-column:1/-1}

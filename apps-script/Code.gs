@@ -24,3 +24,69 @@ function applyDeliveryPatch(row, data, courier) {
   }
   return next;
 }
+
+// Пульс курьера. Действие ping пишет только эту точку (лист «Курьер_гео»), where отдаёт её менеджеру.
+// Не добавляйте ping в общие поля доставки и не расширяйте COURIER_FIELDS: курьер не должен менять заказ этим запросом.
+var GEO_SHEET = "Курьер_гео";
+var GEO_KEEP = 50;
+
+function normalizeHeartbeat(data, now) {
+  var src = data || {}, ts = Number(src.ts) || now || Date.now(), point = {ts: ts};
+  var lat = Number(src.lat), lng = Number(src.lng);
+  if (isFinite(lat) && isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+    point.lat = Math.round(lat * 1e6) / 1e6;
+    point.lng = Math.round(lng * 1e6) / 1e6;
+    var acc = Number(src.acc);
+    if (isFinite(acc) && acc >= 0) point.acc = Math.round(acc);
+  }
+  var battery = Number(src.battery);
+  if (src.battery != null && src.battery !== "" && isFinite(battery)) point.battery = Math.max(0, Math.min(1, battery));
+  return point;
+}
+function appendGeo(rows, point) {
+  var next = (rows || []).concat([point]);
+  return next.slice(Math.max(0, next.length - GEO_KEEP));
+}
+function recordHeartbeat(rows, data, now) {
+  return appendGeo(rows, normalizeHeartbeat(data, now || Date.now()));
+}
+function geoSheet_() {
+  if (typeof SpreadsheetApp === "undefined") return null;
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName(GEO_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(GEO_SHEET);
+    sh.appendRow(["ts", "lat", "lng", "acc", "battery"]);
+  }
+  return sh;
+}
+function readGeoRows_() {
+  var sh = geoSheet_();
+  if (!sh || sh.getLastRow() < 2) return [];
+  return sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues().map(function (r) {
+    var point = {ts: Number(r[0])};
+    if (r[1] !== "" && r[2] !== "") { point.lat = Number(r[1]); point.lng = Number(r[2]); }
+    if (r[3] !== "") point.acc = Number(r[3]);
+    if (r[4] !== "") point.battery = Number(r[4]);
+    return point;
+  }).filter(function (p) { return p.ts; });
+}
+function writeGeoRows_(rows) {
+  var sh = geoSheet_();
+  if (!sh) return;
+  if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 5).clearContent();
+  if (!rows.length) return;
+  sh.getRange(2, 1, rows.length, 5).setValues(rows.map(function (p) {
+    return [p.ts, p.lat != null ? p.lat : "", p.lng != null ? p.lng : "", p.acc != null ? p.acc : "", p.battery != null ? p.battery : ""];
+  }));
+}
+// case "ping": только после ключа курьера. case "where": только после ключа менеджера.
+function actionPing(data) {
+  var rows = recordHeartbeat(readGeoRows_(), data, Date.now());
+  writeGeoRows_(rows);
+  return rows[rows.length - 1];
+}
+function actionWhere() {
+  var rows = readGeoRows_();
+  return {latest: rows.length ? rows[rows.length - 1] : null, track: rows.filter(function (p) { return p.lat != null; }).slice(-GEO_KEEP)};
+}

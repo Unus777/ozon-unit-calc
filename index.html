@@ -374,6 +374,7 @@ async function loadOrders(silent) {
     const now = new Date(), day = now.toLocaleDateString("ru-RU", {weekday: "short", day: "numeric", month: "long"});
     $("ltSub").textContent = `${day[0].toUpperCase() + day.slice(1)} · обновлено ${now.toLocaleTimeString("ru-RU", {hour: "2-digit", minute: "2-digit"})}`;
     drawOrders(silent !== true);
+    loadWhere();
     splashHide();
     ownerAlerts(postings);
   } catch (err) {
@@ -580,13 +581,39 @@ function drawOwnerMap() {
       center: [37.62, 55.75], zoom: 9, attributionControl: false, dragRotate: false, pitchWithRotate: false});
     OMAP.addControl(new maplibregl.NavigationControl({showCompass: false}), "top-right");
     await new Promise(ok => OMAP.once("load", ok));
+    OMAP.addSource("rashad", {type: "geojson", data: {type: "FeatureCollection", features: []}});
+    OMAP.addLayer({id: "rashad", type: "line", source: "rashad", layout: {"line-cap": "round", "line-join": "round"},
+      paint: {"line-color": "#2F7BF6", "line-width": 3, "line-opacity": .35}});
     OMAP.addSource("route", {type: "geojson", data: {type: "FeatureCollection", features: []}});
     const acc = getComputedStyle(document.documentElement).getPropertyValue("--acc").trim() || "#2451D6";
     OMAP.addLayer({id: "route", type: "line", source: "route", layout: {"line-cap": "round", "line-join": "round"},
       paint: {"line-color": acc, "line-width": 4}});
   })().catch(err => { OMAP_P = null; $("omapMeta").textContent = err.message || "Карта не загрузилась"; }));
-  boot.then(() => { if (OMAP) { OMAP.resize(); paint(); } }).catch(() => {});
+  boot.then(() => { if (OMAP) { OMAP.resize(); paint(); drawRashad(); } }).catch(() => {});
 }
+let RASHAD = null, RPIN = null;
+function drawRashad() {
+  const latest = RASHAD && RASHAD.latest;
+  const seen = $("rashadSeen");
+  if (seen) seen.textContent = geoSeenText(latest, Date.now());
+  if (!OMAP || !OMAP.getSource) return;
+  const track = todayTrack((RASHAD && RASHAD.track) || [], Date.now()).map(p => [p.lng, p.lat]);
+  const src = OMAP.getSource("rashad");
+  if (src) src.setData(track.length > 1 ? {type: "Feature", geometry: {type: "LineString", coordinates: track}} : {type: "FeatureCollection", features: []});
+  if (RPIN) { RPIN.remove(); RPIN = null; }
+  if (!latest || latest.lat == null || latest.lng == null) return;
+  const el = document.createElement("div");
+  el.className = "rashad";
+  el.innerHTML = `<i></i><div class="rashad-pop">${e(geoSeenText(latest, Date.now()))}</div>`;
+  RPIN = new maplibregl.Marker({element: el, anchor: "center"}).setLngLat([latest.lng, latest.lat]).addTo(OMAP);
+}
+async function loadWhere() {
+  if (!(ADMIN() && SCRIPT_URL) || document.hidden) return;
+  try { RASHAD = await sheetApi({action: "where", key: ADMIN()}); }
+  catch { if (!RASHAD) RASHAD = {latest: null, track: []}; }
+  drawRashad();
+}
+setInterval(loadWhere, 45000);
 $("omapMe").onclick = () => {
   if (!navigator.geolocation) { toast("Геопозиция недоступна", true); return; }
   navigator.geolocation.getCurrentPosition(p => {
@@ -699,10 +726,12 @@ function drawOwnerDash() {
       </div>
       <div class="who">
         <div><b>Рашад</b> <span>принял ${accepted} · в пути ${enroute} · на месте ${onsite} · сдал сегодня ${doneToday}</span></div>
+        <div id="rashadSeen" class="mut">Нет данных о местоположении</div>
         ${ledger}
       </div>
     </section>`;
     tickCount(el);
+    drawRashad();
   } catch (err) {
     console.error("Owner dash error:", err);
   }
