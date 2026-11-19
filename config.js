@@ -282,6 +282,38 @@ function busyBtn(btn, run) {
     Math.max(0, 600 - (Date.now() - started))));  // хотя бы один оборот, чтобы было видно
 }
 
+// Линия маршрута дорисовывается по точкам. При prefers-reduced-motion сразу целиком.
+function paintRoute(map, sourceId, coords) {
+  const src = map && map.getSource(sourceId);
+  if (!src) return;
+  const feature = line => ({type: "Feature", properties: {road: true}, geometry: {type: "LineString", coordinates: line}});
+  if (!coords || coords.length < 2) { src.setData({type: "FeatureCollection", features: []}); return; }
+  const reduce = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce || coords.length < 8 || typeof requestAnimationFrame !== "function") { src.setData(feature(coords)); return; }
+  let i = 2;
+  const step = () => {
+    if (!map.getSource(sourceId)) return;
+    map.getSource(sourceId).setData(feature(coords.slice(0, i)));
+    i += Math.max(1, Math.ceil(coords.length / 28));
+    if (i < coords.length) requestAnimationFrame(step);
+    else map.getSource(sourceId).setData(feature(coords));
+  };
+  step();
+}
+function tickCount(root) {
+  if (!root || typeof requestAnimationFrame !== "function") return;
+  if (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  root.querySelectorAll("[data-count]").forEach(el => {
+    const target = Number(el.dataset.count) || 0, node = el.querySelector("span") || el, t0 = performance.now();
+    const run = now => {
+      const k = Math.min(1, (now - t0) / 520);
+      node.textContent = Math.round(target * (1 - (1 - k) ** 3)).toLocaleString("ru-RU").replace(/\u00a0/g, " ");
+      if (k < 1) requestAnimationFrame(run);
+    };
+    requestAnimationFrame(run);
+  });
+}
+
 function toast(msg, bad) {
   let t = document.getElementById("toast");
   if (!t) { t = document.createElement("div"); t.id = "toast"; t.setAttribute("aria-live", "polite"); document.body.append(t); }

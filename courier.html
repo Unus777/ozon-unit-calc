@@ -44,7 +44,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 @media(prefers-reduced-motion:reduce){.sp-logo,.sp-logo::before,.sp-logo::after,.sp-road::before,.sp-truck,.sp-truck svg{animation:none}
 .sp-logo::before,.sp-logo::after{display:none}.sp-truck{transform:translateX(69px)}#splash,.sp-in{transition:none}}
 </style>
-<link rel="stylesheet" href="style.css?v=42">
+<link rel="stylesheet" href="style.css?v=43">
 <link rel="icon" href="icons/courier.svg?v=39" type="image/svg+xml">
 <link rel="icon" href="icons/courier-32.png?v=39" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/courier-180.png?v=39" sizes="180x180">
@@ -71,7 +71,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 <div id="mapbox" hidden>
 <div id="map" role="region" aria-label="Карта доставок"></div>
 <div class="map-load" id="mapLoad" role="status"><i></i><span>Загружаем карту…</span></div>
-<div class="mtop"><div class="mleg" aria-label="Цвета меток"><span><i class="st-w"></i>Склад</span><span><i class="st-n"></i>Новый</span><span><i class="st-g"></i>Согласован</span></div>
+<div class="mtop"><div class="mleg" aria-label="Цвета меток"><span><i class="st-n"></i>Новый</span><span><i class="st-g"></i>Согласован</span></div>
 <div class="mctl"><button type="button" class="mbtn" data-mfit aria-label="Показать все точки" title="Все точки"><span data-ico="fit"></span></button><button type="button" class="mbtn" data-mme aria-label="Где я" title="Где я"><span data-ico="locate"></span></button></div></div>
 <div class="mcard" id="mcard" aria-live="polite"></div>
 <section class="msheet" id="msheet" data-state="peek" aria-label="Остановки маршрута">
@@ -99,11 +99,11 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 </div>
 </div>
 </main>
-<nav class="tabbar" aria-label="Разделы"><div class="in tabs" role="tablist">
+<nav class="tabbar" aria-label="Разделы"><div class="brandbar"><b>ALMALY</b><span>курьер</span></div><div class="in tabs" role="tablist">
 <button role="tab" aria-selected="true" data-tab="today"><span data-ico="today"></span>Сегодня</button>
 <button role="tab" aria-selected="false" data-tab="active"><span data-ico="orders"></span>Все</button>
 <button role="tab" aria-selected="false" data-tab="map"><span data-ico="map"></span>Карта</button>
-<button role="tab" aria-selected="false" data-tab="done"><span data-ico="checkc"></span>Готово</button>
+<button role="tab" aria-selected="false" data-tab="done"><span data-ico="checkc"></span>История</button>
 </div></nav>
 
 <script src="config.js?v=42"></script>
@@ -157,7 +157,8 @@ function stepsHtml(r) {
   const flags = [isAccepted(r), !!n.enroute, !!n.onsite, done];
   const labels = [["got", "Получен"], ["go", "В пути"], ["here", "На месте"], ["done", "Вручён"]];
   const closed = done || r.status === "Отменён";
-  return `<div class="steps" role="group" aria-label="Этап доставки">${labels.map(([k, lab], i) =>
+  const p = flags.filter(Boolean).length;
+  return `<div class="steptrack" style="--p:${p}" aria-hidden="true"><i></i></div><div class="steps" role="group" aria-label="Этап доставки">${labels.map(([k, lab], i) =>
     `<button type="button" class="${flags[i] ? "on" : ""}" data-step="${k}" aria-pressed="${flags[i]}" ${closed ? "disabled" : ""}>${lab}</button>`).join("")}</div>`;
 }
 function card(r, next) {
@@ -334,16 +335,23 @@ function draw(anim) {
     const isOver = leftKg > 1500;
     const owed = rep.hasPayments ? rep.left : rep.done.pay;
     const label = IS_ADMIN ? (owed < 0 ? "Переплата курьеру" : "Курьеру осталось") : (owed < 0 ? "Выплачено авансом" : "Вам должны");
+    const cap = Math.min(100, Math.round(leftKg / 1500 * 100));
+    const today = todayStr();
+    const doneToday = ROWS.filter(r => r.status === "Доставлен" && String(r.delivered_at || "").includes(today.slice(0, 5))).length;
+    const ahead = active.filter(r => !r.date || r.date === today).length;
     heroEl.innerHTML = `<div class="hero" style="padding:16px 20px">
       <div class="r"><span class="lbl">${label}</span><span class="hchip ml"><span class="dot sm"></span>${IS_ADMIN ? "Владелец" : "Рашад"} · на смене</span></div>
-      <div class="big money">${Math.round(Math.abs(owed)).toLocaleString("ru-RU").replace(/\u00a0/g, " ")}<small>₽</small></div>
+      <div class="big money" data-count="${Math.round(Math.abs(owed))}"><span>${Math.round(Math.abs(owed)).toLocaleString("ru-RU").replace(/\u00a0/g, " ")}</span><small>₽</small></div>
       ${activePay ? `<div class="lbl" style="margin-top:2px">+ ${rub(activePay)} за точки в работе</div>` : ""}
       <div class="hstats" style="margin-top:12px;padding-top:12px">
         <div><span>Осталось</span><b>${plural(active.length, "точка", "точки", "точек")}</b></div>
         <div><span>Упаковок</span><b>${leftPacks} уп</b></div>
         <div><span>${isOver ? "Перегруз!" : "Вес · до 1,5 т"}</span><b class="${isOver ? "am" : ""}">${leftKg} кг</b></div>
       </div>
+      <div class="load"><div class="loadbar"><span style="width:${cap}%"></span></div><small>${leftKg} / 1 500 кг${isOver ? " · перегруз" : ""}</small></div>
+      <div class="dayprog">${doneToday} сдано сегодня · ${ahead} впереди</div>
     </div>`;
+    tickCount(heroEl);
   }
 
   let rows = TAB === "done" ? ROWS.filter(isDone).reverse()
@@ -433,8 +441,7 @@ function roadRoute(lls) {
   return p;
 }
 function routeInfo(order) {
-  const depot = [DEPOT.lat, DEPOT.lon];
-  const lls = [depot].concat(order.map(p => p.ll), order.length ? [depot] : []);
+  const lls = (ME ? [ME] : []).concat(order.map(p => p.ll));
   if (lls.length < 2) return {key: "", lls, data: null};
   const key = llKey(lls), got = ROAD.get(key);
   return {key, lls, data: got && !(got instanceof Promise) ? got : null};
@@ -505,9 +512,6 @@ function drawPins(order) {
     el.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pickStop(r.posting); } });
     return new maplibregl.Marker({element: el, anchor: "bottom", offset: [0, 2]}).setLngLat([ll[1], ll[0]]).addTo(MAP);
   });
-  const wh = pinEl("pin-w", `<div class="pin st-w"><div class="pin-h"><b>С</b></div><i class="pin-s"></i></div>`, DEPOT.name);
-  wh.style.zIndex = 2;
-  PINS.push(new maplibregl.Marker({element: wh, anchor: "bottom", offset: [0, 2]}).setLngLat([DEPOT.lon, DEPOT.lat]).addTo(MAP));
   if (ME) {
     if (!ME_PIN) ME_PIN = new maplibregl.Marker({element: pinEl("me-w", '<div class="me"><i></i></div>', ""), anchor: "center"});
     ME_PIN.setLngLat([ME[1], ME[0]]).addTo(MAP);
@@ -520,14 +524,14 @@ function drawRoute(info) {
   if (key === ROUTE_KEY) return;
   ROUTE_KEY = key;
   const d = info.key ? info.data || straight(info.lls) : null;
-  MAP.getSource("route").setData(!d ? EMPTY : {type: "Feature", properties: {road: d.road, final: !!info.data},
-    geometry: {type: "LineString", coordinates: d.line.map(p => [p[1], p[0]])}});
+  if (!d) MAP.getSource("route").setData(EMPTY);
+  else paintRoute(MAP, "route", d.line.map(p => [p[1], p[0]]));
 }
 const sheetPeek = () => ($("msheet").querySelector(".ms-head") || {}).offsetHeight || 150;
 const deskMap = () => matchMedia("(min-width: 1100px)").matches;
 function fitAll(animate) {
   if (!MAP) return;
-  const lls = MAP_ORDER.map(p => p.ll).concat([[DEPOT.lat, DEPOT.lon]], ME ? [ME] : []);
+  const lls = MAP_ORDER.map(p => p.ll).concat(ME ? [ME] : []);
   const duration = animate ? 700 : 0;
   if (!lls.length) { MAP.jumpTo({center: [37.62, 55.75], zoom: 8.5}); return; }
   if (lls.length === 1) { MAP.flyTo({center: [lls[0][1], lls[0][0]], zoom: 13.5, duration}); return; }
@@ -589,15 +593,14 @@ function drawMap() {
   const noCoords = active.filter(r => !pts.some(p => p.r === r));
   if (!GEO_ASKED) locate(false);
   if (SEL && !pts.some(p => p.r.posting === SEL)) SEL = null;
-  const order = MAP_ORDER = pts.length ? routeOrder(pts, [DEPOT.lat, DEPOT.lon]) : [];
+  const order = MAP_ORDER = pts.length ? routeOrder(pts, ME) : [];
   const info = routeInfo(order), d = info.data || (info.key ? straight(info.lls) : null);
   // ---- шторка: сводка и остановки ----
   const off = ME ? 0 : -1;  // legs[0] — от курьера до первой точки, без геопозиции — от первой точки до второй
   const legOf = i => d && d.legs[i + off] != null ? "+" + kmText(d.legs[i + off]) : "";
-  const depotLL = `${DEPOT.lat},${DEPOT.lon}`;
-  const all = `https://yandex.ru/maps/?rtext=${depotLL}~${order.map(p => p.ll.join(",")).join("~")}~${depotLL}&rtt=auto`;
+  const all = `https://yandex.ru/maps/?rtext=~${order.map(p => p.ll.join(",")).join("~")}&rtt=auto`;
   $("msum").innerHTML = `<div class="ms-t"><b>${order.length ? plural(order.length, "точка", "точки", "точек") : "Нет точек"}</b>${d ? ` · ~${kmText(d.m)} · ~${durText(d.s)}` : ""}</div>
-<div class="ms-s">${!order.length ? (noCoords.length ? "У заказов в работе нет точки на карте" : "Нет активных заказов") : !d ? "Склад на карте" : info.data && info.data.road ? "По дорогам, без учёта пробок" : info.data ? "По прямой — маршрут по дорогам недоступен" : "Считаю маршрут по дорогам…"} · ${e(DEPOT.name)}${ME ? " · вы на карте" : ""}</div>`;
+<div class="ms-s">${!order.length ? (noCoords.length ? "У заказов в работе нет точки на карте" : "Нет активных заказов") : !d ? "Один адрес" : info.data && info.data.road ? "По дорогам, без учёта пробок" : info.data ? "По прямой — маршрут по дорогам недоступен" : "Считаю маршрут по дорогам…"}${ME ? " · от вас" : ""}</div>`;
   $("mnav").hidden = !order.length;
   $("mnav").href = all;
   const body = $("mlist"), st = body.scrollTop;

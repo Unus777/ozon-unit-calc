@@ -44,7 +44,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 @media(prefers-reduced-motion:reduce){.sp-logo,.sp-logo::before,.sp-logo::after,.sp-road::before,.sp-truck,.sp-truck svg{animation:none}
 .sp-logo::before,.sp-logo::after{display:none}.sp-truck{transform:translateX(69px)}#splash,.sp-in{transition:none}}
 </style>
-<link rel="stylesheet" href="style.css?v=42">
+<link rel="stylesheet" href="style.css?v=43">
 <link rel="icon" href="icons/owner.svg?v=39" type="image/svg+xml">
 <link rel="icon" href="icons/owner-32.png?v=39" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/owner-180.png?v=39" sizes="180x180">
@@ -151,7 +151,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 </div>
 </div>
 </main>
-<nav class="tabbar" aria-label="Разделы"><div class="in">
+<nav class="tabbar" aria-label="Разделы"><div class="brandbar"><b>ALMALY</b><span>доставка</span></div><div class="in">
   <button type="button" data-view="orders" aria-selected="true"><span data-ic="orders"></span>Заказы<i id="tabBadge" hidden></i></button>
   <button type="button" data-view="calc" aria-selected="false"><span data-ic="calc"></span>Расчёт</button>
   <a id="dlvLink" href="courier.html?admin=1" hidden><span data-ic="truck"></span>Курьер</a>
@@ -507,21 +507,18 @@ function nearestStops(points, start) {
 function drawOwnerMap() {
   const box = $("omapBox");
   if (!box || document.body.dataset.view === "calc" || document.body.dataset.view === "settings") return;
-  const stops = nearestStops(ownerStops(), [DEPOT.lat, DEPOT.lon]);
-  const lls = [[DEPOT.lat, DEPOT.lon]].concat(stops.map(p => p.ll), stops.length ? [[DEPOT.lat, DEPOT.lon]] : []);
+  const raw = ownerStops();
+  const stops = nearestStops(raw, OME || (raw[0] && raw[0].ll) || [55.75, 37.62]);
+  const lls = (OME ? [OME] : []).concat(stops.map(p => p.ll));
   box.hidden = false;
-  $("omapMeta").textContent = stops.length ? `${stops.length} · ${DEPOT.name}` : DEPOT.name;
+  $("omapMeta").textContent = stops.length ? plural(stops.length, "точка", "точки", "точек") : "Нет точек с координатами";
   const go = $("omapGo");
   go.hidden = !stops.length;
   go.href = `https://yandex.ru/maps/?rtext=${lls.map(p => p.join(",")).join("~")}&rtt=auto`;
   const key = stops.map(p => p.r.posting).join("|") + (OME ? ":me" : "");
   const paint = () => {
     OPINS.forEach(m => m.remove());
-    const depotEl = document.createElement("div");
-    depotEl.className = "pin-w";
-    depotEl.innerHTML = `<div class="pin st-w"><div class="pin-h"><b>С</b></div><i class="pin-s"></i></div>`;
-    depotEl.title = DEPOT.name;
-    OPINS = [new maplibregl.Marker({element: depotEl, anchor: "bottom"}).setLngLat([DEPOT.lon, DEPOT.lat]).addTo(OMAP)];
+    OPINS = [];
     stops.forEach(({r, ll}, i) => {
       const el = document.createElement("div");
       el.className = "pin-w";
@@ -544,7 +541,8 @@ function drawOwnerMap() {
     if (key !== OMAP_KEY) {
       OMAP_KEY = key;
       const motion = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 700;
-      if (lls.length < 2 && !OME) OMAP.flyTo({center: [DEPOT.lon, DEPOT.lat], zoom: 12, duration: motion});
+      if (!lls.length) OMAP.flyTo({center: [37.62, 55.75], zoom: 9, duration: motion});
+      else if (lls.length < 2) OMAP.flyTo({center: [lls[0][1], lls[0][0]], zoom: 12, duration: motion});
       else OMAP.fitBounds(bounds, {padding: 48, maxZoom: 13, duration: motion});
     }
     if (stops.length) {
@@ -553,12 +551,8 @@ function drawOwnerMap() {
       fetch(`https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson`, {signal: ctl.signal})
         .then(r => r.json()).then(j => {
           const line = j && j.routes && j.routes[0] && j.routes[0].geometry;
-          const src = OMAP.getSource("route");
-          if (src && line) src.setData({type: "Feature", properties: {road: true}, geometry: line});
-        }).catch(() => {
-          const src = OMAP.getSource("route");
-          if (src) src.setData({type: "Feature", properties: {road: false}, geometry: {type: "LineString", coordinates: lls.map(p => [p[1], p[0]])}});
-        }).finally(() => clearTimeout(timer));
+          if (line) paintRoute(OMAP, "route", line.coordinates);
+        }).catch(() => paintRoute(OMAP, "route", lls.map(p => [p[1], p[0]]))).finally(() => clearTimeout(timer));
     } else OMAP.getSource("route")?.setData({type: "FeatureCollection", features: []});
   };
   const boot = OMAP_P || (OMAP_P = (async () => {
@@ -570,7 +564,7 @@ function drawOwnerMap() {
     });
     const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
     OMAP = new maplibregl.Map({container: "omap", style: `https://tiles.openfreemap.org/styles/${dark ? "dark" : "positron"}`,
-      center: [DEPOT.lon, DEPOT.lat], zoom: 10, attributionControl: false, dragRotate: false, pitchWithRotate: false});
+      center: [37.62, 55.75], zoom: 9, attributionControl: false, dragRotate: false, pitchWithRotate: false});
     OMAP.addControl(new maplibregl.NavigationControl({showCompass: false}), "top-right");
     await new Promise(ok => OMAP.once("load", ok));
     OMAP.addSource("route", {type: "geojson", data: {type: "FeatureCollection", features: []}});
@@ -651,19 +645,47 @@ function drawOwnerDash() {
       }
     }
     const tons = (kgToday / 1000).toFixed(1).replace(".", ",");
-    const rep = typeof deliveryReport === "function" ? deliveryReport(rashadDeliveries(Object.values(DELIV || {})), PAYS) : {left: courierOwed};
+    const rep = typeof deliveryReport === "function" ? deliveryReport(rashadDeliveries(Object.values(DELIV || {})), PAYS) : {left: courierOwed, done: {pay: 0}, paid: 0, hasPayments: false};
     const leftPay = rep && rep.hasPayments ? rep.left : courierOwed;
     const amount = Math.round(Math.abs(leftPay)).toLocaleString("ru-RU").replace(/\u00a0/g, " ");
-    el.innerHTML = `<div class="hero">
-      <div class="r"><span class="lbl">${leftPay < 0 ? "Переплата курьеру" : "Курьеру к выплате"}</span>
-        <span class="hchip ml">${ic("truck")}${notAgreed ? `${notAgreed} не согласовано` : "Рашад"}</span></div>
-      <div class="big money">${amount}<small>₽</small></div>
-      <div class="hstats">
-        <div><span>В работе</span><b>${plural(countToday, "заказ", "заказа", "заказов")}</b></div>
-        <div><span>Ждут ЦБ</span><b class="${waitCbCount > 0 ? "am" : "gr"}">${waitCbCount > 0 ? waitCbCount : "0 ✓"}</b></div>
-        <div><span>Груз · ${packsToday} уп</span><b>${tons} т</b></div>
+    const rows = rashadDeliveries(Object.values(DELIV || {}));
+    let accepted = 0, enroute = 0, onsite = 0, doneToday = 0;
+    for (const r of rows) {
+      const notes = courierNotes(r.courier_comment);
+      if (r.status === "Доставлен" && String(r.delivered_at || "").includes(today.slice(0, 5))) doneToday++;
+      if (r.status === "Доставлен" || r.status === "Отменён") continue;
+      if (isAccepted(r)) accepted++;
+      if (notes.enroute) enroute++;
+      if (notes.onsite) onsite++;
+    }
+    const late = (ORDERS || []).filter(p => !isFbs(p) && ozState(p) === "late").length;
+    const focus = [
+      waitCbCount && ["new", "Ждут ЦБ", `${waitCbCount} без накладной`, true],
+      notAgreed && ["courier", "Не согласовано", `${notAgreed} у Рашада`, false],
+      late && ["all", "Ozon не подтвердил", `${late} старше 2 часов`, true],
+    ].filter(Boolean);
+    const day = new Date().toLocaleDateString("ru-RU", {weekday: "long", day: "numeric", month: "long"});
+    el.innerHTML = `<section class="dash">
+      <div class="dash-top"><div><div class="eyebrow">${day}</div><h2>Смена</h2></div>
+        <div class="dash-pay"><span>${leftPay < 0 ? "Переплата" : "Курьеру к выплате"}</span>
+        <b class="money" data-count="${Math.round(Math.abs(leftPay))}"><span>${amount}</span><small>₽</small></b></div></div>
+      <div class="stats">
+        <article><span>В работе</span><b>${countToday}</b><small>${packsToday} уп</small></article>
+        <article><span>Ждут ЦБ</span><b class="${waitCbCount ? "am" : ""}">${waitCbCount}</b><small>${waitCbCount ? "нужна накладная" : "всё с ЦБ"}</small></article>
+        <article><span>Не согласовано</span><b>${notAgreed}</b><small>у Рашада</small></article>
+        <article><span>Груз</span><b>${tons}</b><small>тонн · сегодня и в пути</small></article>
       </div>
-    </div>`;
+      <div class="focus"><div class="focus-h"><b>Сейчас</b><span>${focus.length ? focus.length : "пусто"}</span></div>
+        ${focus.length ? focus.map(([tab, title, sub, warn]) => `<button type="button" data-focus="${tab}"><span class="${warn ? "am" : ""}">${title}</span><small>${sub}</small></button>`).join("") : `<p class="mut">Нет срочных дел. Рашад везёт согласованное.</p>`}
+      </div>
+      <div class="who">
+        <div><b>Рашад</b> <span>принял ${accepted} · в пути ${enroute} · на месте ${onsite} · сдал сегодня ${doneToday}</span></div>
+        <div class="who-pay"><span>Начислено ${Math.round(rep.done?.pay || 0).toLocaleString("ru-RU")}</span>
+          <span>Выплачено ${Math.round(rep.paid || 0).toLocaleString("ru-RU")}</span>
+          <span>Осталось ${amount}</span></div>
+      </div>
+    </section>`;
+    tickCount(el);
   } catch (err) {
     console.error("Owner dash error:", err);
   }
@@ -1286,6 +1308,8 @@ $("app").addEventListener("click", ev => {
   }
   const t = ev.target.closest("[data-otab]");
   if (t) { OTAB = t.dataset.otab; drawOrders(true); return; }
+  const focus = ev.target.closest("[data-focus]");
+  if (focus) { OTAB = focus.dataset.focus; drawOrders(true); document.getElementById("otabs")?.scrollIntoView({block: "start"}); return; }
   const mo = ev.target.closest("[data-more]");
   if (mo) { openSheet(+mo.dataset.more); return; }
   const ss = ev.target.closest("[data-sendsheet]");

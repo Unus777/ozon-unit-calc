@@ -602,15 +602,51 @@ button:focus-visible,a:focus-visible,.crow:focus-visible,[tabindex]:focus-visibl
 .al-night .ic{width:14px;height:14px}
 
 /* Mac в браузере: боковое меню и ширина экрана. Уже 1100px — как телефон. */
+.brandbar{display:none}
+.dash{display:grid;gap:12px;margin-bottom:14px}
+.dash-top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.dash-top h2{margin:0;font-size:32px;letter-spacing:-.03em}
+.eyebrow{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)}
+.dash-pay{text-align:right;flex:0 0 auto;white-space:nowrap}
+.dash-pay > span{display:block;color:var(--mut);font-size:13px}
+.dash-pay b{font-size:34px;letter-spacing:-.03em}
+.dash-pay b span{font-size:inherit;color:inherit}
+.dash-pay small{font-size:16px;margin-left:2px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stats article{background:var(--card);border-radius:18px;padding:12px 14px;box-shadow:var(--sh1),inset 0 0 0 1px var(--line)}
+.stats span{display:block;color:var(--mut);font-size:12px;font-weight:650}
+.stats b{display:block;font-size:26px;letter-spacing:-.03em;margin-top:2px}
+.stats small{color:var(--mut);font-size:12px}
+.focus,.who{background:var(--card);border-radius:18px;padding:12px;box-shadow:var(--sh1),inset 0 0 0 1px var(--line)}
+.focus-h,.who{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.focus-h b,.who b{font-size:15px}
+.focus-h span{min-width:22px;height:22px;border-radius:11px;background:var(--acc);color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;padding:0 6px}
+.focus button{width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:48px;margin-top:8px;background:var(--soft);color:var(--fg);box-shadow:none;border-radius:14px;padding:0 12px}
+.focus button small{color:var(--mut);font-weight:550}
+.focus .am{color:var(--yellow)}
+.who{display:grid;gap:6px;align-items:start}
+.who span,.who-pay{color:var(--ink2);font-size:13px}
+.who-pay{display:flex;gap:12px;flex-wrap:wrap}
+.load{margin-top:12px}
+.loadbar{height:8px;border-radius:99px;background:rgba(255,255,255,.18);overflow:hidden}
+.loadbar span{display:block;height:100%;border-radius:inherit;background:#9DB4FF;width:0;transition:width .6s ease}
+.dayprog{margin-top:8px;font-size:13px;opacity:.85}
+.steptrack{height:4px;margin:14px 16px 0;border-radius:99px;background:var(--line);overflow:hidden}
+.steptrack i{display:block;height:100%;width:calc(var(--p) * 25%);background:var(--acc);border-radius:inherit;transition:width .35s ease}
+@media(prefers-reduced-motion:reduce){.loadbar span,.steptrack i{transition:none}}
 @media (min-width: 1100px) {
-  :root { --bar-h: 64px; --desk-nav: 228px; }
+  :root { --bar-h: 64px; --desk-nav: 240px; }
   body { padding-left: var(--desk-nav); }
   .tabbar { top: 0; bottom: 0; left: 0; right: auto; width: var(--desk-nav); display: flex; flex-direction: column;
-    border-top: 0; border-right: 1px solid var(--line); padding: 20px 12px 16px; }
+    background: #0e1a33; color: #d7e1f8; border-top: 0; border-right: 0; padding: 18px 12px 16px; }
+  .brandbar{display:block;padding:6px 12px 16px}
+  .brandbar b{display:block;font-size:18px;letter-spacing:.08em}
+  .brandbar span{color:#9aafd6;font-size:12px}
   .tabbar .in { flex-direction: column; align-items: stretch; max-width: none; width: 100%; gap: 4px; }
   .tabbar .in > a, .tabbar .in > button { flex: 0 0 auto; flex-direction: row; justify-content: flex-start; width: 100%;
-    height: 44px; min-height: 44px; gap: 10px; padding: 0 12px; font-size: 15px; border-radius: 12px; }
-  .tabbar .in > [aria-selected="true"] { background: var(--acc-bg); color: var(--acc); }
+    height: 44px; min-height: 44px; gap: 10px; padding: 0 12px; font-size: 15px; border-radius: 12px; color: #d7e1f8; background: transparent; box-shadow: none; }
+  .tabbar .in > [aria-selected="true"] { background: rgba(143,176,255,.2); color: #fff; }
+  .stats{grid-template-columns:repeat(4,1fr)}
   .tabbar i { position: static; margin-left: auto; box-shadow: none; }
   .bar { height: var(--bar-h); max-width: 1120px; }
   .lt, main { max-width: 1120px; }

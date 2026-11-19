@@ -44,7 +44,6 @@ const plural = (n, one, few, many) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? o
 const todayLabel = () => new Intl.DateTimeFormat("ru-RU", {day: "numeric", month: "long", weekday: "long"}).format(new Date());
 
 let mapPoints = [];
-const CONCEPT_DEPOT = {name: "квартал Щитниково, 3Ж", lat: 55.816013, lon: 37.844068};
 let orders = [
   {id: "ЦБ-1048", posting: "04382190-0112-1", customer: "Алексей", phone: "+7 900 123-45-67", address: "Москва, ул. Зорге, 21", area: "Москва · 12,4 км от склада", product: "Миррор Вайт 60×120", packs: 12, weight: 336, pay: 3200, status: "in_transit", date: "Сегодня", time: "10:00–12:00", unload: "Лифт · 4 этаж", note: "Позвонить прорабу за 30 минут до приезда.", foreman: "+7 900 555-01-24", distance: 12.4, type: "rfbs"},
   {id: "ЦБ-1049", posting: "05129044-0084-1", customer: "Марина", phone: "+7 900 234-56-78", address: "Балашиха, проспект Ленина, 32", area: "Балашиха · 8,1 км от склада", product: "Георгия Полиш 60×60", packs: 16, weight: 448, pay: 1800, status: "assigned", date: "Сегодня", time: "12:30–14:30", unload: "Без подъёма", note: "Въезд со двора, шлагбаум откроет охрана.", foreman: "", distance: 8.1, type: "rfbs"},
@@ -260,14 +259,12 @@ async function mountConceptMap() {
   try { await ensureConceptLib(); } catch { el.textContent = "Карта не загрузилась"; return; }
   if (conceptMap) { conceptMap.remove(); conceptMap = null; }
   const stops = mapPoints.slice();
-  conceptMap = new maplibregl.Map({container: el, style: conceptStyle(), center: [CONCEPT_DEPOT.lon, CONCEPT_DEPOT.lat], zoom: 9,
+  const first = stops[0];
+  conceptMap = new maplibregl.Map({container: el, style: conceptStyle(), center: first ? [first.lon, first.lat] : [37.62, 55.75], zoom: 9,
     attributionControl: false, dragRotate: false, pitchWithRotate: false, fadeDuration: matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 150});
   conceptMap.addControl(new maplibregl.NavigationControl({showCompass: false}), "top-right");
   conceptMap.on("load", () => {
-    const depot = document.createElement("div");
-    depot.className = "concept-pin depot"; depot.textContent = "С"; depot.title = CONCEPT_DEPOT.name;
-    new maplibregl.Marker({element: depot, anchor: "center"}).setLngLat([CONCEPT_DEPOT.lon, CONCEPT_DEPOT.lat]).addTo(conceptMap);
-    const lls = [[CONCEPT_DEPOT.lon, CONCEPT_DEPOT.lat]];
+    const lls = [];
     stops.forEach((order, i) => {
       const pin = document.createElement("button");
       pin.type = "button"; pin.className = "concept-pin"; pin.textContent = String(i + 1); pin.title = order.address;
@@ -275,15 +272,13 @@ async function mountConceptMap() {
       new maplibregl.Marker({element: pin, anchor: "center"}).setLngLat([order.lon, order.lat]).addTo(conceptMap);
       lls.push([order.lon, order.lat]);
     });
-    if (stops.length) lls.push([CONCEPT_DEPOT.lon, CONCEPT_DEPOT.lat]);
-    conceptMap.addSource("route", {type: "geojson", data: {type: "Feature", geometry: {type: "LineString", coordinates: lls}}});
-    conceptMap.addLayer({id: "route", type: "line", source: "route", layout: {"line-cap": "round", "line-join": "round"}, paint: {"line-color": "#2451D6", "line-width": 4}});
-    const b = new maplibregl.LngLatBounds();
-    lls.forEach(p => b.extend(p));
-    conceptMap.fitBounds(b, {padding: 36, maxZoom: 11, duration: 0});
-    if (stops.length) {
-      const path = [[CONCEPT_DEPOT.lat, CONCEPT_DEPOT.lon]].concat(stops.map(o => [o.lat, o.lon]), [[CONCEPT_DEPOT.lat, CONCEPT_DEPOT.lon]])
-        .map(p => `${(+p[1]).toFixed(6)},${(+p[0]).toFixed(6)}`).join(";");
+    conceptMap.addSource("route", {type: "geojson", data: {type: "Feature", geometry: {type: "LineString", coordinates: lls.length > 1 ? lls : [[37.62, 55.75], [37.63, 55.76]]}}});
+    conceptMap.addLayer({id: "route", type: "line", source: "route", layout: {"line-cap": "round", "line-join": "round"}, paint: {"line-color": "#2451D6", "line-width": 4, "line-opacity": lls.length > 1 ? 1 : 0}});
+    if (lls.length > 1) {
+      const b = new maplibregl.LngLatBounds();
+      lls.forEach(p => b.extend(p));
+      conceptMap.fitBounds(b, {padding: 36, maxZoom: 11, duration: 0});
+      const path = stops.map(o => `${(+o.lon).toFixed(6)},${(+o.lat).toFixed(6)}`).join(";");
       fetch("https://router.project-osrm.org/route/v1/driving/" + path + "?overview=full&geometries=geojson").then(r => r.json()).then(j => {
         const g = j && j.routes && j.routes[0] && j.routes[0].geometry;
         if (g && conceptMap && conceptMap.getSource("route")) conceptMap.getSource("route").setData({type: "Feature", geometry: g});
