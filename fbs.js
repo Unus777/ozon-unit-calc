@@ -90,9 +90,19 @@ function groupFbsPostings(postings) {
 function orderTab(posting, row) {
   if (isAlmalyFbs(posting)) return "fbs";
   if (!posting) return "cancel";
+  if (posting.status === "cancelled" || (row && row.status === "Отменён")) return "cancel";
   if (posting.status === "delivered" || (row && row.status === "Доставлен")) return "done";
-  if (!row) return posting.status === "cancelled" ? "cancel" : "new";
+  if (!row) return "new";
   return "courier";
+}
+
+// Что записать в лист «Доставки» после сверки с Ozon. Пусто — строку не трогаем.
+// FBS и заказы без строки курьеру не пишем. Уже доставленное не переводим в «Отменён».
+function deliveryStatusSync(posting, row) {
+  if (!posting || !row || isAlmalyFbs(posting) || isFbsSheetRow(row)) return "";
+  if (posting.status === "delivered" && row.status !== "Доставлен") return "Доставлен";
+  if (posting.status === "cancelled" && (row.status === "Новый" || row.status === "Согласован")) return "Отменён";
+  return "";
 }
 
 function normalizeCb(raw) {
@@ -365,5 +375,5 @@ if (typeof module !== "undefined") module.exports = {
   fbsOrderKey, fbsGroupKey, fbsSiblings, groupFbsPostings, orderTab, normalizeCb,
   loadFbsState, saveFbsState, cbSources, groupCbPicture, sharedCbPlan, fbsCbSavedText, persistSharedCb,
   setFbsStage, setFbsStageAll, applyLabelResult, requestFbsLabel, publicOzonError,
-  officialOzon, shipText, warehouseLine, fbsBoardHtml,
+  officialOzon, shipText, warehouseLine, fbsBoardHtml, deliveryStatusSync,
 };
