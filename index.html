@@ -213,27 +213,65 @@ function unloadText(prr) {
   return ({lift: "Лифт", stairs: "Лестница"})[prr.code] ? ({lift: "Лифт", stairs: "Лестница"})[prr.code] + floor : prr.code + floor;
 }
 
+// Ozon отдаёт related_postings объектом {related_posting_numbers}, не массивом. .join по объекту ронял отправку.
+function relatedNumbers(p) {
+  const raw = p && p.related_postings;
+  const list = Array.isArray(raw) ? raw : raw && raw.related_posting_numbers;
+  if (!Array.isArray(list)) return [];
+  return list.map(x => (x && typeof x === "object" ? x.posting_number : x)).filter(x => x != null && String(x).trim() !== "").map(String);
+}
+
+// /v4/product/info/attributes: result — массив. Старые ответы клали товары в result.items.
+function attributeItems(body) {
+  const result = body && body.result;
+  if (Array.isArray(result)) return result;
+  if (result && Array.isArray(result.items)) return result.items;
+  if (body && Array.isArray(body.items)) return body.items;
+  return [];
+}
+
+async function getPosting(number) {
+  const plain = {posting_number: number};
+  try {
+    return (await ozon("/v3/posting/fbs/get", {...plain, with: {analytics_data: true, barcodes: true, related_postings: true}})).result;
+  } catch (err) {
+    if (/: (401|403|404) /.test(err && err.message || "")) throw err;  // ключ или номер: повтор без обогащения ничего не даст
+    return (await ozon("/v3/posting/fbs/get", plain)).result;
+  }
+}
+
+async function attachAttributes(posting) {
+  posting.product_attributes = [];
+  try {
+    const offers = (posting.products || []).map(p => p.offer_id).filter(Boolean);
+    if (!offers.length) return;
+    posting.product_attributes = attributeItems(await ozon("/v4/product/info/attributes", {
+      filter: {offer_id: offers, visibility: "ALL"}, limit: 100, sort_dir: "ASC", last_id: ""}));
+  } catch { posting.product_attributes = []; }
+}
+
 function courierOzonData(p) {
   const c = p.customer || {}, a = c.address || {}, an = p.analytics_data || {}, dm = p.delivery_method || {};
-  const attrs = Object.fromEntries((p.product_attributes || []).map(x => [x.offer_id, x]));
-  const products = p.products.map(x => {
+  const attrs = Object.fromEntries((Array.isArray(p.product_attributes) ? p.product_attributes : []).map(x => [x.offer_id, x]));
+  const products = (p.products || []).map(x => {
     const at = attrs[x.offer_id] || {}, unit = at.weight_unit || "g";
     const kg = at.weight ? Math.round((Number(at.weight) * ({kg: 1, g: .001, lb: .453592, oz: .0283495}[unit] || 1)) * x.quantity * 10) / 10 : null;
     const dimUnit = at.dimension_unit || "mm", dimFactor = {mm: .1, cm: 1, in: 2.54}[dimUnit] || 1;
     return {name: x.name, sku: String(x.sku || ""), offer: x.offer_id, qty: x.quantity,
       kg, dimensions: at.width ? [at.width, at.height, at.depth].map(v => Math.round(v * dimFactor * 10) / 10).join("×") + " см" : ""};
   });
-  const barcodes = p.barcodes ? Object.values(p.barcodes).filter(Boolean).join(", ") : "";
+  const barcodes = p.barcodes && typeof p.barcodes === "object" ? Object.values(p.barcodes).filter(Boolean).join(", ") : "";
   return {customer: c.name || (p.addressee || {}).name || "", order: p.order_number || "",
     created: p.in_process_at || "", shipment: p.shipment_date || "", delivery: dm.name || "",
     window: [an.delivery_date_begin, an.delivery_date_end].filter(Boolean).map(x => new Date(x).toLocaleString("ru-RU")).join(" — "),
     region: [an.region, an.city].filter(Boolean).join(", "), address_comment: a.comment || "",
-    related: (p.related_postings || []).join(", "), barcodes, products,
+    related: relatedNumbers(p).join(", "), barcodes, products,
     weight: Math.round(products.reduce((sum, x) => sum + (x.kg || 0), 0) * 10) / 10};
 }
 
 async function sendToCourier(number, cbRaw, details) {
-  const [posting] = await fetchPosting(number);
+  const posting = await getPosting(number);
+  await attachAttributes(posting);  // вес и габариты необязательны: ошибка Ozon не отменяет отправку
   assertRashadPath(posting, null);
   const c = posting.customer || {}, a = c.address || {}, prr = posting.prr_option || {};
   const phone = String(c.phone || (posting.addressee || {}).phone || "").replace(/\D/g, "");
@@ -245,6 +283,8 @@ async function sendToCourier(number, cbRaw, details) {
   if (details.delivery_pay !== "" && !isNaN(Number(details.delivery_pay))) delivery = Number(details.delivery_pay);
   else delivery = parseFloat(posting.delivery_price) || 0;
   const lift = parseFloat(prr.price) || 0;
+  let courierInfo = null;
+  try { courierInfo = courierOzonData(posting); } catch {}  // кривой ответ Ozon не должен останавливать запись в таблицу
   const data = {
     posting: posting.posting_number,
     cb: /^\d+$/.test(cbRaw) ? `ЦБ-${cbRaw}` : cbRaw.toUpperCase().replace(/^ЦБ\s*-?\s*/, "ЦБ-"),
@@ -253,7 +293,7 @@ async function sendToCourier(number, cbRaw, details) {
     packs: posting.products.map(p => `${p.quantity} уп ${tileFormat(p.offer_id, p.name) || p.offer_id}`).join(", "),
     unload, delivery, lift,
     date: details.date || "",
-    comment: deliveryComment({...details, ozon: courierOzonData(posting), note: [a.comment, details.note].filter(Boolean).join("\n")}),
+    comment: deliveryComment({...details, ozon: courierInfo, note: [a.comment, details.note].filter(Boolean).join("\n")}),
   };
   let jwts = {}, keyWarn = "";
   try {
@@ -287,15 +327,13 @@ async function ozon(path, payload) {
 }
 
 async function fetchPosting(number) {
-  const posting = (await ozon("/v3/posting/fbs/get", {posting_number: number,
-    with: {analytics_data: true, barcodes: true, related_postings: true}})).result;
-  const offers = posting.products.map(p => p.offer_id);
-  const [items, attributes] = await Promise.all([
+  const posting = await getPosting(number);
+  const offers = (posting.products || []).map(p => p.offer_id);
+  const [prices] = await Promise.all([
     ozon("/v5/product/info/prices", {filter: {offer_id: offers, visibility: "ALL"}, limit: 100}),
-    ozon("/v4/product/info/attributes", {filter: {offer_id: offers, visibility: "ALL"}, limit: 100, sort_by: "id", sort_dir: "ASC", last_id: ""}),
+    attachAttributes(posting),
   ]);
-  posting.product_attributes = attributes.result?.items || [];
-  return [posting, Object.fromEntries(items.items.map(i => [i.offer_id, i]))];
+  return [posting, Object.fromEntries(prices.items.map(i => [i.offer_id, i]))];
 }
 
 let ORDERS = [], PRICES = {};

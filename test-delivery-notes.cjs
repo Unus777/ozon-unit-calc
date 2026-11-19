@@ -23,6 +23,44 @@ assert.equal(context.deliveryDetails(enriched).note, details.note);
 assert.ok(context.ozonInfoHtml(ozon).includes('квартал Щитниково, 3Ж'));
 assert.ok(!JSON.stringify(ozon).includes('financial_data'));
 const owner = read('index.html');
+vm.runInContext(owner.slice(owner.indexOf('function relatedNumbers('), owner.indexOf('\nfunction show(')), context);
+vm.runInContext(owner.slice(owner.indexOf('async function fetchPosting('), owner.indexOf('\nlet ORDERS')), context);
+const posting = {
+  posting_number: '01234567-0001-1', order_number: '01234567-0001',
+  products: [{name: 'Керамогранит', sku: 111, offer_id: 'TILE-600', quantity: 2, price: '4500'}],
+  customer: {name: 'Иван', phone: '79001234567', address: {address_tail: 'Химки, ул. Тестовая, 1', latitude: 55.9, longitude: 37.4, comment: 'домофон 12'}},
+  addressee: {pin: '0042'}, prr_option: {code: 'lift', floor: '5', price: '700'}, delivery_price: '1500',
+  delivery_method: {name: 'Своя доставка'},
+  analytics_data: {region: 'Московская область', city: 'Химки', delivery_date_begin: '2026-11-19T07:00:00Z', delivery_date_end: '2026-11-19T11:00:00Z'},
+  barcodes: {upper_barcode: '200111', lower_barcode: ''},
+  related_postings: {related_posting_numbers: ['01234567-0001-2', '01234567-0001-3']},
+  financial_data: {cluster_to: 'Москва', products: [{commission_amount: 900, payout: 3000}]},
+  in_process_at: '2026-11-18T10:00:00Z', shipment_date: '2026-11-19',
+};
+const attrs = context.attributeItems({result: [{offer_id: 'TILE-600', weight: 35000, weight_unit: 'g', width: 600, height: 600, depth: 110, dimension_unit: 'mm'}]});
+assert.equal(attrs[0].offer_id, 'TILE-600');
+assert.equal(JSON.stringify(context.attributeItems({result: {items: [{offer_id: 'OLD'}]}}).map(x => x.offer_id)), '["OLD"]');
+assert.equal(context.attributeItems(null).length, 0);
+const info = context.courierOzonData({...posting, product_attributes: attrs});
+assert.equal(info.related, '01234567-0001-2, 01234567-0001-3');
+assert.equal(info.customer, 'Иван');
+assert.equal(info.products[0].kg, 70);
+assert.equal(info.weight, 70);
+assert.equal(info.products[0].dimensions, '60×60×11 см');
+assert.equal(info.barcodes, '200111');
+assert.equal(info.region, 'Московская область, Химки');
+assert.equal('price' in info.products[0], false);
+assert.ok(!JSON.stringify(info).includes('4500'));
+assert.ok(!JSON.stringify(info).includes('financial_data'));
+assert.ok(!JSON.stringify(info).includes('payout'));
+assert.equal(context.courierOzonData({...posting, related_postings: null, product_attributes: []}).related, '');
+const missingRelated = {...posting, product_attributes: []};
+delete missingRelated.related_postings;
+assert.equal(context.courierOzonData(missingRelated).related, '');
+assert.equal(context.courierOzonData({...posting, related_postings: ['A-1', 'A-2'], product_attributes: []}).related, 'A-1, A-2');
+assert.doesNotThrow(() => context.courierOzonData({related_postings: {related_posting_numbers: ['Z-1']}}));
+assert.equal(context.courierOzonData({related_postings: {related_posting_numbers: ['Z-1']}}).related, 'Z-1');
+console.log('Данные Ozon для курьера: форма ответа, вес и без финансов — проверки пройдены');
 vm.runInContext(owner.match(/^const e = .*;$/m)[0], context);
 vm.runInContext(owner.slice(owner.indexOf('function deliveryFields('), owner.indexOf('\nfunction render(')), context);
 const form = context.deliveryFields({date: '27.10.2026', comment: encoded});
@@ -199,6 +237,73 @@ async function swRun(notice, {list = [ROW], hour = '2026-11-05T11:05:00Z', badge
   return {shown, sw, handlers, badges, click};
 }
 (async () => {
+  const sendDetails = {note: 'Позвонить', time: '', foreman: '', date: '19.11.2026', delivery_pay: ''};
+  context.store = {get() { return ''; }};
+  context.ADMIN = () => 'test-key';
+  context.ownerKey = ownerKey;
+  vm.runInContext(read('calc.js'), context);
+  const written = [];
+  const realSheet = context.sheetApi;
+  context.sheetApi = async req => { written.push(req); return {posting: req.data.posting, pushed: true}; };
+  let ozonCalls = 0;
+  context.ozon = async () => { ozonCalls++; throw new Error('Ozon /v3/posting/fbs/get: 401 нет доступа'); };
+  await assert.rejects(() => context.sendToCourier(posting.posting_number, '970', sendDetails), /401/);
+  assert.equal(ozonCalls, 1);
+  assert.equal(written.length, 0);
+  const calls = [];
+  context.ozon = async (path, payload) => {
+    calls.push(path + (payload && payload.with ? ':with' : ''));
+    if (String(path).includes('attributes') || String(path).includes('prices')) throw new Error(path + ' down');
+    if (payload && payload.with) throw new Error('Ozon /v3/posting/fbs/get: 400 bad with');
+    return {result: posting};
+  };
+  const sent = await context.sendToCourier(posting.posting_number, '970', sendDetails);
+  assert.equal(sent.posting, posting.posting_number);
+  assert.equal(written.length, 1);
+  assert.equal(written[0].action, 'create');
+  assert.equal(written[0].data.cb, 'ЦБ-970');
+  assert.equal(written[0].data.address, 'Химки, ул. Тестовая, 1');
+  assert.match(written[0].data.comment, /01234567-0001-2, 01234567-0001-3/);
+  assert.match(written[0].data.comment, /домофон 12/);
+  assert.ok(!written[0].data.comment.includes('financial_data'));
+  assert.ok(!written[0].data.comment.includes('4500'));
+  assert.ok(!written[0].data.comment.includes('payout'));
+  assert.ok(calls.includes('/v3/posting/fbs/get:with') && calls.includes('/v3/posting/fbs/get'));
+  assert.ok(calls.some(c => c.includes('attributes')));
+  assert.ok(!calls.some(c => c.includes('prices')));
+  const realCourierOzon = context.courierOzonData;
+  context.courierOzonData = () => { throw new TypeError('related_postings.join is not a function'); };
+  const broken = await context.sendToCourier(posting.posting_number, '971', sendDetails);
+  assert.equal(broken.posting, posting.posting_number);
+  assert.equal(written[1].data.cb, 'ЦБ-971');
+  assert.ok(!written[1].data.comment.includes('Ozon:'));
+  assert.equal(written[1].data.packs.includes('2 уп'), true);
+  context.courierOzonData = realCourierOzon;
+  context.ozon = async path => {
+    if (String(path).includes('attributes')) return {result: [{offer_id: 'TILE-600', weight: 28000, weight_unit: 'g', width: 600, height: 600, depth: 100, dimension_unit: 'mm'}]};
+    if (String(path).includes('prices')) return {items: [{offer_id: 'TILE-600', price: {price: '100'}}]};
+    return {result: JSON.parse(JSON.stringify(posting))};
+  };
+  const [got, prices] = await context.fetchPosting(posting.posting_number);
+  assert.equal(got.product_attributes[0].weight, 28000);
+  assert.equal(prices['TILE-600'].price.price, '100');
+  assert.equal(context.courierOzonData(got).products[0].kg, 56);
+  assert.equal(context.courierOzonData(got).products[0].dimensions, '60×60×10 см');
+  context.sheetApi = realSheet;
+  context.FormData = class { constructor(form) { this._ = Object.entries(form.fields); } [Symbol.iterator]() { return this._[Symbol.iterator](); } };
+  context.fromIso = d => d ? d.split('-').reverse().join('.') : '';
+  const kept = context.deliveryComment({...details, agreed: ag, ozon});
+  context.ROWS = [{posting: 'demo', address: 'Химки', lat: '1', lon: '2', comment: kept, courier_comment: 'курьер'}];
+  let saved;
+  context.save = async (id, data) => { saved = data; };
+  await context.saveEdit({
+    fields: {cb: 'ЦБ-9', status: 'Новый', courier: 'Рашад', date: '2026-10-27', time: 'с 14:00 до 16:00', address: 'Химки', phone: '', ext: '', packs: '2 уп', unload: 'Нет', delivery: '100', lift: '0', note: 'новая пометка', foreman: '89001234567', courier_comment: 'курьер'},
+    closest() { return {dataset: {posting: 'demo'}}; },
+  });
+  assert.equal(context.deliveryDetails(saved.comment).note, 'новая пометка');
+  assert.equal(context.deliveryDetails(saved.comment).agreed.who, 'прораб');
+  assert.equal(context.deliveryDetails(saved.comment).ozon.customer, 'Получатель');
+  console.log('Отправка курьеру не зависит от обогащения Ozon: проверки пройдены');
   // днём: крупный заголовок, адрес · упаковки · время, звук и длинная вибрация, баннер, кнопки
   let {shown, badges, click} = await swRun({type: 'new', posting: '1-1-1', cb: 'ЦБ-7', packs: '8 уп', address: 'Химки', unload: 'Нет'});
   assert.equal(shown.length, 1);
