@@ -1,30 +1,30 @@
 :root {
-  --bg: #f2f5f1;
+  --bg: #f3f5fb;
   --surface: #ffffff;
-  --surface-soft: #f6f8f5;
-  --surface-strong: #e9eeea;
-  --text: #17231e;
-  --muted: #748079;
-  --line: #e0e7e1;
-  --sidebar: #10251f;
-  --sidebar-soft: #1a352c;
-  --primary: #176b52;
-  --primary-hover: #10553f;
-  --primary-soft: #e6f3ed;
-  --accent: #c9f277;
-  --accent-hover: #d6fa91;
-  --accent-ink: #183321;
-  --green: #16845f;
-  --green-soft: #e4f5ed;
-  --blue: #4778d7;
-  --blue-soft: #ebf0fc;
+  --surface-soft: #f5f7fc;
+  --surface-strong: #e6ebf6;
+  --text: #12182a;
+  --muted: #6d7690;
+  --line: #e1e6f2;
+  --sidebar: #0e1a33;
+  --sidebar-soft: #182848;
+  --primary: #2451d6;
+  --primary-hover: #1c3fad;
+  --primary-soft: #e7eeff;
+  --accent: #d9e4ff;
+  --accent-hover: #c5d6ff;
+  --accent-ink: #10204a;
+  --green: #2451d6;
+  --green-soft: #e7eeff;
+  --blue: #2451d6;
+  --blue-soft: #e7eeff;
   --orange: #bf7027;
   --orange-soft: #fff2e3;
   --red: #c95055;
   --red-soft: #ffedef;
   --purple: #8061b5;
   --purple-soft: #f1ebfa;
-  --map: #e8ede6;
+  --map: #e7eef8;
   --shadow: 0 1px 2px rgba(22, 44, 34, .025), 0 10px 30px rgba(22, 44, 34, .035);
   --shadow-hover: 0 14px 38px rgba(22, 44, 34, .09);
   --shadow-lg: 0 28px 90px rgba(10, 29, 21, .2);
@@ -32,29 +32,29 @@
 }
 
 :root[data-theme="dark"] {
-  --bg: #0e1713;
-  --surface: #15221c;
-  --surface-soft: #1a2a23;
-  --surface-strong: #24372e;
-  --text: #edf4ef;
-  --muted: #94a49a;
-  --line: #283a31;
-  --sidebar: #09130f;
-  --sidebar-soft: #162a21;
-  --primary: #79d8b2;
-  --primary-hover: #9ae4c7;
-  --primary-soft: #1c3a2f;
-  --green: #72d6aa;
-  --green-soft: #193a2d;
-  --blue: #93b2f3;
-  --blue-soft: #202f48;
+  --bg: #0b1020;
+  --surface: #141a2e;
+  --surface-soft: #1b2340;
+  --surface-strong: #263156;
+  --text: #eef2fb;
+  --muted: #9aa6c4;
+  --line: #2a3558;
+  --sidebar: #080d1c;
+  --sidebar-soft: #152042;
+  --primary: #8fb0ff;
+  --primary-hover: #b3c8ff;
+  --primary-soft: #1c2c55;
+  --green: #8fb0ff;
+  --green-soft: #1c2c55;
+  --blue: #8fb0ff;
+  --blue-soft: #1c2c55;
   --orange: #edb477;
   --orange-soft: #3b2d1f;
   --red: #f0999e;
   --red-soft: #3b2427;
   --purple: #c0a4eb;
   --purple-soft: #312841;
-  --map: #1d2b23;
+  --map: #172038;
   --shadow: none;
   --shadow-hover: 0 14px 38px rgba(0, 0, 0, .18);
   --shadow-lg: 0 28px 90px rgba(0, 0, 0, .5);
@@ -201,6 +201,9 @@ body.is-syncing .sync-bar { opacity: 1; animation: sync-progress .8s cubic-bezie
 .map-head p { margin: 3px 0 0; color: var(--muted); font-size: 9px; }
 .map-head .status-pill { flex: 0 0 auto; }
 .map-canvas { position: relative; height: 316px; overflow: hidden; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--map); }
+.live-map .maplibregl-ctrl-attrib, .live-map .maplibregl-ctrl-logo { display: none !important; }
+.concept-pin { width: 28px; height: 28px; border: 0; border-radius: 50%; background: #2451d6; color: #fff; font-weight: 750; font-size: 12px; box-shadow: 0 0 0 2px #fff, 0 6px 14px rgba(16, 32, 74, .35); display: grid; place-items: center; cursor: pointer; }
+.concept-pin.depot { background: #0e1a33; border-radius: 8px; width: 30px; }
 .map-canvas svg.map-art { width: 100%; height: 100%; position: absolute; inset: 0; }
 :root[data-theme="dark"] .map-art { opacity: .36; filter: saturate(.6) brightness(.75); }
 .map-route-base { fill: none; stroke: color-mix(in srgb, var(--primary) 22%, transparent); stroke-width: 8; stroke-linecap: round; }

@@ -43,6 +43,7 @@ const money = value => `${Math.round(Number(value) || 0).toLocaleString("ru-RU")
 const plural = (n, one, few, many) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? few : many}`;
 const todayLabel = () => new Intl.DateTimeFormat("ru-RU", {day: "numeric", month: "long", weekday: "long"}).format(new Date());
 
+let mapPoints = [];
 let orders = [
   {id: "ЦБ-1048", posting: "04382190-0112-1", customer: "Алексей", phone: "+7 900 123-45-67", address: "Москва, ул. Зорге, 21", area: "Москва · 12,4 км от склада", product: "Миррор Вайт 60×120", packs: 12, weight: 336, pay: 3200, status: "in_transit", date: "Сегодня", time: "10:00–12:00", unload: "Лифт · 4 этаж", note: "Позвонить прорабу за 30 минут до приезда.", foreman: "+7 900 555-01-24", distance: 12.4, type: "rfbs"},
   {id: "ЦБ-1049", posting: "05129044-0084-1", customer: "Марина", phone: "+7 900 234-56-78", address: "Балашиха, проспект Ленина, 32", area: "Балашиха · 8,1 км от склада", product: "Георгия Полиш 60×60", packs: 16, weight: 448, pay: 1800, status: "assigned", date: "Сегодня", time: "12:30–14:30", unload: "Без подъёма", note: "Въезд со двора, шлагбаум откроет охрана.", foreman: "", distance: 8.1, type: "rfbs"},
@@ -54,6 +55,12 @@ let orders = [
   {id: "ЦБ-1046", posting: "98310122-0341-1", customer: "Наталья", phone: "+7 900 789-01-23", address: "Химки, ул. Молодёжная, 8", area: "Химки · 39,5 км", product: "Лилия Беж 60×60", packs: 10, weight: 280, pay: 2500, status: "delivered", date: "Сегодня", time: "08:55", unload: "Без подъёма", note: "", foreman: "", distance: 39.5, type: "rfbs"},
 ];
 
+const CONCEPT_LL = {
+  "04382190-0112-1": [55.7755, 37.5045], "05129044-0084-1": [55.7965, 37.9382], "06813305-0021-2": [55.7308, 37.4455],
+  "07142218-0033-1": [55.8204, 37.3298], "01930412-0017-1": [56.3445, 37.5204], "50125266-0408-1": [55.7812, 38.6504],
+  "98310122-0341-1": [55.8974, 37.4502]
+};
+for (const order of orders) { const ll = CONCEPT_LL[order.posting]; if (ll) { order.lat = ll[0]; order.lon = ll[1]; } }
 let finance = {accrued: 130357, paid: 102540};
 let payments = [
   {id: 1, amount: 52540, date: "18 октября 2026", comment: "Выплата за 5–18 октября"},
@@ -76,7 +83,7 @@ const NAV = {
 
 const activeOrders = () => orders.filter(order => !["delivered", "cancelled"].includes(order.status));
 const waitingOrders = () => orders.filter(order => order.status === "waiting_cb");
-const routeOrders = () => orders.filter(order => ["assigned", "in_transit", "arrived"].includes(order.status));
+const routeOrders = () => orders.filter(order => order.type !== "fbs" && ["assigned", "in_transit", "arrived"].includes(order.status));
 const owed = () => Math.max(0, finance.accrued - finance.paid);
 const sum = (list, key) => list.reduce((total, order) => total + order[key], 0);
 
@@ -127,8 +134,8 @@ function filteredOrders() {
 }
 
 function mapMarkup(list) {
-  const positions = [[22, 68], [39, 47], [57, 30], [71, 58], [83, 28], [48, 72]];
-  return `<div class="map-canvas"><svg class="map-art" viewBox="0 0 900 480" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="900" height="480" fill="#e8ede6"/><g fill="#dde5da"><path d="M25 35h150v82H25zM215 22h125v105H215zM370 38h165v70H370zM690 25h165v105H690zM52 175h105v88H52zM240 165h140v75H240zM620 285h120v90H620zM770 330h105v110H770zM265 355h110v80H265z"/></g><g fill="#d5e3d1"><path d="M565 25h80v115h-80zM38 330h135v110H38zM725 165h130v90H725z"/></g><path d="M0 440c120-55 180-30 255 20s150 30 245-5 190-35 400 15v10H0Z" fill="#d4e4e3"/><g fill="none" stroke="#f8faf6" stroke-linecap="round"><path d="M-30 410C140 350 150 180 300 190S510 420 930 245" stroke-width="28"/><path d="M100-30C110 120 280 160 250 300S160 450 240 520M510-30C460 100 530 210 490 300S420 470 470 520M730-30C650 120 750 205 690 330S650 460 720 520" stroke-width="19"/><path d="M0 100 900 420M0 265 900 65M0 375 900 340" stroke-width="9"/></g><g fill="none" stroke="#d2dbd1" stroke-width="1"><path d="M-30 410C140 350 150 180 300 190S510 420 930 245"/><path d="M100-30C110 120 280 160 250 300S160 450 240 520M510-30C460 100 530 210 490 300S420 470 470 520"/></g><g fill="#9aa79e" font-family="Manrope, sans-serif" font-size="11" font-weight="600"><text x="63" y="155">Балашиха</text><text x="402" y="86">Москва</text><text x="694" y="305">Реутов</text><text x="280" y="445">Щитниково</text></g><path class="map-route-base" d="M95 405C190 360 195 280 290 300S380 390 455 305S515 155 620 195S700 320 795 160"/><path class="map-route-flow" d="M95 405C190 360 195 280 290 300S380 390 455 305S515 155 620 195S700 320 795 160"/></svg><div class="map-toolbar"><span class="map-badge">${icon("route")}Схема маршрута · демо</span><span class="map-badge live">Рашад движется к точке 1</span></div><div class="map-marker warehouse" style="left:7%;top:81%"><span>Склад · Щитниково, 3Ж</span></div>${list.slice(0, 6).map((order, index) => `<button class="map-marker ${order.status === "in_transit" ? "active" : order.status === "arrived" ? "arrived" : ""}" style="left:${positions[index][0]}%;top:${positions[index][1]}%" data-open-order="${esc(order.posting)}" aria-label="Открыть ${esc(order.id)}"><span>${index + 1}</span></button>`).join("")}<div class="courier-beacon">${icon("truck")}</div><div class="map-legend"><i></i>Оптимальный порядок объезда</div></div>`;
+  mapPoints = list.filter(order => order.type !== "fbs" && order.lat && order.lon);
+  return `<div class="map-canvas live-map" role="region" aria-label="Карта маршрута"></div>`;
 }
 
 function managerShiftCard() {
@@ -143,7 +150,7 @@ function managerShiftCard() {
 
 function attentionCard() {
   const waiting = waitingOrders();
-  return `<article class="card attention-card"><div class="card-head"><div><h2>Фокус менеджера</h2><p>Только то, что требует действия</p></div><span class="attention-count">3</span></div><div class="attention-list"><button class="attention-item" data-action="filter-waiting"><span class="attention-symbol">${icon("edit")}</span><span class="attention-copy"><strong>Заполнить ${plural(waiting.length, "номер ЦБ", "номера ЦБ", "номеров ЦБ")}</strong><span>Заказы не попадут курьеру без накладной</span></span>${icon("chevron-right")}</button><button class="attention-item" data-open-order="0221995810-0012"><span class="attention-symbol purple">${icon("clock")}</span><span class="attention-copy"><strong>FBS · сдать в ППЗ до 18:00</strong><span>ЦБ-1050 · Реутовская, 5</span></span>${icon("chevron-right")}</button><button class="attention-item" data-view="route"><span class="attention-symbol green">${icon("calendar")}</span><span class="attention-copy"><strong>Завтра запланированы 2 точки</strong><span>24 упаковки · 672 кг · выезд в 09:00</span></span>${icon("chevron-right")}</button></div></article>`;
+  return `<article class="card attention-card"><div class="card-head"><div><h2>Фокус менеджера</h2><p>Только то, что требует действия</p></div><span class="attention-count">3</span></div><div class="attention-list"><button class="attention-item" data-action="filter-waiting"><span class="attention-symbol">${icon("edit")}</span><span class="attention-copy"><strong>Заполнить ${plural(waiting.length, "номер ЦБ", "номера ЦБ", "номеров ЦБ")}</strong><span>Заказы не попадут курьеру без накладной</span></span>${icon("chevron-right")}</button><button class="attention-item" data-open-order="0221995810-0012"><span class="attention-symbol purple">${icon("clock")}</span><span class="attention-copy"><strong>FBS остаётся на складе</strong><span>ЦБ-1050 не уходит Рашаду</span></span>${icon("chevron-right")}</button><button class="attention-item" data-view="route"><span class="attention-symbol green">${icon("calendar")}</span><span class="attention-copy"><strong>Завтра запланированы 2 точки</strong><span>24 упаковки · 672 кг · выезд в 09:00</span></span>${icon("chevron-right")}</button></div></article>`;
 }
 
 function overviewView() {
@@ -231,6 +238,54 @@ function courierHistoryView() {
   return `${pageHead("Завершённые доставки", `${done.length} заказа в этой демонстрационной смене`, `<button class="button secondary" data-action="export">${icon("download")}Отчёт</button>`, "История смены")}<section class="stats-grid">${metricCard("Доставлено", done.length, "Без отмен и повторных рейсов", "check-circle", "green", "success")}${metricCard("Упаковок", sum(done, "packs"), "Все переданы клиентам", "package")}${metricCard("Заработано", sum(done, "pay"), "За показанные заказы", "wallet", "purple", "", " ₽")}${metricCard("Время в рейсе", "1 ч 17 мин", "По двум завершённым точкам", "clock", "orange")}</section><section class="card orders-card" style="margin-top:0">${orderRows(done)}</section>`;
 }
 
+let conceptMap = null, conceptLib = null;
+function ensureConceptLib() {
+  if (window.maplibregl) return Promise.resolve();
+  if (conceptLib) return conceptLib;
+  conceptLib = new Promise((ok, fail) => {
+    const css = Object.assign(document.createElement("link"), {rel: "stylesheet", href: "https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css", integrity: "sha384-uTttxo/aOKbdE5RlD/SPzSDoDmNvGlUYPjONi2MN/b7c9HPSvW07OIuyP7uL6jxK", crossOrigin: "anonymous"});
+    const js = Object.assign(document.createElement("script"), {src: "https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js", integrity: "sha384-5+cfbwT0iiub6VsQAdn6yz16nr6sDiQoHx6tm4O8OVYXHYOxcffFmCJBL0dgdvGp", crossOrigin: "anonymous"});
+    js.onload = ok; js.onerror = () => fail(new Error("map"));
+    document.head.append(css, js);
+  });
+  return conceptLib;
+}
+function conceptStyle() {
+  return `https://tiles.openfreemap.org/styles/${document.documentElement.dataset.theme === "dark" ? "dark" : "positron"}`;
+}
+async function mountConceptMap() {
+  const el = document.querySelector(".live-map");
+  if (!el) { if (conceptMap) { conceptMap.remove(); conceptMap = null; } return; }
+  try { await ensureConceptLib(); } catch { el.textContent = "Карта не загрузилась"; return; }
+  if (conceptMap) { conceptMap.remove(); conceptMap = null; }
+  const stops = mapPoints.slice();
+  const first = stops[0];
+  conceptMap = new maplibregl.Map({container: el, style: conceptStyle(), center: first ? [first.lon, first.lat] : [37.62, 55.75], zoom: 9,
+    attributionControl: false, dragRotate: false, pitchWithRotate: false, fadeDuration: matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 150});
+  conceptMap.addControl(new maplibregl.NavigationControl({showCompass: false}), "top-right");
+  conceptMap.on("load", () => {
+    const lls = [];
+    stops.forEach((order, i) => {
+      const pin = document.createElement("button");
+      pin.type = "button"; pin.className = "concept-pin"; pin.textContent = String(i + 1); pin.title = order.address;
+      pin.addEventListener("click", () => openOrder(order.posting));
+      new maplibregl.Marker({element: pin, anchor: "center"}).setLngLat([order.lon, order.lat]).addTo(conceptMap);
+      lls.push([order.lon, order.lat]);
+    });
+    conceptMap.addSource("route", {type: "geojson", data: {type: "Feature", geometry: {type: "LineString", coordinates: lls.length > 1 ? lls : [[37.62, 55.75], [37.63, 55.76]]}}});
+    conceptMap.addLayer({id: "route", type: "line", source: "route", layout: {"line-cap": "round", "line-join": "round"}, paint: {"line-color": "#2451D6", "line-width": 4, "line-opacity": lls.length > 1 ? 1 : 0}});
+    if (lls.length > 1) {
+      const b = new maplibregl.LngLatBounds();
+      lls.forEach(p => b.extend(p));
+      conceptMap.fitBounds(b, {padding: 36, maxZoom: 11, duration: 0});
+      const path = stops.map(o => `${(+o.lon).toFixed(6)},${(+o.lat).toFixed(6)}`).join(";");
+      fetch("https://router.project-osrm.org/route/v1/driving/" + path + "?overview=full&geometries=geojson").then(r => r.json()).then(j => {
+        const g = j && j.routes && j.routes[0] && j.routes[0].geometry;
+        if (g && conceptMap && conceptMap.getSource("route")) conceptMap.getSource("route").setData({type: "Feature", geometry: g});
+      }).catch(() => {});
+    }
+  });
+}
 function renderNavigation() {
   const html = NAV[state.role].map(([view, iconName, label]) => {
     const count = view === "orders" ? activeOrders().length : view === "today" ? routeOrders().length : 0;
@@ -260,6 +315,7 @@ function render() {
   main.innerHTML = content;
   hydrateIcons();
   animateCounters();
+  mountConceptMap();
 }
 
 function navigate(view) {
@@ -443,6 +499,7 @@ document.addEventListener("click", event => {
     document.documentElement.dataset.theme = dark ? "dark" : "light";
     try { localStorage.setItem("almaly-prototype-theme-v2", dark ? "dark" : "light"); } catch {}
     document.querySelectorAll('[data-action="theme"]').forEach(item => { item.innerHTML = icon(dark ? "sun" : "moon"); });
+    mountConceptMap();
   } else if (action === "refresh") {
     button.classList.add("spinning");
     document.body.classList.add("is-syncing");

@@ -44,7 +44,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 @media(prefers-reduced-motion:reduce){.sp-logo,.sp-logo::before,.sp-logo::after,.sp-road::before,.sp-truck,.sp-truck svg{animation:none}
 .sp-logo::before,.sp-logo::after{display:none}.sp-truck{transform:translateX(69px)}#splash,.sp-in{transition:none}}
 </style>
-<link rel="stylesheet" href="style.css?v=41">
+<link rel="stylesheet" href="style.css?v=43">
 <link rel="icon" href="icons/courier.svg?v=39" type="image/svg+xml">
 <link rel="icon" href="icons/courier-32.png?v=39" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/courier-180.png?v=39" sizes="180x180">
@@ -99,14 +99,14 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 </div>
 </div>
 </main>
-<nav class="tabbar" aria-label="Разделы"><div class="in tabs" role="tablist">
+<nav class="tabbar" aria-label="Разделы"><div class="brandbar"><b>ALMALY</b><span>курьер</span></div><div class="in tabs" role="tablist">
 <button role="tab" aria-selected="true" data-tab="today"><span data-ico="today"></span>Сегодня</button>
 <button role="tab" aria-selected="false" data-tab="active"><span data-ico="orders"></span>Все</button>
 <button role="tab" aria-selected="false" data-tab="map"><span data-ico="map"></span>Карта</button>
-<button role="tab" aria-selected="false" data-tab="done"><span data-ico="checkc"></span>Готово</button>
+<button role="tab" aria-selected="false" data-tab="done"><span data-ico="checkc"></span>История</button>
 </div></nav>
 
-<script src="config.js?v=41"></script>
+<script src="config.js?v=42"></script>
 <script src="fbs.js?v=40"></script>
 <script src="push.js?v=39"></script>
 <script src="alarm.js?v=39"></script>
@@ -151,7 +151,17 @@ function parsePacksKg(str, info) {  // Сначала точный вес Ozon, 
   return {packs: p, kg: info?.ozon?.weight || kg};
 }
 
-function card(r) {
+function stepsHtml(r) {
+  const n = courierNotes(r.courier_comment);
+  const done = r.status === "Доставлен";
+  const flags = [isAccepted(r), !!n.enroute, !!n.onsite, done];
+  const labels = [["got", "Получен"], ["go", "В пути"], ["here", "На месте"], ["done", "Вручён"]];
+  const closed = done || r.status === "Отменён";
+  const p = flags.filter(Boolean).length;
+  return `<div class="steptrack" style="--p:${p}" aria-hidden="true"><i></i></div><div class="steps" role="group" aria-label="Этап доставки">${labels.map(([k, lab], i) =>
+    `<button type="button" class="${flags[i] ? "on" : ""}" data-step="${k}" aria-pressed="${flags[i]}" ${closed ? "disabled" : ""}>${lab}</button>`).join("")}</div>`;
+}
+function card(r, next) {
   if (isPpz(r)) return "";
   const done = r.status === "Доставлен" || r.status === "Отменён";
   const {kg} = parsePacksKg(r.packs, deliveryDetails(r.comment));
@@ -179,6 +189,8 @@ function card(r) {
   return `<div class="card order open pt${r.posting === FOCUS ? " hl" : ""}" data-posting="${e(r.posting)}" data-card tabindex="0" aria-haspopup="dialog">
 <div class="ph"><div class="r"><span class="badge ${done ? "done" : "way plain"}">${done ? ic("check") : ic("clock")}${e(badgeTxt)}</span><span class="pay ml">${rub(r.pay)}</span></div>
 <div class="addr">${e(r.address)}</div><div class="pn" style="margin-top:4px">${e(r.cb)} · ${e(r.posting)}</div></div>
+${next && !done ? `<div class="nextk">Следующая точка</div>` : ""}
+${stepsHtml(r)}
 ${agreeRow}
 <div class="facts"><div><span>Везти</span><b>${e(r.packs || "—")}</b></div><div><span>Вес</span><b>${kg ? `~${kg} кг` : "—"}</b></div>
 <div class="${r.unload && r.unload !== "Нет" ? "warn" : ""}"><span>Разгрузка</span><b>${e(unloadText(r))}</b></div></div>
@@ -290,6 +302,7 @@ async function geocode(address) {
 
 async function saveEdit(form) {
   const r = ROWS.find(x => x.posting === form.closest(".order").dataset.posting);
+  const info = deliveryDetails(r.comment);
   const v = Object.fromEntries(new FormData(form));
   const data = {cb: v.cb.trim(), status: v.status, courier: v.courier.trim(), date: fromIso(v.date), address: v.address.trim(),
     phone: v.phone.trim() ? "+" + v.phone.replace(/\D/g, "").replace(/^8(?=\d{10}$)/, "7") : "", ext: v.ext.replace(/\D/g, ""),
@@ -322,16 +335,23 @@ function draw(anim) {
     const isOver = leftKg > 1500;
     const owed = rep.hasPayments ? rep.left : rep.done.pay;
     const label = IS_ADMIN ? (owed < 0 ? "Переплата курьеру" : "Курьеру осталось") : (owed < 0 ? "Выплачено авансом" : "Вам должны");
+    const cap = Math.min(100, Math.round(leftKg / 1500 * 100));
+    const today = todayStr();
+    const doneToday = ROWS.filter(r => r.status === "Доставлен" && String(r.delivered_at || "").includes(today.slice(0, 5))).length;
+    const ahead = active.filter(r => !r.date || r.date === today).length;
     heroEl.innerHTML = `<div class="hero" style="padding:16px 20px">
       <div class="r"><span class="lbl">${label}</span><span class="hchip ml"><span class="dot sm"></span>${IS_ADMIN ? "Владелец" : "Рашад"} · на смене</span></div>
-      <div class="big money">${Math.round(Math.abs(owed)).toLocaleString("ru-RU").replace(/\u00a0/g, " ")}<small>₽</small></div>
+      <div class="big money" data-count="${Math.round(Math.abs(owed))}"><span>${Math.round(Math.abs(owed)).toLocaleString("ru-RU").replace(/\u00a0/g, " ")}</span><small>₽</small></div>
       ${activePay ? `<div class="lbl" style="margin-top:2px">+ ${rub(activePay)} за точки в работе</div>` : ""}
       <div class="hstats" style="margin-top:12px;padding-top:12px">
         <div><span>Осталось</span><b>${plural(active.length, "точка", "точки", "точек")}</b></div>
         <div><span>Упаковок</span><b>${leftPacks} уп</b></div>
         <div><span>${isOver ? "Перегруз!" : "Вес · до 1,5 т"}</span><b class="${isOver ? "am" : ""}">${leftKg} кг</b></div>
       </div>
+      <div class="load"><div class="loadbar"><span style="width:${cap}%"></span></div><small>${leftKg} / 1 500 кг${isOver ? " · перегруз" : ""}</small></div>
+      <div class="dayprog">${doneToday} сдано сегодня · ${ahead} впереди</div>
     </div>`;
+    tickCount(heroEl);
   }
 
   let rows = TAB === "done" ? ROWS.filter(isDone).reverse()
@@ -340,7 +360,7 @@ function draw(anim) {
   if (TAB !== "done" && !rows.some(r => r.posting === OPEN)) OPEN = (rows.find(r => r.posting === FOCUS) || rows[0] || {}).posting || null;
   const head = TAB === "done" ? reportHtml(rep, IS_ADMIN ? {title: rep.left < 0 ? "Переплата курьеру" : "Курьеру осталось выплатить", leftLabel: ""} : {title: rep.left < 0 ? "Выплачено авансом" : "Вам должны", leftLabel: ""}) : "";
   $("list").classList.toggle("anim", !!anim);
-  $("list").innerHTML = head + (rows.length ? rows.map((r, i) => (TAB !== "done" && i === 1 ? '<div class="sec"><b>Дальше</b></div>' : "") + card(r)).join("")
+  $("list").innerHTML = head + (rows.length ? rows.map((r, i) => (TAB !== "done" && i === 1 ? '<div class="sec"><b>Дальше</b></div>' : "") + card(r, TAB !== "done" && i === 0)).join("")
     : `<div class="card empty">${ic("checkc")}${TAB === "done" ? "Пока нет доставленных" : TAB === "today" ? "На сегодня заказов нет — смотрите вкладку «Все»" : "Заказов в работе нет"}</div>`);
   if (FOCUS) document.querySelector(".order.hl")?.scrollIntoView({block: "center"});
 }
@@ -504,8 +524,8 @@ function drawRoute(info) {
   if (key === ROUTE_KEY) return;
   ROUTE_KEY = key;
   const d = info.key ? info.data || straight(info.lls) : null;
-  MAP.getSource("route").setData(!d ? EMPTY : {type: "Feature", properties: {road: d.road, final: !!info.data},
-    geometry: {type: "LineString", coordinates: d.line.map(p => [p[1], p[0]])}});
+  if (!d) MAP.getSource("route").setData(EMPTY);
+  else paintRoute(MAP, "route", d.line.map(p => [p[1], p[0]]));
 }
 const sheetPeek = () => ($("msheet").querySelector(".ms-head") || {}).offsetHeight || 150;
 const deskMap = () => matchMedia("(min-width: 1100px)").matches;
@@ -534,7 +554,7 @@ function pickStop(posting) {
 
 function mcardHtml(r, n) {
   if (isPpz(r)) return "";
-  const {kg} = parsePacksKg(r.packs), {tel} = telOf(r), a = agreementOf(r), info = deliveryDetails(r.comment);
+  const info = deliveryDetails(r.comment), {kg} = parsePacksKg(r.packs, info), {tel} = telOf(r), a = agreementOf(r);
   let foreman = "";
   try { foreman = foremanPhone(info.foreman); } catch {}
   const call = tel || (foreman ? "tel:" + foreman : "");
@@ -550,6 +570,7 @@ function mcardHtml(r, n) {
 <div class="${r.unload && r.unload !== "Нет" ? "warn" : ""}"><span>Разгрузка</span><b>${e(unloadText(r))}</b></div></div>
 ${note ? `<div class="mc-note">${ic("note")}<span>${e(note)}</span></div>` : ""}
 <div class="mc-pay"><span>Оплата за точку</span><b class="num">${rub(r.pay)}</b></div>
+${stepsHtml(r)}
 <div class="mc-a1"><a class="btn mc-go" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">${ic("nav")}Поехать</a>
 ${call ? `<a class="btn ghost sq" href="${e(call)}" aria-label="${tel ? "Позвонить клиенту" : "Позвонить прорабу"}">${ic("phone")}</a>` : ""}
 <button type="button" class="ghost sq" data-mmore="${e(r.posting)}" aria-label="Все действия с заказом">${ic("more")}</button></div>
@@ -674,7 +695,7 @@ const ackSet = v => { try { localStorage.setItem(ACK_KEY, JSON.stringify(v)); } 
 const ACK_SYNC = new Set();
 function alarmItem(r) {
   if (isPpz(r)) return null;
-  const info = deliveryDetails(r.comment), {kg} = parsePacksKg(r.packs);
+  const info = deliveryDetails(r.comment), {kg} = parsePacksKg(r.packs, info);
   const when = [r.date ? (r.date === todayStr() ? "Сегодня" : r.date.slice(0, 5)) : "", info.time].filter(Boolean).join(", ") || "Дата не назначена";
   return {id: r.posting, kicker: `Новый заказ · ${r.cb}`, icon: "truck",
     title: r.address || "Адрес уточняется", sub: r.posting,
@@ -804,7 +825,28 @@ if ($("modal-c-confirm")) {
 if ($("modal-c-close")) $("modal-c-close").onclick = closeDoneModal;
 if ($("modal-c-cancel")) $("modal-c-cancel").onclick = closeDoneModal;
 
+async function setTrip(posting, kind) {
+  const r = ROWS.find(x => x.posting === posting);
+  if (!r || isPpz(r) || r.status === "Доставлен" || r.status === "Отменён") return;
+  if (kind === "got") { if (!isAccepted(r)) acceptOrder(posting); return; }
+  if (!isAccepted(r)) await acceptOrder(posting);
+  const cur = ROWS.find(x => x.posting === posting) || r;
+  const notes = courierNotes(cur.courier_comment);
+  const at = agreedNow();
+  if (kind === "go" || kind === "here") notes.enroute = notes.enroute || {at};
+  if (kind === "here") notes.onsite = {at};
+  await save(posting, {courier_comment: courierComment(notes)});
+  toast(kind === "here" ? "Отмечено: на месте" : "Отмечено: в пути");
+}
 $("app").addEventListener("click", ev => {
+  const step = ev.target.closest("[data-step]");
+  if (step && !step.disabled) {
+    const posting = (step.closest("[data-posting]") || {}).dataset?.posting;
+    if (!posting) return;
+    if (step.dataset.step === "done") { openDoneModal(posting, step); return; }
+    setTrip(posting, step.dataset.step).catch(err => toast(err.message, true));
+    return;
+  }
   const ag = ev.target.closest("[data-agree]");
   if (ag) { openAgreeSheet(ag.dataset.agree); return; }
   const pick = ev.target.closest("[data-who], [data-day], [data-aslot]");
