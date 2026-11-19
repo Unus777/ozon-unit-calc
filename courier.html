@@ -290,6 +290,7 @@ async function geocode(address) {
 
 async function saveEdit(form) {
   const r = ROWS.find(x => x.posting === form.closest(".order").dataset.posting);
+  const info = deliveryDetails(r.comment);
   const v = Object.fromEntries(new FormData(form));
   const data = {cb: v.cb.trim(), status: v.status, courier: v.courier.trim(), date: fromIso(v.date), address: v.address.trim(),
     phone: v.phone.trim() ? "+" + v.phone.replace(/\D/g, "").replace(/^8(?=\d{10}$)/, "7") : "", ext: v.ext.replace(/\D/g, ""),
