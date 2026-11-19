@@ -99,7 +99,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 </div>
 </div>
 </main>
-<nav class="tabbar" aria-label="Разделы"><div class="brandbar"><b>ALMALY</b><span>курьер</span></div><div class="in tabs" role="tablist">
+<nav class="tabbar" id="courierTabs" hidden aria-label="Разделы"><div class="brandbar"><b>ALMALY</b><span>курьер</span></div><div class="in tabs" role="tablist">
 <button role="tab" aria-selected="true" data-tab="today"><span data-ico="today"></span>Сегодня</button>
 <button role="tab" aria-selected="false" data-tab="active"><span data-ico="orders"></span>Все</button>
 <button role="tab" aria-selected="false" data-tab="map"><span data-ico="map"></span>Карта</button>
@@ -120,7 +120,7 @@ const KEY = IS_ADMIN ? ADMIN_KEY : new URLSearchParams(location.search).get("k")
 const STATUSES = ["Новый", "Согласован", "Доставлен", "Отменён"];
 const FOCUS = new URLSearchParams(location.search).get("o");
 const BADGE = {"Новый": "ship", "Согласован": "way", "Доставлен": "done"};
-let ROWS = [], PAYS = null, TAB = "today", OPEN = null, SHEET = null;
+let ROWS = [], PAYS = null, PAYS_ERR = "", TAB = "today", OPEN = null, SHEET = null;
 const todayStr = () => new Date().toLocaleDateString("ru-RU", {day: "2-digit", month: "2-digit", year: "numeric"});
 
 const toIso = d => { const m = /^(\d\d)\.(\d\d)\.(\d{4})$/.exec(d || ""); return m ? `${m[3]}-${m[2]}-${m[1]}` : ""; };
@@ -333,15 +333,15 @@ function draw(anim) {
       activePay += Number(String(r.pay || 0).replace(/\D/g, "")) || 0;
     }
     const isOver = leftKg > 1500;
-    const owed = rep.hasPayments ? rep.left : rep.done.pay;
-    const label = IS_ADMIN ? (owed < 0 ? "Переплата курьеру" : "Курьеру осталось") : (owed < 0 ? "Выплачено авансом" : "Вам должны");
+    const owed = PAYS_ERR ? 0 : (rep.hasPayments ? rep.left : rep.done.pay);
+    const label = PAYS_ERR ? "Не удалось загрузить выплаты" : (IS_ADMIN ? (owed < 0 ? "Переплата курьеру" : "Курьеру осталось") : (owed < 0 ? "Выплачено авансом" : "Вам должны"));
     const cap = Math.min(100, Math.round(leftKg / 1500 * 100));
     const today = todayStr();
     const doneToday = ROWS.filter(r => r.status === "Доставлен" && String(r.delivered_at || "").includes(today.slice(0, 5))).length;
     const ahead = active.filter(r => !r.date || r.date === today).length;
     heroEl.innerHTML = `<div class="hero" style="padding:16px 20px">
       <div class="r"><span class="lbl">${label}</span><span class="hchip ml"><span class="dot sm"></span>${IS_ADMIN ? "Владелец" : "Рашад"} · на смене</span></div>
-      <div class="big money" data-count="${Math.round(Math.abs(owed))}"><span>${Math.round(Math.abs(owed)).toLocaleString("ru-RU").replace(/\u00a0/g, " ")}</span><small>₽</small></div>
+      ${PAYS_ERR ? `<button type="button" class="soft" data-pay-retry style="margin-top:8px">Повторить</button>` : `<div class="big money" data-count="${Math.round(Math.abs(owed))}"><span>${Math.round(Math.abs(owed)).toLocaleString("ru-RU").replace(/\u00a0/g, " ")}</span><small>₽</small></div>`}
       ${activePay ? `<div class="lbl" style="margin-top:2px">+ ${rub(activePay)} за точки в работе</div>` : ""}
       <div class="hstats" style="margin-top:12px;padding-top:12px">
         <div><span>Осталось</span><b>${plural(active.length, "точка", "точки", "точек")}</b></div>
@@ -358,7 +358,7 @@ function draw(anim) {
     : active.filter(r => TAB === "active" || !r.date || r.date === todayStr());
   if (TAB !== "done") rows.sort((a, b) => (toIso(a.date) || "9999").localeCompare(toIso(b.date) || "9999"));
   if (TAB !== "done" && !rows.some(r => r.posting === OPEN)) OPEN = (rows.find(r => r.posting === FOCUS) || rows[0] || {}).posting || null;
-  const head = TAB === "done" ? reportHtml(rep, IS_ADMIN ? {title: rep.left < 0 ? "Переплата курьеру" : "Курьеру осталось выплатить", leftLabel: ""} : {title: rep.left < 0 ? "Выплачено авансом" : "Вам должны", leftLabel: ""}) : "";
+  const head = TAB === "done" ? reportHtml(rep, Object.assign(IS_ADMIN ? {title: rep.left < 0 ? "Переплата курьеру" : "Курьеру осталось выплатить", leftLabel: ""} : {title: rep.left < 0 ? "Выплачено авансом" : "Вам должны", leftLabel: ""}, {paysError: PAYS_ERR})) : "";
   $("list").classList.toggle("anim", !!anim);
   $("list").innerHTML = head + (rows.length ? rows.map((r, i) => (TAB !== "done" && i === 1 ? '<div class="sec"><b>Дальше</b></div>' : "") + card(r, TAB !== "done" && i === 0)).join("")
     : `<div class="card empty">${ic("checkc")}${TAB === "done" ? "Пока нет доставленных" : TAB === "today" ? "На сегодня заказов нет — смотрите вкладку «Все»" : "Заказов в работе нет"}</div>`);
@@ -675,7 +675,9 @@ $("mapbox").addEventListener("click", ev => {
 async function load() {
   try {
     ROWS = rashadDeliveries(await api({action: "list"}));
-    PAYS = await api({action: "payments"}).catch(() => null);
+    PAYS_ERR = "";
+    try { PAYS = await api({action: "payments"}); }
+    catch (err) { PAYS = null; if (!/Неизвестное действие/.test(err.message || "")) PAYS_ERR = "Не удалось загрузить выплаты"; }
     draw(true);
     splashHide();
     checkAlerts();
@@ -781,6 +783,7 @@ $("app").addEventListener("submit", async ev => {
   const who = af.querySelector("[data-who][aria-pressed=true]")?.dataset.who || "прораб";
   const agreed = {who, at: agreedNow(), slot: af.elements.slot.value.trim()};
   const data = {courier_comment: courierComment({...courierNotes(r.courier_comment), agreed})};
+  if (r.status === "Новый") data.status = "Согласован";  // согласие — отдельное действие, не сохранение даты
   const date = fromIso(af.elements.date.value);
   if (date && date !== r.date) data.date = date;
   if (await save(posting, data, btn)) { closeCSheet(); toast("Согласовано ✓ Владелец получит уведомление"); }
@@ -839,6 +842,7 @@ async function setTrip(posting, kind) {
   toast(kind === "here" ? "Отмечено: на месте" : "Отмечено: в пути");
 }
 $("app").addEventListener("click", ev => {
+  if (ev.target.closest("[data-pay-retry]")) { load().catch(err => toast(err.message, true)); return; }
   const step = ev.target.closest("[data-step]");
   if (step && !step.disabled) {
     const posting = (step.closest("[data-posting]") || {}).dataset?.posting;
@@ -942,6 +946,7 @@ async function setupNotif() {
 }
 
 if (KEY) {
+  $("courierTabs").hidden = false;
   $("app").hidden = false;
   $("driverHero").innerHTML = skelHero();  // пока грузятся данные — скелетоны вместо пустого экрана
   $("list").innerHTML = skelCards(3);

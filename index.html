@@ -368,7 +368,7 @@ async function loadOrders(silent) {
     }
     await loadDeliveries();
     await syncDeliveredFromOzon(postings);
-    PAYS = ADMIN() && SCRIPT_URL ? await sheetApi({action: "payments", key: ADMIN()}).catch(() => null) : null;  // null — скрипт ещё без выплат
+    await loadPays();
     drawReport();
     ORDERS = postings; PRICES = prices;
     const now = new Date(), day = now.toLocaleDateString("ru-RU", {weekday: "short", day: "numeric", month: "long"});
@@ -441,14 +441,27 @@ function ozState(p) {  // "ok" — Ozon провёл; "wait" — ждём; "late
 const OZ_LINE = {ok: ic("check") + "Отмечено в Ozon",wait: ic("wait") + "Отправлено в Ozon — ждём подтверждения", late: ic("alert") + "Ozon не подтвердил доставку за 2 часа — проверьте в кабинете"};
 
 // Отметили «Доставлено» прямо в кабинете Ozon — переносим в таблицу, чтобы курьер и расчёт выплат это видели
+async function notifyCourierCancel(row) {
+  try {
+    const jwk = ownerKey(store.get("dlv_vk"));
+    const jwts = {};
+    for (const aud of await sheetApi({action: "push_targets", key: ADMIN()})) jwts[aud] = await vapidJwt(aud, jwk);
+    await sheetApi({action: "remind", key: ADMIN(), posting: row.posting,
+      text: `Заказ отменён в Ozon${row.cb ? " · " + row.cb : ""}. Везти не нужно.`, jwts});
+  } catch {}  // статус уже записан: нет ключа пуша — курьер увидит отмену при обновлении списка
+}
 async function syncDeliveredFromOzon(postings) {
   if (!ADMIN() || !SCRIPT_URL) return;
   const pend = pendingGet();
   for (const p of postings) {
     const d = DELIV[p.posting_number];
     if (isFbs(p) || isFbsSheetRow(d)) { delete pend[p.posting_number]; continue; }
-    if (p.status === "delivered" && d && d.status !== "Доставлен") {
-      try { DELIV[p.posting_number] = await sheetApi({action: "update", key: ADMIN(), posting: p.posting_number, data: {status: "Доставлен"}}); } catch {}
+    const next = deliveryStatusSync(p, d);
+    if (next) {
+      try {
+        DELIV[p.posting_number] = await sheetApi({action: "update", key: ADMIN(), posting: p.posting_number, data: {status: next}});
+        if (next === "Отменён") notifyCourierCancel(d);
+      } catch {}
     }
     if (["delivered", "cancelled"].includes(p.status)) delete pend[p.posting_number];
   }
@@ -626,7 +639,7 @@ function drawOwnerDash() {
     const today = todayStr();
     let countToday = 0, packsToday = 0, kgToday = 0, courierOwed = 0, waitCbCount = 0, notAgreed = 0;
     for (const p of (ORDERS || [])) {
-      if (isFbs(p)) continue;
+      if (isFbs(p) || p.status === "cancelled" || (DELIV[p.posting_number] && DELIV[p.posting_number].status === "Отменён")) continue;
       const st = ostate(p);
       const d = DELIV ? DELIV[p.posting_number] : null;
       if (st === "new") waitCbCount++;
@@ -646,8 +659,15 @@ function drawOwnerDash() {
     }
     const tons = (kgToday / 1000).toFixed(1).replace(".", ",");
     const rep = typeof deliveryReport === "function" ? deliveryReport(rashadDeliveries(Object.values(DELIV || {})), PAYS) : {left: courierOwed, done: {pay: 0}, paid: 0, hasPayments: false};
-    const leftPay = rep && rep.hasPayments ? rep.left : courierOwed;
+    const leftPay = PAYS_ERR ? 0 : (rep && rep.hasPayments ? rep.left : courierOwed);
     const amount = Math.round(Math.abs(leftPay)).toLocaleString("ru-RU").replace(/\u00a0/g, " ");
+    const payBlock = PAYS_ERR
+      ? `<div class="dash-pay"><span>Не удалось загрузить выплаты</span><button type="button" class="soft" data-pay-retry>Повторить</button></div>`
+      : `<div class="dash-pay"><span>${leftPay < 0 ? "Переплата" : "Курьеру к выплате"}</span>
+        <b class="money" data-count="${Math.round(Math.abs(leftPay))}"><span>${amount}</span><small>₽</small></b></div>`;
+    const ledger = PAYS_ERR ? "" : `<div class="who-pay"><span>Начислено ${Math.round(rep.done?.pay || 0).toLocaleString("ru-RU")}</span>
+          <span>Выплачено ${Math.round(rep.paid || 0).toLocaleString("ru-RU")}</span>
+          <span>Осталось ${amount}</span></div>`;
     const rows = rashadDeliveries(Object.values(DELIV || {}));
     let accepted = 0, enroute = 0, onsite = 0, doneToday = 0;
     for (const r of rows) {
@@ -667,8 +687,7 @@ function drawOwnerDash() {
     const day = new Date().toLocaleDateString("ru-RU", {weekday: "long", day: "numeric", month: "long"});
     el.innerHTML = `<section class="dash">
       <div class="dash-top"><div><div class="eyebrow">${day}</div><h2>Смена</h2></div>
-        <div class="dash-pay"><span>${leftPay < 0 ? "Переплата" : "Курьеру к выплате"}</span>
-        <b class="money" data-count="${Math.round(Math.abs(leftPay))}"><span>${amount}</span><small>₽</small></b></div></div>
+        ${payBlock}</div>
       <div class="stats">
         <article><span>В работе</span><b>${countToday}</b><small>${packsToday} уп</small></article>
         <article><span>Ждут ЦБ</span><b class="${waitCbCount ? "am" : ""}">${waitCbCount}</b><small>${waitCbCount ? "нужна накладная" : "всё с ЦБ"}</small></article>
@@ -680,9 +699,7 @@ function drawOwnerDash() {
       </div>
       <div class="who">
         <div><b>Рашад</b> <span>принял ${accepted} · в пути ${enroute} · на месте ${onsite} · сдал сегодня ${doneToday}</span></div>
-        <div class="who-pay"><span>Начислено ${Math.round(rep.done?.pay || 0).toLocaleString("ru-RU")}</span>
-          <span>Выплачено ${Math.round(rep.paid || 0).toLocaleString("ru-RU")}</span>
-          <span>Осталось ${amount}</span></div>
+        ${ledger}
       </div>
     </section>`;
     tickCount(el);
@@ -705,7 +722,7 @@ function orderCard(p, i, n = 0) {
   const live = ["ship", "way"].includes(stage(p.status)[0]);
 
   let badgeHtml = "";
-  if (p.status === "cancelled") badgeHtml = `<span class="badge cancel">Отменён</span>`;
+  if (p.status === "cancelled" || (d && d.status === "Отменён")) badgeHtml = `<span class="badge cancel">Отменён</span>`;
   else if (isDone) badgeHtml = `<span class="badge done">${ic("check")}Доставлен</span>`;
   else if (d) badgeHtml = `<span class="badge way">У курьера</span>`;
   else badgeHtml = `<span class="badge ship">Новый Ozon</span>`;
@@ -866,12 +883,21 @@ ${d && (needOzon || !done) && ADMIN() && SCRIPT_URL ? `<button class="ok wide" d
 }
 const closeSheet = sheetHide;
 
-let PAYS = null;
+let PAYS = null, PAYS_ERR = "";
+async function loadPays() {
+  PAYS_ERR = "";
+  if (!(ADMIN() && SCRIPT_URL)) { PAYS = null; return; }
+  try { PAYS = await sheetApi({action: "payments", key: ADMIN()}); }
+  catch (err) {
+    PAYS = null;
+    if (!/Неизвестное действие/.test(err.message || "")) PAYS_ERR = "Не удалось загрузить выплаты";
+  }
+}
 function drawReport() {
   const open = !!document.querySelector("#report details[open]");
   $("dlvLink").hidden = !(ADMIN() && SCRIPT_URL);
   $("report").innerHTML = ADMIN() && SCRIPT_URL ? reportHtml(deliveryReport(rashadDeliveries(Object.values(DELIV)), PAYS),
-    {title: "Выплаты и расчёт с курьером", leftLabel: "", admin: true}) : "";
+    {title: "Выплаты и расчёт с курьером", leftLabel: "", admin: true, paysError: PAYS_ERR}) : "";
   if (open) document.querySelector("#report details")?.setAttribute("open", "");
 }
 
@@ -891,6 +917,12 @@ $("report").addEventListener("submit", async ev => {
     toast(err.message, true);
     btn.disabled = false;
   }
+});
+document.addEventListener("click", async ev => {
+  if (!ev.target.closest("[data-pay-retry]")) return;
+  await loadPays();
+  drawReport();
+  drawOwnerDash();
 });
 $("report").addEventListener("click", async ev => {
   const b = ev.target.closest("[data-unpay]");

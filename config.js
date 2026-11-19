@@ -181,6 +181,7 @@ const plural = (n, one, few, many) =>
 function reportHtml(rep, opts) {
   const rub = x => Math.round(x).toLocaleString("ru-RU").replace(/\u00a0/g, " ") + " ₽";
   const esc = x => String(x ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
+  if (opts.paysError) return `<div class="card report"><p>${esc(opts.paysError)}</p><button type="button" data-pay-retry>Повторить</button></div>`;
   const months = rep.months.map(m => `<tr><td>${m.label}<div class="mut">${plural(m.n, "доставка", "доставки", "доставок")} · доставка ${rub(m.delivery)} · разгрузка ${rub(m.lift)}</div></td><td>${rub(m.pay)}</td></tr>`).join("");
   const pays = [...rep.payments].reverse().map(p => `<tr><td>${esc(p.date)}${p.comment ? `<div class="mut">${esc(p.comment)}</div>` : ""}</td>` +
     `<td>${rub(num(p.amount))}${opts.admin && p.id ? ` <button class="text" data-unpay="${esc(p.id)}" aria-label="Удалить выплату">✕</button>` : ""}</td></tr>`).join("");
