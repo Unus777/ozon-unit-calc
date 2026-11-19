@@ -43,17 +43,31 @@ function parseAgreement(line) {
   const m = /^Согласовано: (прораб|клиент) · (\d\d)\.(\d\d) (\d\d:\d\d)(?: · интервал (.+))?$/.exec(String(line || "").trim());
   return m ? {who: m[1], day: `${m[2]}.${m[3]}`, time: m[4], at: `${m[2]}.${m[3]} ${m[4]}`, slot: (m[5] || "").trim()} : null;
 }
-function courierNotes(value) {  // «Комментарий курьера» → его текст + отметки «Согласовано:» и «Принял:»
-  const text = [];
-  let agreed = null, ack = null;
-  for (const line of String(value || "").split("\n")) {
-    const a = parseAgreement(line), k = parseAck(line);
-    if (a) agreed = a; else if (k) ack = k; else text.push(line);
-  }
-  return {text: text.join("\n").trim(), agreed, ack};
+// «В пути: 19.11 10:05» / «На месте: 19.11 10:40» — этап курьера в том же комментарии, что «Принял» и «Согласовано»
+function tripLine(kind, at) {
+  const label = kind === "onsite" ? "На месте" : kind === "enroute" ? "В пути" : "";
+  return label && /^\d\d\.\d\d \d\d:\d\d$/.test(at || "") ? `${label}: ${at}` : "";
 }
-function courierComment({text, agreed, ack}) {
-  return [String(text || "").trim(), agreementLine(agreed), ackLine(ack)].filter(Boolean).join("\n");
+function parseTrip(line) {
+  const m = /^(В пути|На месте): (\d\d)\.(\d\d) (\d\d:\d\d)$/.exec(String(line || "").trim());
+  return m ? {kind: m[1] === "На месте" ? "onsite" : "enroute", at: `${m[2]}.${m[3]} ${m[4]}`} : null;
+}
+function courierNotes(value) {  // «Комментарий курьера» → его текст + отметки, без служебных строк
+  const text = [];
+  let agreed = null, ack = null, enroute = null, onsite = null;
+  for (const line of String(value || "").split("\n")) {
+    const a = parseAgreement(line), k = parseAck(line), t = parseTrip(line);
+    if (a) agreed = a;
+    else if (k) ack = k;
+    else if (t && t.kind === "onsite") onsite = t;
+    else if (t) enroute = t;
+    else text.push(line);
+  }
+  return {text: text.join("\n").trim(), agreed, ack, enroute, onsite};
+}
+function courierComment({text, agreed, ack, enroute, onsite}) {
+  return [String(text || "").trim(), agreementLine(agreed), tripLine("enroute", enroute && enroute.at),
+    tripLine("onsite", onsite && onsite.at), ackLine(ack)].filter(Boolean).join("\n");
 }
 // «Принял: 05.11 14:05» — курьер нажал «Принял» на экране тревоги нового заказа
 function ackLine(a) {
@@ -114,12 +128,24 @@ function deliveryComment({note, time, foreman, agreed, ozon}) {
     ozon && "Ozon: " + JSON.stringify(ozon)].filter(Boolean).join("\n");
 }
 
+// Свой склад отгрузки. Координаты — опубликованная точка квартала Щитниково, вл. 3 (Балашиха).
+const DEPOT = {name: "квартал Щитниково, 3Ж", lat: 55.816013, lon: 37.844068};
+function warehouseName(value) {
+  const name = String(value || "").trim();
+  return name || DEPOT.name;
+}
+function mskStamp(value) {
+  const d = new Date(value);
+  if (!value || Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("ru-RU", {timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"});
+}
+
 function ozonInfoHtml(info) {
   if (!info) return "";
   const esc = x => String(x ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
   const rows = [["Получатель", info.customer], ["Заказ Ozon", info.order], ["Создан", info.created],
     ["Отгрузка до", info.shipment], ["Окно доставки", info.window], ["Служба", info.delivery],
-    ["Связанные отправления", info.related], ["Штрихкоды", info.barcodes], ["Склад", "квартал Щитниково, 3Ж"]]
+    ["Связанные отправления", info.related], ["Штрихкоды", info.barcodes], ["Склад", warehouseName(info.warehouse)]]
     .filter(([, value]) => value).map(([label, value]) => `<div class="sitem"><span>${esc(label)}</span><b>${esc(value)}</b></div>`).join("");
   return `<div class="sgroup">Данные Ozon</div>${rows || '<p class="mut">Дополнительные данные появятся после обновления заказа.</p>'}`;
 }
