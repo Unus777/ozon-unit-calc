@@ -59,12 +59,18 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 <header class="hdr"><div class="bar">
 <div class="logo" aria-hidden="true">А</div>
 <div class="grow"><div class="brand">Доставки <span id="subtitle">Алмалы</span></div></div>
+<span id="geoState" class="geo-on" hidden>Местоположение передаётся</span>
 <button class="ibtn" id="themeBtn" aria-label="Сменить тему"></button><button class="ibtn" id="reload" aria-label="Обновить"></button>
 </div></header>
 <main style="padding-top:8px">
 <div class="card" id="nokey" hidden><h3>Нет доступа</h3><p class="mut">Откройте ссылку, которую прислал владелец магазина.</p></div>
 
 <div id="app" hidden>
+<div class="card" id="geoAsk" hidden>
+<h3>Где вы на смене</h3>
+<p class="mut">Пока это приложение открыто, раз в минуту Юнус видит вашу точку на карте. В фоне телефон её не отправляет. Если отказаться, уйдёт только время, когда приложение было открыто.</p>
+<div class="actions two" style="margin-top:10px"><button type="button" id="geoYes">Поделиться местоположением</button><button type="button" class="soft" id="geoNo">Не сейчас</button></div>
+</div>
 <div class="card" id="notif" hidden></div>
 <div id="driverHero"></div>
 <div id="owed"></div>
@@ -721,6 +727,7 @@ function acceptOrder(posting) {  // «Принял»: в телефоне сра
   for (const k of Object.keys(l)) if (!ROWS.some(r => r.posting === k)) delete l[k];  // забываем закрытые заказы
   ackSet(l);
   OPEN = posting;
+  heartbeat();
   return sendAck(posting, at);
 }
 function appBadge(n) {  // число непринятых заказов на иконке приложения (iOS 16.4+ с экрана «Домой», Android, компьютер)
@@ -754,6 +761,7 @@ async function save(posting, data, el) {
     ROWS = ROWS.map(x => x.posting === posting ? r : x);
     draw();
     if (SHEET === posting) data.status ? closeCSheet() : openCSheet(posting);
+    if (data.status === "Доставлен" || data.status === "Согласован") heartbeat();
     if (data.status === "Доставлен") toast("Доставлено ✓ Владелец получит уведомление");  // меню «⋯» показывает свежие данные
     return true;
   } catch (err) {
@@ -839,6 +847,7 @@ async function setTrip(posting, kind) {
   if (kind === "go" || kind === "here") notes.enroute = notes.enroute || {at};
   if (kind === "here") notes.onsite = {at};
   await save(posting, {courier_comment: courierComment(notes)});
+  heartbeat();
   toast(kind === "here" ? "Отмечено: на месте" : "Отмечено: в пути");
 }
 $("app").addEventListener("click", ev => {
@@ -945,6 +954,40 @@ async function setupNotif() {
   };
 }
 
+let GEO_SHARE = false;
+function geoFlag(on) { const el = $("geoState"); if (el) el.hidden = !on; }
+function readPos() {
+  if (!navigator.geolocation) return Promise.resolve(null);
+  return new Promise(resolve => navigator.geolocation.getCurrentPosition(
+    p => resolve(p), () => resolve(null), {enableHighAccuracy: true, timeout: 8000, maximumAge: 60000}));
+}
+async function heartbeat() {
+  if (!KEY || document.hidden) return;
+  const data = {ts: Date.now()};
+  if (GEO_SHARE) {
+    const pos = await readPos();
+    if (pos) { data.lat = pos.coords.latitude; data.lng = pos.coords.longitude; data.acc = pos.coords.accuracy; geoFlag(true); }
+    else geoFlag(false);
+  } else geoFlag(false);
+  try { const bat = navigator.getBattery ? await navigator.getBattery() : null; if (bat && bat.level != null) data.battery = bat.level; } catch {}
+  try { await api({action: "ping", data}); } catch {}
+}
+function chooseGeo(on) {
+  GEO_SHARE = on;
+  try { localStorage.setItem("dlv_geo", on ? "1" : "0"); } catch {}
+  $("geoAsk").hidden = true;
+  heartbeat();
+}
+function startGeo() {
+  let saved = "";
+  try { saved = localStorage.getItem("dlv_geo") || ""; } catch {}
+  if (!saved) { $("geoAsk").hidden = false; return; }
+  GEO_SHARE = saved === "1";
+  heartbeat();
+}
+if ($("geoYes")) $("geoYes").onclick = () => chooseGeo(true);
+if ($("geoNo")) $("geoNo").onclick = () => chooseGeo(false);
+
 if (KEY) {
   $("courierTabs").hidden = false;
   $("app").hidden = false;
@@ -953,6 +996,9 @@ if (KEY) {
   load();
   if (IS_ADMIN) document.querySelector(".brand span").textContent = "режим владельца";
   else setupNotif();
+  startGeo();
+  setInterval(() => { if (!document.hidden) heartbeat(); }, 90000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) heartbeat(); });
   setInterval(() => { if (!document.hidden) load(); }, 60000);
 } else {
   $("nokey").hidden = false;

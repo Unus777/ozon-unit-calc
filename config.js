@@ -140,6 +140,44 @@ function mskStamp(value) {
   return d.toLocaleString("ru-RU", {timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"});
 }
 
+// Пульс курьера: только точка и время. Чужие поля (статус, деньги, комментарий) отбрасываются.
+const GEO_KEEP = 50;
+function normalizeHeartbeat(data, now) {
+  const src = data || {};
+  const ts = Number(src.ts) || now || Date.now();
+  const point = {ts};
+  const lat = Number(src.lat), lng = Number(src.lng);
+  if (Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+    point.lat = Math.round(lat * 1e6) / 1e6;
+    point.lng = Math.round(lng * 1e6) / 1e6;
+    const acc = Number(src.acc);
+    if (Number.isFinite(acc) && acc >= 0) point.acc = Math.round(acc);
+  }
+  const battery = Number(src.battery);
+  if (src.battery != null && src.battery !== "" && Number.isFinite(battery)) point.battery = Math.max(0, Math.min(1, battery));
+  return point;
+}
+function appendGeo(rows, point) {
+  return (rows || []).concat([point]).slice(-GEO_KEEP);
+}
+function mskDay(ts) {
+  return new Intl.DateTimeFormat("en-CA", {timeZone: "Europe/Moscow", year: "numeric", month: "2-digit", day: "2-digit"}).format(new Date(ts));
+}
+function todayTrack(rows, now) {
+  const day = mskDay(now || Date.now());
+  return (rows || []).filter(p => p && p.lat != null && p.lng != null && mskDay(p.ts) === day);
+}
+function geoSeenText(point, now) {
+  if (!point || !point.ts) return "Нет данных о местоположении";
+  const ts = Number(point.ts), age = Math.max(0, (now || Date.now()) - ts);
+  const clock = new Date(ts).toLocaleTimeString("ru-RU", {timeZone: "Europe/Moscow", hour: "2-digit", minute: "2-digit"});
+  const acc = point.acc != null ? " · ±" + point.acc + " м" : "";
+  const label = age < 3 * 60 * 1000 ? "В сети"
+    : age < 60 * 60 * 1000 ? "Был в сети " + Math.max(1, Math.round(age / 60000)) + " мин назад"
+    : "Был в сети " + Math.floor(age / 3600000) + " ч" + (Math.round(age % 3600000 / 60000) ? " " + Math.round(age % 3600000 / 60000) + " мин" : "") + " назад";
+  return label + " · " + clock + acc;
+}
+
 function ozonInfoHtml(info) {
   if (!info) return "";
   const esc = x => String(x ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
