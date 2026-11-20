@@ -364,10 +364,10 @@ box-shadow:var(--sh2),inset 0 0 0 1px var(--line);border-radius:20px;min-height:
 /* ---------- карта доставок (Leaflet + CARTO) ---------- */
 body.maptab{overflow:hidden}
 body.maptab #driverHero,body.maptab #owed,body.maptab #notif{display:none}
-#mapbox{--peek:150px;--pin-n:#E39A16;--pin-g:#2451D6;--pin-w:#0F1A3D;--pin-p:#6B3FC2;position:fixed;z-index:5;left:0;right:0;margin:0 auto;max-width:600px;
+#mapbox{--peek:150px;--pin-n:#E8890C;--pin-g:#2F5BEA;--pin-w:#0F1A3D;--pin-p:#7C3AED;position:fixed;z-index:5;left:0;right:0;margin:0 auto;max-width:600px;
 top:calc(var(--bar-h) + env(safe-area-inset-top));bottom:calc(57px + env(safe-area-inset-bottom));overflow:hidden;background:var(--soft)}
-:root[data-theme="dark"] #mapbox{--pin-n:#F2A93B;--pin-g:#8FB0FF;--pin-w:#2451D6;--pin-p:#9B74F0}
-@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) #mapbox{--pin-n:#F2A93B;--pin-g:#8FB0FF;--pin-w:#2451D6;--pin-p:#9B74F0}}
+:root[data-theme="dark"] #mapbox{--pin-n:#E8890C;--pin-g:#2F5BEA;--pin-w:#475569;--pin-p:#7C3AED}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) #mapbox{--pin-n:#E8890C;--pin-g:#2F5BEA;--pin-w:#475569;--pin-p:#7C3AED}}
 #map{position:absolute;inset:0;z-index:0;background:var(--soft)}
 #mapbox .maplibregl-map{font:inherit}
 #mapbox .maplibregl-ctrl-bottom-right{bottom:var(--peek);transition:bottom .32s cubic-bezier(.2,.8,.2,1)}
@@ -382,7 +382,7 @@ top:calc(var(--bar-h) + env(safe-area-inset-top));bottom:calc(57px + env(safe-ar
 background:color-mix(in srgb,var(--card) 82%,transparent);backdrop-filter:saturate(180%) blur(16px);-webkit-backdrop-filter:saturate(180%) blur(16px);
 box-shadow:0 4px 16px -6px rgba(11,18,32,.25),inset 0 0 0 1px var(--line)}
 .mleg span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
-.mleg i{width:8px;height:8px;border-radius:50%}
+.mleg i{width:10px;height:10px;border-radius:50%;box-shadow:0 0 0 1.5px #fff}
 .mleg .st-n{background:var(--pin-n)}.mleg .st-g{background:var(--pin-g)}.mleg .st-w{background:var(--pin-w)}.mleg .st-p{background:var(--pin-p)}
 .mctl{display:flex;flex-direction:column;gap:8px}
 button.mbtn{width:44px;height:44px;min-height:44px;padding:0;border-radius:14px;color:var(--fg);
@@ -390,13 +390,13 @@ background:color-mix(in srgb,var(--card) 88%,transparent);backdrop-filter:satura
 box-shadow:0 4px 16px -6px rgba(11,18,32,.3),inset 0 0 0 1px var(--line)}
 button.mbtn .ic{width:21px;height:21px}
 /* метки */
-.pin-w{width:40px;height:48px;cursor:pointer;outline:none}
-.pin{position:relative;width:40px;height:48px;transform-origin:50% 95%;transition:transform .25s cubic-bezier(.3,1.5,.5,1);--c:var(--pin-n)}
-.pin.st-g{--c:var(--pin-g)}.pin.st-w{--c:var(--pin-w)}.pin.st-p{--c:var(--pin-p)}
-.pin-h{position:absolute;left:4px;top:2px;width:32px;height:32px;border-radius:50% 50% 50% 4px;transform:rotate(-45deg);background:var(--c);
-box-shadow:0 0 0 2.5px #fff,0 8px 16px -6px rgba(11,18,32,.55);display:grid;place-items:center}
-.pin-h b{transform:rotate(45deg);color:#fff;font-size:14px;font-weight:750;letter-spacing:-.02em;font-variant-numeric:tabular-nums;text-shadow:0 1px 1px rgba(0,0,0,.15)}
-.pin-s{position:absolute;left:14px;bottom:0;width:12px;height:5px;border-radius:50%;background:rgba(11,18,32,.28);filter:blur(1px)}
+.pin-w{width:44px;height:52px;cursor:pointer;outline:none}
+.pin{position:relative;width:44px;height:52px;transform-origin:50% 95%;transition:transform .25s cubic-bezier(.3,1.5,.5,1);--c:var(--pin-n,#E8890C);opacity:1}
+.pin.st-g{--c:var(--pin-g,#2F5BEA)}.pin.st-w{--c:var(--pin-w,#0F1A3D)}.pin.st-p{--c:var(--pin-p,#7C3AED)}
+.pin-h{position:absolute;left:5px;top:3px;width:34px;height:34px;border-radius:50% 50% 50% 4px;transform:rotate(-45deg);background:var(--c);opacity:1;
+box-shadow:0 0 0 3px #fff,0 3px 6px rgba(10,16,30,.35),0 10px 18px -6px rgba(10,16,30,.55);display:grid;place-items:center}
+.pin-h b{transform:rotate(45deg);color:#fff;font-size:15px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;text-shadow:0 1px 1px rgba(0,0,0,.25)}
+.pin-s{position:absolute;left:16px;bottom:0;width:12px;height:5px;border-radius:50%;background:rgba(11,18,32,.35);filter:blur(1px)}
 .pin-pulse{display:none}
 .pin.on{transform:scale(1.28)}
 .pin.on .pin-h{box-shadow:0 0 0 3px #fff,0 0 0 6px color-mix(in srgb,var(--c) 35%,transparent),0 10px 20px -6px rgba(11,18,32,.6)}

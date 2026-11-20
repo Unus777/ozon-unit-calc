@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="robots" content="noindex">
-<title>Юнит-экономика</title>
+<title>Алмалы · Доставка</title>
 <link rel="manifest" href="owner.webmanifest?v=39">
 <meta name="apple-mobile-web-app-title" content="Алмалы">
 <script src="theme.js?v=41"></script>
@@ -44,85 +44,120 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 @media(prefers-reduced-motion:reduce){.sp-logo,.sp-logo::before,.sp-logo::after,.sp-road::before,.sp-truck,.sp-truck svg{animation:none}
 .sp-logo::before,.sp-logo::after{display:none}.sp-truck{transform:translateX(69px)}#splash,.sp-in{transition:none}}
 </style>
-<link rel="stylesheet" href="style.css?v=43">
+<link rel="stylesheet" href="style.css?v=44">
+<link rel="stylesheet" href="manager.css?v=1">
 <link rel="icon" href="icons/owner.svg?v=39" type="image/svg+xml">
 <link rel="icon" href="icons/owner-32.png?v=39" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/owner-180.png?v=39" sizes="180x180">
 </head>
-<body data-view="orders">
+<body class="mgr" data-view="orders">
 <div id="splash" role="status" aria-live="polite" aria-label="Загрузка"><div class="sp-in">
 <div class="sp-logo" aria-hidden="true">А</div>
 <div class="sp-name">Алмалы Доставка</div><div class="sp-sub">Загружаем заказы…</div>
 <div class="sp-road" aria-hidden="true"><div class="sp-truck"><svg viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h8A1.5 1.5 0 0 1 14 6.5V16H3zM14 9h3.6a1 1 0 0 1 .8.4l2.4 3.1a1 1 0 0 1 .2.6V16h-7M7.5 18.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM16.5 18.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg></div></div>
 </div></div>
 <script>setTimeout(function () { if (window.splashHide) splashHide(); else { var s = document.getElementById("splash"); if (s) s.remove(); } }, 10000);  // страховка: заставка не дольше 10 с</script>
-<header class="hdr"><div class="bar">
-<div class="logo" aria-hidden="true">А</div>
-<div class="grow"><div class="brand">Алмалы Доставка<span id="brandSub">Заказы и курьер</span></div></div>
-<span class="presence" id="presence" hidden><span class="dot"></span>Рашад на связи</span>
+<aside class="m-side" aria-label="Разделы">
+  <div class="m-brand"><div class="logo" aria-hidden="true">А</div><div><b>Алмалы</b><span>Доставка · менеджер</span></div></div>
+  <nav class="m-sidenav">
+    <button type="button" data-view="orders" aria-current="page"><span data-ic="orders"></span>Заказы<i class="m-badge" data-badge hidden></i></button>
+    <button type="button" data-view="map"><span data-ic="map"></span>Карта</button>
+    <button type="button" data-view="courier"><span data-ic="truck"></span>Курьер</button>
+    <button type="button" data-view="calc"><span data-ic="calc"></span>Расчёт ₽/м²</button>
+    <button type="button" data-view="settings"><span data-ic="settings"></span>Настройки</button>
+  </nav>
+  <div class="m-side-foot">Алмалы-Керамик · v4.0</div>
+</aside>
+<header class="m-top"><div class="m-top-in">
+  <div class="logo m-mob" aria-hidden="true">А</div>
+  <div class="grow"><h1 id="ltTitle">Заказы</h1><div class="m-subt" id="ltSub">Загружаем…</div></div>
+  <button type="button" class="m-presence off" id="presence" data-view="courier" hidden><span class="dot"></span><span id="presenceTxt">Рашад</span></button>
+  <button type="button" class="m-ibtn" id="reload" aria-label="Обновить заказы" title="Обновить"><span data-ic="refresh"></span></button>
 </div></header>
-<div class="lt" id="lt"><h1 id="ltTitle">Заказы</h1><div class="sub" id="ltSub"></div></div>
-<main>
+<main class="m-main">
 
-<section class="settings-view" id="settings" hidden>
-<div class="sec">Оформление</div>
-<div class="card" style="padding:12px"><div class="seg" id="themeSw"></div></div>
-<div class="sec">Доставки курьеру</div>
-<div class="list">
-  <div class="li"><div class="lic g" id="dlvIc"><span data-ic="link"></span></div><div class="k">Таблица «Доставки»<small id="dlvState"></small></div></div>
-  <div class="li col"><form id="accessForm" class="r">
+<section class="m-settings" id="settings" hidden>
+<div class="m-set-grid">
+<section class="m-card"><h2 class="m-card-t"><span data-ic="theme"></span>Оформление</h2><div class="seg m-seg2" id="themeSw"></div></section>
+<section class="m-card"><h2 class="m-card-t"><span data-ic="link"></span>Таблица доставок</h2>
+  <div class="m-set-row"><div class="lic g" id="dlvIc"><span data-ic="link"></span></div><div class="grow">Таблица «Доставки»<small id="dlvState"></small></div></div>
+  <form id="accessForm" class="m-inline">
     <input id="accessLink" placeholder="Ссылка доступа" autocomplete="off" aria-label="Ссылка доступа к доставкам">
-    <button class="tint">Подключить</button>
-  </form></div>
+    <button class="m-btn tint">Подключить</button>
+  </form></section>
+<section class="m-card" id="ownerNotif"><h2 class="m-card-t"><span data-ic="bell"></span>Уведомления о курьере</h2>
+  <p class="m-hint" id="ownerNotifState">Придут, когда курьер поставит дату, согласует доставку, напишет комментарий или нажмёт «Доставлено».</p>
+  <div class="m-inline"><button type="button" class="m-btn pri" id="ownerNotifBtn"><span data-ic="bell"></span>Включить</button>
+  <button type="button" class="m-btn ghost" id="ownerTestBtn"><span data-ic="spark"></span>Проверить пуш</button></div>
+  <p class="m-hint" id="ownerTestState" aria-live="polite"></p></section>
+<section class="m-card"><h2 class="m-card-t"><span data-ic="copy"></span>Данные</h2>
+  <p class="m-hint">Выгрузка всех заказов за 90 дней: номера, ЦБ, адреса, вес и окна доставки.</p>
+  <div class="m-inline"><button type="button" class="m-btn ghost" id="export"><span data-ic="copy"></span>Выгрузить CSV</button>
+  <button type="button" class="m-btn ghost" id="reload2"><span data-ic="refresh"></span>Сверить с Ozon</button></div></section>
+<section class="m-card" id="forget"><h2 class="m-card-t"><span data-ic="key"></span>Ozon Seller API</h2>
+  <div class="m-set-row"><div class="lic"><span data-ic="key"></span></div><div class="grow">Client-Id<small>Ключи хранятся только в этом браузере</small></div><b class="m-mono" id="cidMask"></b></div>
+  <button type="button" class="m-btn ghost danger" id="forgetBtn"><span data-ic="refresh"></span>Сменить ключи Ozon</button></section>
 </div>
-<div id="ownerNotif"><div class="sec">Уведомления о курьере</div>
-<div class="list">
-  <div class="li"><div class="lic b"><span data-ic="bell"></span></div><div class="k">Push-уведомления<small id="ownerNotifState">Придут, когда курьер поставит дату, согласует доставку, напишет комментарий или нажмёт «Доставлено».</small></div></div>
-  <div class="li col"><div class="actions two" style="margin:0">
-    <button class="tint" id="ownerNotifBtn"><span data-ic="bell"></span>Включить</button>
-    <button class="soft" id="ownerTestBtn"><span data-ic="spark"></span>Проверить</button></div></div>
-</div>
-<p class="foot" id="ownerTestState" aria-live="polite"></p></div>
-<div id="forget"><div class="sec">Ozon Seller API</div>
-<div class="list">
-  <div class="li"><div class="lic"><span data-ic="key"></span></div><div class="k">Client-Id<small>Ключи хранятся только в этом браузере</small></div><div class="v m" id="cidMask"></div></div>
-  <div class="li col" style="padding:8px"><button class="text wide danger" id="forgetBtn" style="justify-content:flex-start;padding:0 8px"><span data-ic="refresh"></span>Сменить ключи Ozon</button></div>
-</div></div>
-<p class="foot" style="text-align:center;margin-top:24px">Алмалы Доставка · v3.0</p>
+<p class="m-ver">Алмалы Доставка · v4.0 · сверка с Ozon каждые 2 минуты</p>
 </section>
 
-<div class="card" id="keys" hidden>
-<h3>Ключи Ozon Seller API</h3>
-<p class="mut">Вводятся один раз на этом устройстве, хранятся только в его браузере и уходят только на api-seller.ozon.ru.</p>
-<form id="keysForm" style="display:grid;gap:8px">
+<section class="m-card m-keys" id="keys" hidden>
+<div class="m-empty-ic"><span data-ic="key"></span></div>
+<h2>Ключи Ozon Seller API</h2>
+<p class="m-hint">Вводятся один раз на этом устройстве, хранятся только в его браузере и уходят только на api-seller.ozon.ru.</p>
+<form id="keysForm" class="m-keysform">
 <input id="cid" placeholder="Client-Id" autocomplete="off" inputmode="numeric" aria-label="Client-Id" required>
 <input id="key" type="password" placeholder="Api-Key" autocomplete="off" aria-label="Api-Key" required>
-<button>Сохранить</button>
+<button class="m-btn pri">Сохранить и загрузить заказы</button>
 </form>
-</div>
+</section>
 
 <div id="app" hidden>
-<div id="ownerDash"></div>
-<section id="omapBox" class="omap" hidden>
-<div class="omap-h"><b>Маршрут сегодня</b><span id="omapMeta" class="mut"></span>
-<button type="button" class="soft" id="omapMe">Где я</button>
-<a class="btn ghost" id="omapGo" href="#" target="_blank" rel="noopener" hidden>Яндекс</a></div>
-<div id="omap" role="region" aria-label="Карта сегодняшних доставок"></div>
+<section class="m-pane m-orders" data-pane="orders map">
+  <div id="ownerDash"></div>
+  <section id="omapBox" class="m-mappane">
+  <div class="m-map">
+    <div id="omap" role="region" aria-label="Карта доставок: Рашад и точки заказов"></div>
+    <div class="m-mapload" id="omapLoad"><i></i><span>Загружаем карту…</span></div>
+    <button type="button" class="m-mapexp" data-view="map" aria-label="Открыть карту на весь экран"><span data-ic="fit"></span>Открыть карту</button>
+    <div class="m-maptop">
+      <button type="button" class="m-rchip" id="mapRashad" aria-label="Показать Рашада на карте"><span class="m-ava sm">Р</span><span><b>Рашад</b><small>Нет данных о местоположении</small></span></button>
+      <div class="m-mapbtns">
+        <button type="button" class="m-fab" id="omapFit" aria-label="Показать все точки" title="Все точки"><span data-ic="fit"></span></button>
+        <button type="button" class="m-fab" id="omapMe" aria-label="Где я" title="Где я"><span data-ic="locate"></span></button>
+        <a class="m-fab" id="omapGo" href="#" target="_blank" rel="noopener" aria-label="Маршрут в Яндекс Картах" title="Маршрут в Яндекс Картах" hidden><span data-ic="nav"></span></a>
+      </div>
+    </div>
+    <div class="m-mapfoot">
+      <div class="m-mapmeta"><span id="omapMeta"></span><span class="m-legend" id="legend"></span></div>
+      <div class="m-stops" id="mstops"></div>
+    </div>
+  </div>
 </section>
-<div id="report"></div>
-<form class="search" id="calcForm">
-<span data-ic="search"></span>
-<input id="n" placeholder="Номер отправления" autocomplete="off" aria-label="Номер отправления" required>
-<button id="go">Рассчитать</button>
-</form>
-<div id="out"></div>
-<div id="fbsLive" class="fbs-live" role="status" aria-live="polite"></div>
-<form class="find" id="findForm" role="search"><span data-ic="search"></span>
-<input id="find" placeholder="ЦБ, адрес, имя, отправление" aria-label="Найти заказ" autocomplete="off"></form>
-<div class="otabs" role="tablist" aria-label="Заказы" id="otabs"></div>
-<div id="orders" class="mut"></div>
-<p id="reloadP" style="text-align:center;margin:8px 0 0"><button class="text" id="reload"><span data-ic="refresh"></span>Обновить список</button> <button class="text" id="export">Выгрузить CSV</button> <a class="text" href="design.html" target="_blank" rel="noopener">Новый дизайн</a></p>
-<div id="sheet" class="sheet" hidden><div class="sheet-bg" data-close></div><section class="sheet-panel" role="dialog" aria-modal="true" aria-label="Действия с заказом" id="sheetPanel"></section></div>
+  <div id="board"></div>
+  <div class="m-listwrap">
+  <div class="m-tools">
+    <form class="m-search" id="findForm" role="search"><span data-ic="search"></span>
+      <input id="find" type="search" placeholder="Поиск: ЦБ, адрес, имя, телефон, отправление" aria-label="Найти заказ" autocomplete="off"></form>
+    <div class="m-chips" role="tablist" aria-label="Фильтр заказов" id="otabs"></div>
+  </div>
+  <div id="fbsLive" class="fbs-live" role="status" aria-live="polite"></div>
+  <div id="orders"></div>
+  </div>
+</section>
+<section class="m-pane m-courier" data-pane="courier">
+  <div id="rashadCard"></div>
+  <div id="report"></div>
+</section>
+<section class="m-pane m-calc" data-pane="calc">
+  <form class="m-search m-calcform" id="calcForm">
+    <span data-ic="search"></span>
+    <input id="n" placeholder="Номер отправления, например 48210000-0001-1" autocomplete="off" aria-label="Номер отправления" required>
+    <button id="go" class="m-btn pri">Рассчитать</button>
+  </form>
+  <div id="out"><div class="m-empty"><div class="m-empty-ic"><span data-ic="chart"></span></div><b>Расчёт ₽/м²</b><p>Введите номер отправления или откройте заказ и нажмите «Полный расчёт ₽/м²».</p></div></div>
+</section>
+<div id="sheet" class="sheet" hidden><div class="sheet-bg" data-close></div><section class="sheet-panel" role="dialog" aria-modal="true" aria-label="Заказ" id="sheetPanel"></section></div>
 <div id="modal-edit-cb" class="modal-bg" hidden>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-cb-title">
     <div class="modal-head">
@@ -151,11 +186,12 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 </div>
 </div>
 </main>
-<nav class="tabbar" aria-label="Разделы"><div class="brandbar"><b>ALMALY</b><span>доставка</span></div><div class="in">
-  <button type="button" data-view="orders" aria-selected="true"><span data-ic="orders"></span>Заказы<i id="tabBadge" hidden></i></button>
-  <button type="button" data-view="calc" aria-selected="false"><span data-ic="calc"></span>Расчёт</button>
-  <a id="dlvLink" href="courier.html?admin=1" hidden><span data-ic="truck"></span>Курьер</a>
-  <button type="button" id="gear" data-view="settings" aria-selected="false" aria-expanded="false" aria-controls="settings"><span data-ic="settings"></span>Настройки</button>
+<nav class="m-nav" aria-label="Разделы"><div class="m-nav-in">
+  <button type="button" data-view="orders" aria-current="page"><span data-ic="orders"></span>Заказы<i class="m-badge" data-badge hidden></i></button>
+  <button type="button" data-view="map"><span data-ic="map"></span>Карта</button>
+  <button type="button" data-view="courier"><span data-ic="truck"></span>Курьер</button>
+  <button type="button" data-view="calc"><span data-ic="calc"></span>Расчёт</button>
+  <button type="button" data-view="settings"><span data-ic="settings"></span>Ещё</button>
 </div></nav>
 
 <script src="calc.js?v=39"></script>
@@ -291,7 +327,7 @@ async function sendToCourier(number, cbRaw, details) {
   let delivery = 0;
   if (details.delivery_pay !== "" && !isNaN(Number(details.delivery_pay))) delivery = Number(details.delivery_pay);
   else delivery = parseFloat(posting.delivery_price) || 0;
-  const lift = parseFloat(prr.price) || 0;
+  const lift = details.lift_pay !== undefined && details.lift_pay !== "" && !isNaN(Number(details.lift_pay)) ? Number(details.lift_pay) : parseFloat(prr.price) || 0;
   let courierInfo = null;
   try { courierInfo = courierOzonData(posting); } catch {}  // кривой ответ Ozon не должен останавливать запись в таблицу
   const data = {
@@ -323,7 +359,7 @@ function show() {
   $("forget").hidden = !has;
   $("cidMask").textContent = has ? "••••" + String(store.get("ozon_cid")).slice(-4) : "";
   $("presence").hidden = !(ADMIN() && SCRIPT_URL);
-  if (has) { if (ADMIN() && !$("ownerDash").innerHTML) $("ownerDash").innerHTML = skelHero(); loadOrders(); }
+  if (has) { if (!$("ownerDash").innerHTML) $("ownerDash").innerHTML = skelKpis(); loadOrders(); }
   else splashHide();
 }
 
@@ -372,14 +408,15 @@ async function loadOrders(silent) {
     drawReport();
     ORDERS = postings; PRICES = prices;
     const now = new Date(), day = now.toLocaleDateString("ru-RU", {weekday: "short", day: "numeric", month: "long"});
-    $("ltSub").textContent = `${day[0].toUpperCase() + day.slice(1)} · обновлено ${now.toLocaleTimeString("ru-RU", {hour: "2-digit", minute: "2-digit"})}`;
+    $("ltSub").textContent = `${day[0].toUpperCase() + day.slice(1)} · ${now.toLocaleTimeString("ru-RU", {hour: "2-digit", minute: "2-digit"})}`;
     drawOrders(silent !== true);
     loadWhere();
     splashHide();
     ownerAlerts(postings);
   } catch (err) {
-    if ($("ownerDash").querySelector(".sk-hero")) $("ownerDash").innerHTML = "";
-    $("orders").innerHTML = `<div class="card err">${e(err.message)}</div>`;
+    if ($("ownerDash").querySelector(".m-sk")) $("ownerDash").innerHTML = "";
+    $("orders").innerHTML = `<div class="m-empty m-errcard"><div class="m-empty-ic red">${ic("alert")}</div><b>Не удалось загрузить заказы</b><p>${e(err.message)}</p><button type="button" class="m-btn pri" id="retryLoad">${ic("refresh")}Повторить</button></div>`;
+    $("retryLoad").onclick = () => loadOrders();
     splashHide();
   }
 }
@@ -423,13 +460,6 @@ function ostate(p) {
 function otabCategory(p) {
   return orderTab(p, DELIV[p.posting_number]);
 }
-const OTABS = {
-  all: "Все",
-  new: "Ждут ЦБ",
-  courier: "У Рашада",
-  fbs: "FBS склад",
-  done: "Доставлены"
-};
 // Ozon меняет статус на «Доставлено» не сразу — помним отправленные заказы и проверяем, пока не подтвердит
 const PENDING_TTL = 2 * 3600e3;
 const pendingGet = () => { try { return JSON.parse(localStorage.getItem("oz_pending") || "{}"); } catch { return {}; } };
@@ -499,9 +529,52 @@ $("findForm").addEventListener("submit", ev => ev.preventDefault());
 $("find").addEventListener("input", () => { FIND = $("find").value.trim().toLowerCase(); drawOrders(true); });
 
 const CLS = {red: "c-r", yellow: "c-a", green: "c-g"};
-let OMAP = null, OMAP_P = null, OPINS = [], OME = null, OMAP_KEY = "";
+let OMAP = null, OMAP_P = null, OPINS = [], OME = null, OMAP_KEY = "", ROUTE_KEY = "";
 const OLIB = {js: "https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js", jsSri: "sha384-5+cfbwT0iiub6VsQAdn6yz16nr6sDiQoHx6tm4O8OVYXHYOxcffFmCJBL0dgdvGp",
   css: "https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css", cssSri: "sha384-uTttxo/aOKbdE5RlD/SPzSDoDmNvGlUYPjONi2MN/b7c9HPSvW07OIuyP7uL6jxK"};
+const WIDE = () => matchMedia("(min-width: 1180px)").matches;
+const REDUCED = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// ---------- мелкие помощники карточек ----------
+const mskTime = v => { const d = new Date(v); return isNaN(d) ? "" : d.toLocaleTimeString("ru-RU", {timeZone: "Europe/Moscow", hour: "2-digit", minute: "2-digit"}); };
+const mskDayKey = v => new Date(v).toLocaleDateString("ru-RU", {timeZone: "Europe/Moscow"});
+function ozWindow(p) {  // окно доставки из Ozon по Москве: «Сегодня 12:00–14:00»
+  const an = (p && p.analytics_data) || {};
+  if (!an.delivery_date_begin) return "";
+  const day = mskDayKey(an.delivery_date_begin), today = mskDayKey(Date.now()), tmr = mskDayKey(Date.now() + 864e5);
+  const label = day === today ? "Сегодня" : day === tmr ? "Завтра" : day.slice(0, 5);
+  return `${label} ${mskTime(an.delivery_date_begin)}${an.delivery_date_end ? "–" + mskTime(an.delivery_date_end) : ""} МСК`;
+}
+const orderPacks = p => (p.products || []).reduce((s, x) => s + (Number(x.quantity) || 0), 0);
+const orderKg = p => Math.round((p.products || []).reduce((s, x) => s + (Number(x.quantity) || 0) * packKg(tileFormat(String(x.offer_id || ""), x.name || "")), 0));
+const fmtLine = p => (p.products || []).map(x => `${x.quantity} уп ${tileFormat(String(x.offer_id || ""), x.name || "") || x.offer_id}`).join(" + ");
+const kgText = kg => kg >= 1000 ? (kg / 1000).toFixed(1).replace(".", ",") + " т" : "~" + kg + " кг";
+function addrParts(s) {
+  const t = String(s || "").trim(), i = t.indexOf(",");
+  return i > 0 ? [t.slice(0, i), t.slice(i + 1).trim()] : [t, ""];
+}
+function ago(iso) {
+  const m = Math.round((Date.now() - new Date(iso)) / 60000);
+  if (!isFinite(m)) return "";
+  if (m < 1) return "только что";
+  if (m < 60) return m + " мин назад";
+  const h = Math.floor(m / 60);
+  return h < 24 ? h + " ч назад" : Math.floor(h / 24) + " дн назад";
+}
+const money = x => Math.round(Math.abs(x)).toLocaleString("ru-RU").replace(/\u00a0/g, " ");
+
+// Состояние заказа для карточки: раздел, подпись чипа, цвет и шаг курьера
+function cardState(p) {
+  const d = DELIV[p.posting_number], cat = otabCategory(p);
+  if (cat === "cancel") return {cat, chip: "Отменён", cls: "red"};
+  if (cat === "done") return {cat, chip: "Доставлен", cls: "green"};
+  if (cat === "new") return {cat, chip: ["ship", "way"].includes(stage(p.status)[0]) ? "Ждёт отправки" : (stage(p.status)[1][0] || p.status), cls: "amber"};
+  const f = flowOf(p);
+  if (f.now.k === "sent") return {cat, chip: "Не принят", cls: "amber", step: f.cur};
+  return {cat, chip: f.now.label, cls: f.now.k === "onsite" ? "violet" : f.now.k === "ack" ? "indigo" : "blue", step: f.cur};
+}
+
+// ---------- карта: Рашад, точки заказов и маршрут (без точки склада) ----------
 function ownerStops() {
   const today = todayStr();
   return Object.values(DELIV).filter(r => r && !isFbsSheetRow(r) && (r.status === "Новый" || r.status === "Согласован")
@@ -518,93 +591,136 @@ function nearestStops(points, start) {
   }
   return out;
 }
-function drawOwnerMap() {
-  const box = $("omapBox");
-  if (!box || document.body.dataset.view === "calc" || document.body.dataset.view === "settings") return;
+function rashadLL() {
+  const l = RASHAD && RASHAD.latest;
+  return l && l.lat != null && l.lng != null && mskDay(l.ts) === mskDay(Date.now()) ? [+l.lat, +l.lng] : null;
+}
+function mapPoints() {
+  const today = todayStr();
+  const start = rashadLL() || OME;
   const raw = ownerStops();
-  const stops = nearestStops(raw, OME || (raw[0] && raw[0].ll) || [55.75, 37.62]);
-  const lls = (OME ? [OME] : []).concat(stops.map(p => p.ll));
-  box.hidden = false;
-  $("omapMeta").textContent = stops.length ? plural(stops.length, "точка", "точки", "точек") : "Нет точек с координатами";
+  const stops = nearestStops(raw, start || (raw[0] && raw[0].ll) || [55.75, 37.62]);
+  const toSend = (ORDERS || []).filter(p => !isFbs(p) && otabCategory(p) === "new" && ["ship", "way"].includes(stage(p.status)[0])).map(p => {
+    const a = (p.customer || {}).address || {};
+    return a.latitude && a.longitude && isFinite(+a.latitude) ? {p, ll: [+a.latitude, +a.longitude]} : null;
+  }).filter(Boolean);
+  const done = Object.values(DELIV).filter(r => r && !isFbsSheetRow(r) && r.status === "Доставлен" && String(r.delivered_at || "").includes(today.slice(0, 5))
+    && r.lat && r.lon && isFinite(+r.lat)).map(r => ({r, ll: [+r.lat, +r.lon]}));
+  return {start, stops, toSend, done};
+}
+const mapVisible = () => ["map", "orders"].includes(document.body.dataset.view);
+function pinEl(kind, label, title, big) {
+  const el = document.createElement("button");
+  el.type = "button";
+  el.className = `mp mp-${kind}${big ? " mp-next" : ""}`;
+  el.innerHTML = `${big ? '<i class="mp-ring"></i>' : ""}<b>${label}</b>`;
+  el.title = title; el.setAttribute("aria-label", title);
+  return el;
+}
+function openByPosting(posting) {
+  const idx = ORDERS.findIndex(p => p.posting_number === posting);
+  if (idx >= 0) openSheet(idx);
+}
+function drawOwnerMap() {
+  if (!$("omapBox") || !mapVisible() || !$("app") || $("app").hidden) return;
+  const {start, stops, toSend, done} = mapPoints();
+  const lls = (start ? [start] : []).concat(stops.map(p => p.ll));
+  const all = lls.concat(toSend.map(x => x.ll), done.map(x => x.ll));
+  $("omapMeta").innerHTML = stops.length ? `<b>${plural(stops.length, "остановка", "остановки", "остановок")}</b> сегодня` : "Сегодня у Рашада нет точек с координатами";
+  $("legend").innerHTML = [["ok", "Едет / согласован"], ["wait", "Не согласован"], ["send", "Ждёт отправки", toSend.length], ["done", "Доставлен", done.length]]
+    .filter(x => x[2] !== 0).map(([k, t]) => `<span><i class="lg lg-${k}"></i>${t}</span>`).join("");
   const go = $("omapGo");
   go.hidden = !stops.length;
   go.href = `https://yandex.ru/maps/?rtext=${lls.map(p => p.join(",")).join("~")}&rtt=auto`;
-  const key = stops.map(p => p.r.posting).join("|") + (OME ? ":me" : "");
+  $("mstops").innerHTML = stops.map(({r}, i) => `<button type="button" class="m-stop" data-flyto="${e(r.posting)}"><span class="m-stop-n ${agreementOf(r) || r.status === "Согласован" ? "ok" : "wait"}">${i + 1}</span>` +
+    `<span class="m-stop-t"><b>${e(r.cb || "—")} · ${e(addrParts(r.address)[0])}</b><small>${e(whenLine(r, deliveryDetails(r.comment), agreementOf(r)))}</small></span></button>`).join("")
+    + toSend.map(({p}) => `<button type="button" class="m-stop" data-flyto="${e(p.posting_number)}"><span class="m-stop-n send">${ic("send", "s")}</span>` +
+    `<span class="m-stop-t"><b>Ждёт отправки · ${e(addrParts((p.customer || {}).address?.address_tail)[0])}</b><small>${e(fmtLine(p))}</small></span></button>`).join("");
+  const key = stops.map(p => p.r.posting).join("|") + "/" + toSend.length + "/" + done.length + (OME ? ":me" : "");
   const paint = () => {
     OPINS.forEach(m => m.remove());
     OPINS = [];
-    stops.forEach(({r, ll}, i) => {
-      const el = document.createElement("div");
-      el.className = "pin-w";
-      el.innerHTML = `<div class="pin ${r.status === "Согласован" ? "st-g" : "st-n"}"><div class="pin-h"><b>${i + 1}</b></div><i class="pin-s"></i></div>`;
-      el.title = `${r.cb} · ${r.address}`;
-      el.addEventListener("click", ev => {
-        ev.stopPropagation();
-        const idx = ORDERS.findIndex(p => p.posting_number === r.posting);
-        if (idx >= 0) openSheet(idx);
-      });
-      OPINS.push(new maplibregl.Marker({element: el, anchor: "bottom"}).setLngLat([ll[1], ll[0]]).addTo(OMAP));
-    });
+    const add = (el, ll, posting) => {
+      el.addEventListener("click", ev => { ev.stopPropagation(); openByPosting(posting); });
+      OPINS.push(new maplibregl.Marker({element: el, anchor: "center"}).setLngLat([ll[1], ll[0]]).addTo(OMAP));
+    };
+    done.forEach(({r, ll}) => add(pinEl("done", ic("check", "s"), `${r.cb} · доставлен · ${r.address}`), ll, r.posting));
+    toSend.forEach(({p, ll}) => add(pinEl("send", "!", `Ждёт отправки · ${(p.customer || {}).address?.address_tail || ""}`), ll, p.posting_number));
+    stops.forEach(({r, ll}, i) => add(pinEl(agreementOf(r) || r.status === "Согласован" ? "ok" : "wait", i + 1, `${i + 1}. ${r.cb} · ${r.address}`, i === 0), ll, r.posting));
     if (OME) {
       const me = document.createElement("div");
       me.className = "me-w"; me.innerHTML = '<div class="me"><i></i></div>';
       OPINS.push(new maplibregl.Marker({element: me, anchor: "center"}).setLngLat([OME[1], OME[0]]).addTo(OMAP));
     }
-    const bounds = new maplibregl.LngLatBounds();
-    lls.concat(OME ? [OME] : []).forEach(p => bounds.extend([p[1], p[0]]));
-    if (key !== OMAP_KEY) {
-      OMAP_KEY = key;
-      const motion = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 700;
-      if (!lls.length) OMAP.flyTo({center: [37.62, 55.75], zoom: 9, duration: motion});
-      else if (lls.length < 2) OMAP.flyTo({center: [lls[0][1], lls[0][0]], zoom: 12, duration: motion});
-      else OMAP.fitBounds(bounds, {padding: 48, maxZoom: 13, duration: motion});
-    }
-    if (stops.length) {
+    if (key !== OMAP_KEY) { OMAP_KEY = key; fitAll(all); }
+    const rkey = lls.map(p => p.map(x => (+x).toFixed(3)).join(",")).join(";");
+    if (stops.length && rkey !== ROUTE_KEY) {
+      ROUTE_KEY = rkey;
       const path = lls.map(p => `${(+p[1]).toFixed(6)},${(+p[0]).toFixed(6)}`).join(";");
       const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 6000);
       fetch(`https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson`, {signal: ctl.signal})
         .then(r => r.json()).then(j => {
           const line = j && j.routes && j.routes[0] && j.routes[0].geometry;
-          if (line) paintRoute(OMAP, "route", line.coordinates);
+          paintRoute(OMAP, "route", line ? line.coordinates : lls.map(p => [p[1], p[0]]));
         }).catch(() => paintRoute(OMAP, "route", lls.map(p => [p[1], p[0]]))).finally(() => clearTimeout(timer));
-    } else OMAP.getSource("route")?.setData({type: "FeatureCollection", features: []});
+    } else if (!stops.length) { ROUTE_KEY = ""; OMAP.getSource("route")?.setData({type: "FeatureCollection", features: []}); }
   };
   const boot = OMAP_P || (OMAP_P = (async () => {
     if (!window.maplibregl) await new Promise((ok, fail) => {
       const css = Object.assign(document.createElement("link"), {rel: "stylesheet", href: OLIB.css, integrity: OLIB.cssSri, crossOrigin: "anonymous"});
       const js = Object.assign(document.createElement("script"), {src: OLIB.js, integrity: OLIB.jsSri, crossOrigin: "anonymous"});
-      js.onload = ok; js.onerror = () => fail(new Error("map"));
+      js.onload = ok; js.onerror = () => fail(new Error("Карта не загрузилась — проверьте интернет"));
       document.head.append(css, js);
     });
-    const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    const dark = document.documentElement.dataset.theme && document.documentElement.dataset.theme !== "auto" ? document.documentElement.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
     OMAP = new maplibregl.Map({container: "omap", style: `https://tiles.openfreemap.org/styles/${dark ? "dark" : "positron"}`,
       center: [37.62, 55.75], zoom: 9, attributionControl: false, dragRotate: false, pitchWithRotate: false});
-    OMAP.addControl(new maplibregl.NavigationControl({showCompass: false}), "top-right");
+    OMAP.addControl(new maplibregl.NavigationControl({showCompass: false}), "bottom-right");
     await new Promise(ok => OMAP.once("load", ok));
+    const acc = getComputedStyle(document.body).getPropertyValue("--route").trim() || "#2F5BEA";
     OMAP.addSource("rashad", {type: "geojson", data: {type: "FeatureCollection", features: []}});
     OMAP.addLayer({id: "rashad", type: "line", source: "rashad", layout: {"line-cap": "round", "line-join": "round"},
-      paint: {"line-color": "#2F7BF6", "line-width": 3, "line-opacity": .35}});
+      paint: {"line-color": "#7C93F5", "line-width": 3, "line-opacity": .8, "line-dasharray": [1.5, 1.8]}});
     OMAP.addSource("route", {type: "geojson", data: {type: "FeatureCollection", features: []}});
-    const acc = getComputedStyle(document.documentElement).getPropertyValue("--acc").trim() || "#2451D6";
+    OMAP.addLayer({id: "route-case", type: "line", source: "route", layout: {"line-cap": "round", "line-join": "round"},
+      paint: {"line-color": dark ? "#0B0F17" : "#FFFFFF", "line-width": 9, "line-opacity": .95}});
     OMAP.addLayer({id: "route", type: "line", source: "route", layout: {"line-cap": "round", "line-join": "round"},
-      paint: {"line-color": acc, "line-width": 4}});
-  })().catch(err => { OMAP_P = null; $("omapMeta").textContent = err.message || "Карта не загрузилась"; }));
+      paint: {"line-color": acc, "line-width": 5}});
+    $("omapLoad").classList.add("out");
+  })().catch(err => { OMAP_P = null; $("omapLoad").innerHTML = `<b>${e(err.message || "Карта не загрузилась")}</b>`; }));
   boot.then(() => { if (OMAP) { OMAP.resize(); paint(); drawRashad(); } }).catch(() => {});
 }
+function fitAll(all) {
+  if (!OMAP) return;
+  const pts = all.concat(rashadLL() ? [rashadLL()] : []);
+  const duration = REDUCED() ? 0 : 700;
+  const full = document.body.dataset.view === "map" || WIDE();
+  const pad = !full ? {top: 64, bottom: 24, left: 24, right: 24} : WIDE() && document.body.dataset.view !== "map" ? {top: 80, bottom: 160, left: 48, right: 72} : {top: 90, bottom: 170, left: 40, right: 72};
+  if (!pts.length) OMAP.flyTo({center: [37.62, 55.75], zoom: 9, duration});
+  else if (pts.length < 2) OMAP.flyTo({center: [pts[0][1], pts[0][0]], zoom: 12, duration});
+  else {
+    const b = new maplibregl.LngLatBounds();
+    pts.forEach(p => b.extend([p[1], p[0]]));
+    OMAP.fitBounds(b, {padding: pad, maxZoom: 13, duration});
+  }
+}
 let RASHAD = null, RPIN = null;
+function rashadOnline(latest) { return !!(latest && latest.ts && Date.now() - latest.ts < 3 * 60e3); }
 function drawRashad() {
-  const latest = RASHAD && RASHAD.latest;
-  const seen = $("rashadSeen");
-  if (seen) seen.textContent = geoSeenText(latest, Date.now());
+  const latest = RASHAD && RASHAD.latest, now = Date.now(), seen = geoSeenText(latest, now), on = rashadOnline(latest);
+  const short = !latest || !latest.ts ? "нет связи" : on ? "в сети" : seen.split(" · ")[0].replace("Был в сети ", "");
+  if ($("presenceTxt")) { $("presenceTxt").textContent = "Рашад · " + short; $("presence").classList.toggle("off", !on); }
+  if ($("mapRashad")) $("mapRashad").innerHTML = `<span class="m-ava sm ${on ? "on" : ""}">Р</span><span><b>Рашад</b><small>${e(seen)}</small></span>`;
+  document.querySelectorAll("[data-rseen]").forEach(x => { x.textContent = seen; });
   if (!OMAP || !OMAP.getSource) return;
-  const track = todayTrack((RASHAD && RASHAD.track) || [], Date.now()).map(p => [p.lng, p.lat]);
+  const track = todayTrack((RASHAD && RASHAD.track) || [], now).map(p => [p.lng, p.lat]);
   const src = OMAP.getSource("rashad");
   if (src) src.setData(track.length > 1 ? {type: "Feature", geometry: {type: "LineString", coordinates: track}} : {type: "FeatureCollection", features: []});
   if (RPIN) { RPIN.remove(); RPIN = null; }
   if (!latest || latest.lat == null || latest.lng == null) return;
   const el = document.createElement("div");
-  el.className = "rashad";
-  el.innerHTML = `<i></i><div class="rashad-pop">${e(geoSeenText(latest, Date.now()))}</div>`;
+  el.className = "rashad-m" + (on ? " on" : "");
+  el.innerHTML = `<i class="rm-pulse"></i><span class="rm-ava">Р</span><span class="rm-tag">${e(on ? "Рашад · в сети" : "Рашад · " + short)}</span>`;
   RPIN = new maplibregl.Marker({element: el, anchor: "center"}).setLngLat([latest.lng, latest.lat]).addTo(OMAP);
 }
 async function loadWhere() {
@@ -612,6 +728,8 @@ async function loadWhere() {
   try { RASHAD = await sheetApi({action: "where", key: ADMIN()}); }
   catch { if (!RASHAD) RASHAD = {latest: null, track: []}; }
   drawRashad();
+  drawCourier();
+  if (OMAP) drawOwnerMap();
 }
 setInterval(loadWhere, 45000);
 $("omapMe").onclick = () => {
@@ -620,10 +738,23 @@ $("omapMe").onclick = () => {
     OME = [p.coords.latitude, p.coords.longitude];
     OMAP_KEY = "";
     drawOwnerMap();
-    if (OMAP) OMAP.flyTo({center: [OME[1], OME[0]], zoom: 13, duration: 600});
+    if (OMAP) OMAP.flyTo({center: [OME[1], OME[0]], zoom: 13, duration: REDUCED() ? 0 : 600});
   }, () => toast("Нет доступа к геопозиции", true), {enableHighAccuracy: true, timeout: 10000});
 };
+$("omapFit").onclick = () => { const m = mapPoints(); fitAll(m.stops.map(x => x.ll).concat(m.toSend.map(x => x.ll), m.done.map(x => x.ll))); };
+$("mapRashad").onclick = () => { const ll = rashadLL() || (RASHAD && RASHAD.latest && RASHAD.latest.lat != null ? [RASHAD.latest.lat, RASHAD.latest.lng] : null);
+  if (ll && OMAP) OMAP.flyTo({center: [ll[1], ll[0]], zoom: 13, duration: REDUCED() ? 0 : 600}); else if (!ll) toast("Рашад ещё не передавал местоположение"); };
+addEventListener("resize", () => { if (mapVisible()) { drawOwnerMap(); OMAP && OMAP.resize(); } });
 
+// ---------- список заказов: сводка, поиск, фильтры, группы по действию ----------
+const GROUPS = {
+  new: ["Нужно отправить курьеру", "send"],
+  courier: ["У Рашада", "truck"],
+  done: ["Доставлено", "checkc"],
+  cancel: ["Отменено", "x"],
+};
+const OTABS = {all: "Все", new: "Отправить", courier: "У Рашада", done: "Доставлено", cancel: "Отменено", fbs: "FBS склад"};
+let SHOW_DONE = false;
 function drawOrders(anim) {
   const counts = {all: 0, new: 0, courier: 0, fbs: 0, done: 0, cancel: 0};
   ORDERS.forEach(p => {
@@ -631,13 +762,11 @@ function drawOrders(anim) {
     if (cat !== "fbs") counts.all++;
     counts[cat]++;
   });
-  $("otabs").innerHTML = Object.entries(OTABS).map(([k, v]) => {
+  $("otabs").innerHTML = Object.entries(OTABS).filter(([k]) => k !== "fbs" || counts.fbs).map(([k, v]) => {
     const cnt = counts[k] || 0;
-    const isHl = k === "new" && cnt > 0;
-    return `<button role="tab" data-otab="${k}" aria-selected="${OTAB === k}">${v}${cnt ? ` <em class="${isHl ? "a" : ""}">${cnt}</em>` : ""}</button>`;
+    return `<button type="button" role="tab" data-otab="${k}" aria-selected="${OTAB === k}" class="${k === "new" && cnt ? "hot" : ""}">${v}${cnt ? `<em>${cnt}</em>` : ""}</button>`;
   }).join("");
-  $("tabBadge").hidden = !counts.new;
-  $("tabBadge").textContent = counts.new || "";
+  document.querySelectorAll("[data-badge]").forEach(b => { b.hidden = !counts.new; b.textContent = counts.new || ""; });
 
   const cbNum = p => parseInt(String(DELIV[p.posting_number]?.cb || "").replace(/\D/g, "")) || 0;
   const list = ORDERS.map((p, i) => [p, i]).filter(([p]) => {
@@ -649,89 +778,73 @@ function drawOrders(anim) {
   }).sort(([a], [b]) => new Date(b.in_process_at) - new Date(a.in_process_at) || cbNum(b) - cbNum(a));
 
   drawOwnerDash();
+  drawBoard();
   drawOwnerMap();
-  $("orders").classList.toggle("anim", !!anim);
+  drawCourier();
+  const box = $("orders");
+  box.classList.toggle("anim", !!anim && !REDUCED());
   if (OTAB === "fbs") {
-    $("orders").innerHTML = fbsBoardHtml(ORDERS, {deliv: DELIV, local: loadFbsState(fbsStore()), pending: FBS_PENDING_CB});
+    box.innerHTML = `<div class="m-fbs">${fbsBoardHtml(ORDERS, {deliv: DELIV, local: loadFbsState(fbsStore()), pending: FBS_PENDING_CB})}</div>`;
     return;
   }
-  $("orders").innerHTML = list.length ? list.map(([p, i], n) => orderCard(p, i, n)).join("")
-    : `<div class="card empty">${ic("checkc")}${OTAB === "new" ? "Заказов, ожидающих ЦБ, нет" : OTAB === "courier" ? "У курьера сейчас ничего нет" : "Пока пусто"}</div>`;
+  if (!list.length) {
+    const msg = FIND ? ["Ничего не нашли", `По запросу «${e(FIND)}» заказов нет. Проверьте номер ЦБ, адрес или отправление.`]
+      : OTAB === "new" ? ["Всё отправлено", "Новых заказов, которые нужно передать Рашаду, нет."]
+      : OTAB === "courier" ? ["У Рашада пусто", "Отправьте ему заказ из раздела «Отправить»."]
+      : ["Пока пусто", "Здесь появятся заказы из Ozon."];
+    box.innerHTML = `<div class="m-empty"><div class="m-empty-ic">${ic(FIND ? "search" : "checkc")}</div><b>${msg[0]}</b><p>${msg[1]}</p></div>`;
+    return;
+  }
+  const by = {new: [], courier: [], done: [], cancel: []};
+  list.forEach(x => (by[otabCategory(x[0])] || by.new).push(x));
+  by.courier.sort(([a], [b]) => (cardState(b).step || 0) - (cardState(a).step || 0));
+  let n = 0;
+  box.innerHTML = Object.entries(GROUPS).filter(([k]) => by[k].length).map(([k, [title, icon]]) => {
+    let items = by[k], more = "";
+    if (k === "done" && OTAB === "all" && !SHOW_DONE && items.length > 4) { more = `<button type="button" class="m-more" data-showdone>Показать ещё ${items.length - 4}</button>`; items = items.slice(0, 4); }
+    const head = OTAB === "all" || FIND ? `<h2 class="m-gh m-gh-${k}">${ic(icon, "s")}<span>${title}</span><em>${by[k].length}</em></h2>` : "";
+    const cards = items.map(([p, i]) => orderCard(p, i, n++)).join("");
+    if (k === "cancel" && OTAB === "all" && !FIND) return `<details class="m-group m-cancel"><summary class="m-gh m-gh-cancel">${ic(icon, "s")}<span>${title}</span><em>${by[k].length}</em>${ic("chev", "s m-chev")}</summary><div class="m-cards">${cards}</div></details>`;
+    return `<section class="m-group">${head}<div class="m-cards">${cards}</div>${more}</section>`;
+  }).join("");
 }
 
 function drawOwnerDash() {
   try {
     const el = $("ownerDash");
-    if (!el || !ADMIN()) { if (el) el.innerHTML = ""; return; }
+    if (!el) return;
+    if (!ADMIN()) {
+      el.innerHTML = `<div class="m-banner">${ic("link")}<span>Подключите таблицу доставок, чтобы отправлять заказы Рашаду</span><button type="button" class="m-btn tint sm" data-view="settings">Подключить</button></div>`;
+      return;
+    }
     const today = todayStr();
-    let countToday = 0, packsToday = 0, kgToday = 0, courierOwed = 0, waitCbCount = 0, notAgreed = 0;
+    let toSend = 0, active = 0, agreed = 0, notAcc = 0, kg = 0, doneToday = 0;
     for (const p of (ORDERS || [])) {
-      if (isFbs(p) || p.status === "cancelled" || (DELIV[p.posting_number] && DELIV[p.posting_number].status === "Отменён")) continue;
-      const st = ostate(p);
-      const d = DELIV ? DELIV[p.posting_number] : null;
-      if (st === "new") waitCbCount++;
-      if (st === "courier" && d && !isFbs(p) && !agreementOf(d)) notAgreed++;
-      const isToday = (d && d.date === today) || (!d && new Date(p.in_process_at).toLocaleDateString("ru-RU") === today);
-      if (isToday || st === "courier") {
-        countToday++;
-        for (const prod of (p.products || [])) {
-          const q = Number(prod.quantity) || 0;
-          packsToday += q;
-          kgToday += q * packKg(tileFormat(prod.offer_id || "", prod.name || ""));
-        }
-        if (d && d.status !== "Доставлен") {
-          courierOwed += (Number(d.delivery) || 0) + (Number(d.lift) || 0);
-        }
-      }
+      if (isFbs(p)) continue;
+      const cat = otabCategory(p), d = DELIV[p.posting_number];
+      if (cat === "new" && ["ship", "way"].includes(stage(p.status)[0])) toSend++;
+      if (cat === "courier") { active++; kg += orderKg(p); if (agreementOf(d)) agreed++; if (!isAccepted(d)) notAcc++; }
     }
-    const tons = (kgToday / 1000).toFixed(1).replace(".", ",");
-    const rep = typeof deliveryReport === "function" ? deliveryReport(rashadDeliveries(Object.values(DELIV || {})), PAYS) : {left: courierOwed, done: {pay: 0}, paid: 0, hasPayments: false};
-    const leftPay = PAYS_ERR ? 0 : (rep && rep.hasPayments ? rep.left : courierOwed);
-    const amount = Math.round(Math.abs(leftPay)).toLocaleString("ru-RU").replace(/\u00a0/g, " ");
-    const payBlock = PAYS_ERR
-      ? `<div class="dash-pay"><span>Не удалось загрузить выплаты</span><button type="button" class="soft" data-pay-retry>Повторить</button></div>`
-      : `<div class="dash-pay"><span>${leftPay < 0 ? "Переплата" : "Курьеру к выплате"}</span>
-        <b class="money" data-count="${Math.round(Math.abs(leftPay))}"><span>${amount}</span><small>₽</small></b></div>`;
-    const ledger = PAYS_ERR ? "" : `<div class="who-pay"><span>Начислено ${Math.round(rep.done?.pay || 0).toLocaleString("ru-RU")}</span>
-          <span>Выплачено ${Math.round(rep.paid || 0).toLocaleString("ru-RU")}</span>
-          <span>Осталось ${amount}</span></div>`;
-    const rows = rashadDeliveries(Object.values(DELIV || {}));
-    let accepted = 0, enroute = 0, onsite = 0, doneToday = 0;
-    for (const r of rows) {
-      const notes = courierNotes(r.courier_comment);
-      if (r.status === "Доставлен" && String(r.delivered_at || "").includes(today.slice(0, 5))) doneToday++;
-      if (r.status === "Доставлен" || r.status === "Отменён") continue;
-      if (isAccepted(r)) accepted++;
-      if (notes.enroute) enroute++;
-      if (notes.onsite) onsite++;
-    }
+    for (const r of rashadDeliveries(Object.values(DELIV || {}))) if (r.status === "Доставлен" && String(r.delivered_at || "").includes(today.slice(0, 5))) doneToday++;
+    const rep = deliveryReport(rashadDeliveries(Object.values(DELIV || {})), PAYS);
+    const left = rep.hasPayments ? rep.left : rep.done.pay;
     const late = (ORDERS || []).filter(p => !isFbs(p) && ozState(p) === "late").length;
-    const focus = [
-      waitCbCount && ["new", "Ждут ЦБ", `${waitCbCount} без накладной`, true],
-      notAgreed && ["courier", "Не согласовано", `${notAgreed} у Рашада`, false],
-      late && ["all", "Ozon не подтвердил", `${late} старше 2 часов`, true],
+    const kpi = (k, go, label, val, sub, cls = "", icon = "") => `<button type="button" class="m-kpi ${cls}" ${go}><span class="m-kpi-l">${icon ? ic(icon, "s") : ""}${label}</span>` +
+      `<b class="money" data-count="${val}"><span>${money(val)}</span>${k === "rub" ? "<small>₽</small>" : ""}</b><small>${sub}</small></button>`;
+    const pay = PAYS_ERR
+      ? `<button type="button" class="m-kpi warn" data-go="courier"><span class="m-kpi-l">${ic("alert", "s")}Долг курьеру</span><b class="m-kpi-err">Не загрузилось</b><small>Нажмите, чтобы повторить</small></button>`
+      : kpi("rub", 'data-go="courier"', left < 0 ? "Переплата курьеру" : "Долг курьеру", left, rep.hasPayments ? `начислено ${money(rep.done.pay)} · выплачено ${money(rep.paid)}` : "начислено за доставки", "", "user");
+    const attn = [
+      notAcc && ["courier", `${plural(notAcc, "заказ", "заказа", "заказов")} Рашад ещё не принял`, "amber"],
+      late && ["all", `Ozon не подтвердил доставку · ${late}`, "red"],
     ].filter(Boolean);
-    const day = new Date().toLocaleDateString("ru-RU", {weekday: "long", day: "numeric", month: "long"});
-    el.innerHTML = `<section class="dash">
-      <div class="dash-top"><div><div class="eyebrow">${day}</div><h2>Смена</h2></div>
-        ${payBlock}</div>
-      <div class="stats">
-        <article><span>В работе</span><b>${countToday}</b><small>${packsToday} уп</small></article>
-        <article><span>Ждут ЦБ</span><b class="${waitCbCount ? "am" : ""}">${waitCbCount}</b><small>${waitCbCount ? "нужна накладная" : "всё с ЦБ"}</small></article>
-        <article><span>Не согласовано</span><b>${notAgreed}</b><small>у Рашада</small></article>
-        <article><span>Груз</span><b>${tons}</b><small>тонн · сегодня и в пути</small></article>
-      </div>
-      <div class="focus"><div class="focus-h"><b>Сейчас</b><span>${focus.length ? focus.length : "пусто"}</span></div>
-        ${focus.length ? focus.map(([tab, title, sub, warn]) => `<button type="button" data-focus="${tab}"><span class="${warn ? "am" : ""}">${title}</span><small>${sub}</small></button>`).join("") : `<p class="mut">Нет срочных дел. Рашад везёт согласованное.</p>`}
-      </div>
-      <div class="who">
-        <div><b>Рашад</b> <span>принял ${accepted} · в пути ${enroute} · на месте ${onsite} · сдал сегодня ${doneToday}</span></div>
-        <div id="rashadSeen" class="mut">Нет данных о местоположении</div>
-        ${ledger}
-      </div>
-    </section>`;
+    el.innerHTML = `<div class="m-kpis">
+      ${kpi("n", 'data-focus="new"', "К отправке", toSend, toSend ? "нужен ЦБ и оплата" : "всё отправлено", toSend ? "hot" : "", "send")}
+      ${kpi("n", 'data-focus="courier"', "У Рашада", active, active ? `${agreed} согласовано · ${kgText(kg)}` : "сейчас пусто", "", "truck")}
+      ${kpi("n", 'data-focus="done"', "Доставлено сегодня", doneToday, doneToday ? "отлично идём" : "пока ни одной", "good", "checkc")}
+      ${pay}
+    </div>${attn.length ? `<div class="m-attn">${attn.map(([tab, t, c]) => `<button type="button" class="m-attn-i ${c}" data-focus="${tab}"><i></i>${e(t)}${ic("chev", "s")}</button>`).join("")}</div>` : ""}`;
     tickCount(el);
-    drawRashad();
   } catch (err) {
     console.error("Owner dash error:", err);
   }
@@ -744,124 +857,156 @@ function whenLine(d, info, a) {
   return [day, time].filter(Boolean).join(", ") || "Дата не назначена";
 }
 
+// Путь заказа: Не отправлен → Передан курьеру → Принял → Согласован → В пути → На месте → Доставлен (или Отменён)
+const FLOW = [["new", "Не отправлен", "orders"], ["sent", "Передан курьеру", "send"], ["ack", "Принял", "check"], ["agreed", "Согласован", "calcheck"],
+  ["enroute", "В пути", "truck"], ["onsite", "На месте", "pin"], ["done", "Доставлен", "checkc"]];
+function whenShort(v) {
+  const m = /(\d\d)\.(\d\d)(?:\.\d{4})?,?\s+(\d\d:\d\d)/.exec(String(v || ""));
+  if (!m) return "";
+  const today = agreedNow().slice(0, 5);
+  return `${m[1]}.${m[2]}` === today ? m[3] : `${m[1]}.${m[2]} ${m[3]}`;
+}
+function flowOf(p) {
+  const d = DELIV[p.posting_number], n = d ? courierNotes(d.courier_comment) : {}, a = d ? agreementOf(d) : null;
+  const cancelled = p.status === "cancelled" || !!(d && d.status === "Отменён");
+  const delivered = p.status === "delivered" || !!(d && d.status === "Доставлен");
+  const at = {new: mskStamp(p.in_process_at), sent: d && d.sent, ack: n.ack && n.ack.at, agreed: a && a.at,
+    enroute: n.enroute && n.enroute.at, onsite: n.onsite && n.onsite.at, done: d && d.delivered_at};
+  const has = {new: true, sent: !!d, ack: !!(d && isAccepted(d)), agreed: !!(a || (d && d.status === "Согласован")),
+    enroute: !!n.enroute, onsite: !!n.onsite, done: delivered};
+  let cur = 0;
+  FLOW.forEach(([k], i) => { if (has[k]) cur = i; });
+  const steps = FLOW.map(([k, label, icon], i) => ({k, label, icon, done: i <= cur, when: i <= cur ? whenShort(at[k]) : ""}));
+  return {steps, cur, cancelled, now: cancelled ? {k: "cancel", label: "Отменён", icon: "x", when: ""} : steps[cur]};
+}
+function flowLine(p) {  // компактный путь на карточке: точки + «Сейчас: В пути · 09:12»
+  const f = flowOf(p);
+  return `<div class="m-flow k-${f.now.k}" aria-label="Этап: ${e(f.now.label)}">
+    <ol>${f.steps.map((s, i) => `<li class="${s.done && !f.cancelled ? "on" : ""}${i === f.cur && !f.cancelled ? " cur" : ""}" title="${e(s.label + (s.when ? " · " + s.when : ""))}">${i === f.cur && !f.cancelled ? ic(s.icon, "s") : ""}</li>`).join("")}
+    ${f.cancelled ? `<li class="cur x">${ic("x", "s")}</li>` : ""}</ol>
+    <span class="m-flow-now">${ic(f.now.icon, "s")}<b>${e(f.now.label)}</b>${f.now.when ? `<time>${e(f.now.when)}</time>` : ""}</span></div>`;
+}
+function flowTimeline(p) {  // подробный путь в карточке заказа: каждый этап со временем по Москве
+  const f = flowOf(p);
+  return `<ol class="m-tl k-${f.now.k}">${f.steps.map((s, i) => {
+    const state = f.cancelled ? (s.done ? "done" : "off") : i < f.cur ? "done" : i === f.cur ? "cur" : "off";
+    return `<li class="${state}"><span class="m-tl-ic">${ic(s.icon, "s")}</span><b>${e(s.label)}</b><time>${e(s.when || (state === "off" ? "" : "—"))}</time></li>`;
+  }).join("")}${f.cancelled ? `<li class="cur cancel"><span class="m-tl-ic">${ic("x", "s")}</span><b>Отменён в Ozon</b><time></time></li>` : ""}</ol>`;
+}
+// «В работе»: все заказы, которые ещё не доставлены и не отменены, с текущим этапом
+function drawBoard() {
+  const el = $("board");
+  if (!el) return;
+  const items = (ORDERS || []).map((p, i) => [p, i]).filter(([p]) => !isFbs(p) && (otabCategory(p) === "courier" || (otabCategory(p) === "new" && ["ship", "way"].includes(stage(p.status)[0]))))
+    .map(([p, i]) => [p, i, flowOf(p)]).sort((a, b) => b[2].cur - a[2].cur);
+  if (!items.length) { el.innerHTML = ""; return; }
+  el.innerHTML = `<section class="m-card m-board"><div class="m-card-h"><h2>В работе <em>${items.length}</em></h2><span class="m-board-r" data-rseen></span></div>
+    <ul>${items.map(([p, i, f]) => {
+      const d = DELIV[p.posting_number], a = (p.customer || {}).address || {};
+      return `<li><button type="button" class="m-brow k-${f.now.k}" data-board="${i}"><span class="m-brow-ic">${ic(f.now.icon, "s")}</span>` +
+        `<span class="m-brow-t"><b>${e(d && d.cb ? d.cb : "Без ЦБ")} · ${e(addrParts((d && d.address) || a.address_tail || a.city)[0])}</b><small>${e(fmtLine(p))}</small></span>` +
+        `<span class="m-brow-s"><b>${e(f.now.label)}</b><small>${e(f.now.when || "")}</small></span>` +
+        `<span class="m-brow-bar"><i style="--p:${f.cur / 6}"></i></span></button></li>`;
+    }).join("")}</ul></section>`;
+}
 function orderCard(p, i, n = 0) {
   if (isFbs(p)) return "";
-  const d = DELIV[p.posting_number];
-  const isDone = p.status === "delivered" || (d && d.status === "Доставлен");
-  const live = ["ship", "way"].includes(stage(p.status)[0]);
-
-  let badgeHtml = "";
-  if (p.status === "cancelled" || (d && d.status === "Отменён")) badgeHtml = `<span class="badge cancel">Отменён</span>`;
-  else if (isDone) badgeHtml = `<span class="badge done">${ic("check")}Доставлен</span>`;
-  else if (d) badgeHtml = `<span class="badge way">У курьера</span>`;
-  else badgeHtml = `<span class="badge ship">Новый Ozon</span>`;
-
-  let cbBlock = "";
-  if (d && d.cb) {
-    cbBlock = `<button type="button" class="cb-pill" data-edit-cb="${e(p.posting_number)}" data-cur-cb="${e(d.cb)}" title="Изменить номер ЦБ" aria-label="Изменить номер ЦБ ${e(d.cb)}">${e(d.cb)}${ic("edit")}</button>`;
-  } else if (live) {
-    cbBlock = `<span class="cb-pill need">Нужен ЦБ</span>`;
-  }
-
-  let items;
-  try {
-    items = p.products.map(x => {
-      const [, t] = calc({...p, products: [x]}, PRICES, 0, 0);
-      const shortTitle = shortName(x.name).replace(/^Керамогранит\s+/i, "").replace(/\s*60\s*[xх×]\s*(60|120)$/i, "");
-      const delta = Math.round(t.payout_m2 - t.floor);
-      return `<div class="oline"><div><div class="t1">${x.quantity} уп · ${tileFormat(x.offer_id, x.name) || e(x.offer_id)}</div>` +
-        `<div class="t2 trunc">${e(shortTitle)} · ${t.m2.toFixed(2).replace(".", ",")} м²</div></div>` +
-        `<div class="val"><div class="v ${CLS[t.status[0]]}">${Math.round(t.payout_m2).toLocaleString("ru-RU").replace(/\u00a0/g, " ")}<small>₽/м²</small></div>` +
-        `<div class="d ${CLS[t.status[0]]}">${delta < 0 ? `−${-delta} ₽ ниже порога` : `+${delta} ₽ к порогу ${t.floor}`}</div></div></div>`;
-    }).join("");
-  } catch (err) {
-    items = `<div class="err" style="margin-top:12px">${e(err.message)}</div>`;
-  }
-
-  let detailsBlock = "";
-  if (d && (d.address || d.date || d.comment)) {
-    const info = deliveryDetails(d.comment);
-    const a = agreementOf(d);
-    const accepted = isAccepted(d), ack = ackOf(d);
-    // Курьер ещё не нажал «Принял» — главное, что нужно знать; после — отметка «Принял · 14:05» и согласование
-    const ackBadge = isDone || d.status === "Отменён" ? "" : !accepted ? `<span class="badge warn">Не принят курьером</span>`
-      : ack ? `<span class="badge ok">${ic("check")}${e(ackLabel(ack))}</span>` : "";
-    const agreeBadge = ackBadge + (isDone || !accepted ? "" : a ? `<span class="badge ok">${ic("check")}${e(agreedLabel(a))}</span>` : `<span class="badge warn">Не согласовано</span>`);
-    const tags = [d.delivery ? `<span class="tag">Рашаду ${rub(d.delivery)}</span>` : "",
-      d.unload && d.unload !== "Нет" ? `<span class="tag warn">Подъём: ${e(d.unload)}</span>` : ""].filter(Boolean).join("");
-    detailsBlock = `<div class="hr"></div><div class="info">
-      <div class="r">${ic("pin")}<span class="trunc">${e(d.address || "Адрес уточняется")}</span></div>
-      <div class="r when">${ic("clock")}<span class="trunc">${e(whenLine(d, info, a))}</span>${agreeBadge}</div>
-      ${tags ? `<div class="tagrow">${tags}</div>` : ""}
-      ${info.note ? `<div class="note-line">${e(info.note)}</div>` : ""}
-    </div>`;
-  }
-
-  return `<div class="card order${p.status === "cancelled" ? " cancelled" : ""}${!d && live ? " is-new" : ""}" data-card="${i}" tabindex="0" aria-haspopup="dialog" style="--i:${Math.min(n, 8)}">
-    <div class="top">${cbBlock}<span class="pn">${e(p.posting_number)}</span><span class="ml">${badgeHtml}</span></div>
-    ${items}
-    ${detailsBlock}
-    ${primaryActions(p, i)}
-  </div>`;
+  const d = DELIV[p.posting_number], st = cardState(p), a = (p.customer || {}).address || {};
+  const [area, rest] = addrParts((d && d.address) || a.address_tail || a.city || "Адрес уточняется");
+  const info = d ? deliveryDetails(d.comment) : {};
+  const when = d ? whenLine(d, info, agreementOf(d)) : ozWindow(p);
+  const unload = d ? d.unload : unloadText(p.prr_option);
+  const cb = d && d.cb ? `<button type="button" class="m-cb" data-edit-cb="${e(p.posting_number)}" data-cur-cb="${e(d.cb)}" aria-label="Изменить номер ЦБ ${e(d.cb)}">${e(d.cb)}${ic("edit", "s")}</button>`
+    : st.cat === "new" ? `<span class="m-cb need">Без ЦБ</span>` : "";
+  const meta = [
+    `<span>${ic("box", "s")}${e(fmtLine(p))} · ${kgText(orderKg(p))}</span>`,
+    when ? `<span class="${d && !d.date ? "warn" : ""}">${ic("clock", "s")}${e(when)}</span>` : "",
+    unload && unload !== "Нет" ? `<span>${ic("lift", "s")}${e(unload)}</span>` : "",
+  ].filter(Boolean).join("");
+  const act = primaryActions(p, i);
+  return `<article class="m-oc st-${st.cat}" data-card="${i}" tabindex="0" aria-haspopup="dialog" style="--i:${Math.min(n, 10)}">
+    <div class="m-oc-top">${cb}${st.cat === "done" || st.cat === "cancel" ? `<span class="m-chip ${st.cls}">${e(st.chip)}</span>` : ""}<span class="m-oc-age">${e(ago(p.in_process_at))}</span></div>
+    <div class="m-oc-addr"><b>${e(area)}</b>${rest ? `<span>${e(rest)}</span>` : ""}</div>
+    <div class="m-oc-meta">${meta}</div>
+    ${st.cat === "courier" || st.cat === "new" ? flowLine(p) : ""}
+    <div class="m-oc-foot"><span class="m-oc-pn">${e(p.posting_number)}</span>${act}</div>
+  </article>`;
 }
 
 function primaryActions(p, i) {
-  if (isFbs(p)) return "";
+  if (isFbs(p) || !ADMIN() || !SCRIPT_URL) return "";
   const d = DELIV[p.posting_number];
-  if (!ADMIN() || !SCRIPT_URL) return "";
   if (!d) {
-    if (!["ship", "way"].includes(stage(p.status)[0])) return p.status === "delivered" ? `<div class="ozstate ok">${OZ_LINE.ok}</div>` : "";
-    return `<div class="acts"><button type="button" class="f1" data-sendsheet="${e(p.posting_number)}">${ic("send")}Отправить курьеру</button></div>`;
+    if (!["ship", "way"].includes(stage(p.status)[0])) return p.status === "delivered" ? `<span class="m-ozs ok">${OZ_LINE.ok}</span>` : "";
+    return `<button type="button" class="m-btn pri" data-sendsheet="${e(p.posting_number)}">${ic("send")}Отправить курьеру</button>`;
   }
-  const oz = ozState(p), line = oz ? `<div class="ozstate ${oz}">${OZ_LINE[oz]}</div>` : "";
-  const needOzon = !["delivered", "cancelled"].includes(p.status) && oz !== "wait", needSheet = d.status !== "Доставлен";
-  if (!needOzon && !needSheet) return line;
-  const tel = telHref(d.phone, d.ext);
-  const info = deliveryDetails(d.comment);
-  let foreman = "";
-  try { foreman = foremanPhone(info.foreman); } catch {}
-  const doneLabel = "Доставлено";
-  const callBtn = (foreman && needSheet) ? `<a class="btn ghost sq" href="tel:${e(foreman)}" aria-label="Позвонить прорабу" title="Прорабу">${ic("user")}</a>`
-    : (tel && needSheet) ? `<a class="btn ghost sq" href="${e(tel)}" aria-label="Позвонить клиенту" title="Клиенту">${ic("phone")}</a>` : "";
-
-  return `<div class="acts">
-    ${callBtn}
-    <button type="button" class="ghost sq" data-more="${i}" aria-label="Все действия">${ic("more")}</button>
-    <button type="button" class="f1 ${needSheet ? "ok" : ""}" data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">
-      ${ic("check")}${needSheet ? doneLabel : oz === "late" ? "Повторить в Ozon" : "Отметить в Ozon"}
-    </button>
-  </div>` + line;
+  if (d.status === "Отменён" || p.status === "cancelled") return "";
+  const oz = ozState(p), needOzon = !["delivered", "cancelled"].includes(p.status) && oz !== "wait", needSheet = d.status !== "Доставлен";
+  if (!needOzon && !needSheet) return oz ? `<span class="m-ozs ${oz}">${oz === "wait" ? ic("wait") + "Ждём Ozon" : OZ_LINE[oz]}</span>` : "";
+  if (needSheet && !isAccepted(d)) return `<button type="button" class="m-btn tint" data-remind="${e(p.posting_number)}">${ic("bell")}Напомнить</button>`;
+  return `<button type="button" class="m-btn ${needSheet ? "okt" : "warn"}" data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">${ic("check")}${needSheet ? "Доставлено" : oz === "late" ? "Повторить в Ozon" : "Отметить в Ozon"}</button>`;
 }
 
-// «Отправить курьеру»: шторка с ЦБ, оплатой, датой, временем, прорабом и пометкой
+// «Отправить курьеру»: подтверждение в шторке — ЦБ, оплата Рашаду (доставка + подъём), день и время
 function openSendSheet(posting) {
   const p = ORDERS.find(x => x.posting_number === posting);
   if (!p) return;
   if (isFbs(p)) { OTAB = "fbs"; drawOrders(true); toast("FBS остаётся на складе и Рашаду не отправляется"); return; }
   const a = (p.customer || {}).address || {}, prr = p.prr_option || {};
-  let m2 = "";
-  try {
-    const [, t] = calc(p, PRICES);
-    m2 = `<div style="text-align:right;flex:0 0 auto"><div class="k">на руки</div><div class="v num ${CLS[t.status[0]]}">${rub(t.payout_m2)}/м²</div></div>`;
-  } catch {}
-  const where = a.address_tail || a.city || "Адрес из заказа Ozon";
-  const lift = `Подъём: ${unloadText(prr).toLowerCase()}${parseFloat(prr.price) ? " · " + rub(prr.price) : ""}`;
+  const [area, rest] = addrParts(a.address_tail || a.city || "Адрес из заказа Ozon");
+  const dlv = Math.round(parseFloat(p.delivery_price) || 0), lift = Math.round(parseFloat(prr.price) || 0);
+  const iso = off => { const d = new Date(Date.now() + off * 864e5); return new Intl.DateTimeFormat("en-CA", {timeZone: "Europe/Moscow"}).format(d); };
+  const win = ozWindow(p);
   $("sheetPanel").innerHTML = `<div class="grab"></div>
-<div class="shead"><div><h2>Отправить курьеру</h2>
-<div class="mut num">${e(posting)} · ${e(p.products.map(x => `${x.quantity} уп ${tileFormat(x.offer_id, x.name) || x.offer_id}`).join(" + "))}</div></div>
-<button type="button" class="soft sq" data-close aria-label="Закрыть" style="width:36px;min-height:36px;height:36px;border-radius:18px">${ic("x")}</button></div>
-<form class="send" data-send="${e(posting)}">
-<div class="sum" style="margin-top:8px"><div class="grow"><div class="k trunc">${e(where)}</div><div class="v trunc">${e(lift)}</div></div>${m2}</div>
-${deliveryFields({}, p, true)}
-<div class="sdock"><button type="button" class="soft" data-close style="flex:0 0 112px">Отмена</button><button class="f1">${ic("send")}Отправить</button></div>
+<div class="m-sh-head"><div><div class="m-eyebrow">${ic("send", "s")}Отправка Рашаду</div><h2>${e(area)}</h2><div class="mut">${e(rest || posting)}</div></div>
+<button type="button" class="m-x" data-close aria-label="Закрыть">${ic("x")}</button></div>
+<div class="m-facts">
+  <div><span>Груз</span><b>${e(fmtLine(p))}</b><small>${kgText(orderKg(p))}</small></div>
+  <div><span>Подъём</span><b>${e(unloadText(prr))}</b><small>${lift ? "в заказе " + rub(lift) : "не заказан"}</small></div>
+  <div><span>Окно Ozon</span><b>${e(win || "—")}</b><small>${e(posting)}</small></div>
+</div>
+<form class="send m-send" data-send="${e(posting)}">
+  <label class="m-cbfield"><span>Номер ЦБ из 1С</span><span class="pref">ЦБ-<input name="cb" placeholder="970" aria-label="Номер ЦБ" inputmode="numeric" autocomplete="off" required></span></label>
+  <div class="m-pay"><div class="m-pay-h"><span>Оплата Рашаду</span><b id="sendTotal">${rub(dlv + lift)}</b></div>
+    <div class="g2"><label>Доставка, ₽<input name="delivery_pay" inputmode="numeric" value="${dlv || ""}" placeholder="0"></label>
+    <label>Подъём, ₽<input name="lift_pay" inputmode="numeric" value="${lift || ""}" placeholder="0"></label></div></div>
+  <div class="m-fl"><span>Когда везти</span>
+    <div class="m-seg" role="group" aria-label="День доставки">
+      <button type="button" data-day="${iso(0)}" aria-pressed="false">Сегодня</button><button type="button" data-day="${iso(1)}" aria-pressed="false">Завтра</button>
+      <input name="date" type="date" aria-label="Другая дата"></div>
+    <span class="slots">${DELIVERY_SLOTS.map(x => `<button type="button" data-slot="${x}" aria-pressed="false">${slotLabel(x)}</button>`).join("")}</span>
+    <input name="time" placeholder="или своё время, например: с 9 до 11" maxlength="100" aria-label="Время доставки"></div>
+  <details class="m-more-f"><summary>${ic("note", "s")}Прораб и пометка для курьера${ic("chev", "s m-chev")}</summary>
+    <label>Телефон прораба<input name="foreman" type="tel" placeholder="+7 900 000-00-00" maxlength="30"></label>
+    <label>Пометка для курьера<textarea name="note" rows="3" maxlength="2000" placeholder="Например: позвонить прорабу за час"></textarea></label>
+    ${a.comment ? `<p class="m-hint">Комментарий покупателя «${e(a.comment)}» Рашад увидит автоматически.</p>` : ""}
+  </details>
+  <p class="m-hint">${ic("alert", "s")}Финансы магазина Рашаду не уходят — только адрес, груз и его оплата.</p>
+  <div class="sdock"><button type="button" class="soft" data-close style="flex:0 0 112px">Отмена</button><button class="f1 m-go">${ic("send")}Отправить · <span id="sendTotal2">${rub(dlv + lift)}</span></button></div>
 </form>`;
   sheetShow();
   setTimeout(() => $("sheetPanel").querySelector("input[name=cb]")?.focus({preventScroll: true}), 350);
 }
+document.addEventListener("input", ev => {
+  const f = ev.target.closest && ev.target.closest("form[data-send]");
+  if (!f) return;
+  const sum = (Number(f.elements.delivery_pay.value) || 0) + (Number(f.elements.lift_pay.value) || 0);
+  ["sendTotal", "sendTotal2"].forEach(id => { if ($(id)) $(id).textContent = rub(sum); });
+  if (ev.target.name === "date") f.querySelectorAll("[data-day]").forEach(b => b.setAttribute("aria-pressed", b.dataset.day === ev.target.value));
+  if (ev.target.name === "time") f.querySelectorAll("[data-slot]").forEach(b => b.setAttribute("aria-pressed", b.dataset.slot === ev.target.value));
+});
+document.addEventListener("click", ev => {
+  const b = ev.target.closest && ev.target.closest("[data-day]");
+  if (!b) return;
+  const f = b.closest("form");
+  const on = b.getAttribute("aria-pressed") !== "true";
+  f.elements.date.value = on ? b.dataset.day : "";
+  f.querySelectorAll("[data-day]").forEach(x => x.setAttribute("aria-pressed", on && x === b));
+});
 
-// Этапы заказа для истории в меню: Ozon → курьеру → дата → согласовано → курьер доставил → отмечено в Ozon
+// Этапы заказа для истории: Ozon → курьеру → дата → согласовано → курьер доставил → отмечено в Ozon
 function orderSteps(p, d) {
-  const oz = ozState(p), when = new Date(p.in_process_at).toLocaleString("ru-RU", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"}).replace(",", "");
+  const oz = ozState(p), when = new Date(p.in_process_at).toLocaleString("ru-RU", {timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"}).replace(",", "");
   const time = d ? deliveryDetails(d.comment).time : "";
   return [
     {label: "Заказ в Ozon", when, done: true},
@@ -875,39 +1020,65 @@ function orderSteps(p, d) {
   ];
 }
 
-// Меню «⋯»: все остальные действия, по группам
+// Карточка заказа: справа на компьютере, шторкой снизу на телефоне
 function openSheet(i) {
   const p = ORDERS[i];
   if (!p) return;
   if (isFbs(p)) { OTAB = "fbs"; drawOrders(true); toast("Действия FBS — на вкладке склада, Рашаду заказ не уходит"); return; }
-  const d = DELIV[p.posting_number];
+  const d = DELIV[p.posting_number], st = cardState(p), a = (p.customer || {}).address || {};
   const done = d && d.status === "Доставлен";
   const tel = d ? telHref(d.phone, d.ext) : "";
   const info = d ? deliveryDetails(d.comment) : {};
   let foreman = "";
   try { foreman = foremanPhone(info.foreman); } catch {}
-  const foremanRow = foreman ? `<a class="sitem" href="tel:${e(foreman)}">${ic("user")}Позвонить прорабу</a>` : "";
-  const row = (inner) => `<div class="srow">${inner}</div>`;
-  const callRow = tel ? `<a class="sitem" href="${e(tel)}">${ic("phone")}Позвонить клиенту${d.ext ? `<span class="mut">доб. ${e(String(d.ext).padStart(4, "0"))}</span>` : ""}</a>`
-    : ["ship", "way"].includes(stage(p.status)[0]) ? `<button class="sitem" data-call="${e(p.posting_number)}">${ic("phone")}Позвонить клиенту</button>` : "";
+  const [area, rest] = addrParts((d && d.address) || a.address_tail || a.city || "Адрес уточняется");
+  const live = ["ship", "way"].includes(stage(p.status)[0]);
   const needOzon = d && !["delivered", "cancelled"].includes(p.status) && ozState(p) !== "wait";
-  const doneBtnText = done ? "Отметить доставленным в Ozon" : "Доставлено";
+  const notes = d ? courierNotes(d.courier_comment) : {};
+  const qa = [
+    tel ? `<a class="m-qa" href="${e(tel)}">${ic("phone")}<span>Клиенту</span></a>` : live ? `<button type="button" class="m-qa" data-call="${e(p.posting_number)}">${ic("phone")}<span>Клиенту</span></button>` : "",
+    foreman ? `<a class="m-qa" href="tel:${e(foreman)}">${ic("user")}<span>Прорабу</span></a>` : "",
+    d && !done && d.status !== "Отменён" ? `<button type="button" class="m-qa" data-remind="${e(p.posting_number)}">${ic("bell")}<span>Напомнить</span></button>` : "",
+    (d && d.lat) || a.latitude ? `<button type="button" class="m-qa" data-mapgo="${e(p.posting_number)}">${ic("map")}<span>На карте</span></button>` : "",
+    `<a class="m-qa" href="https://seller.ozon.ru/app/postings/fbs?search=${encodeURIComponent(p.posting_number)}" target="_blank" rel="noopener">${ic("nav")}<span>В Ozon</span></a>`,
+    `<button type="button" class="m-qa" data-copy="${i}">${ic("copy")}<span>Копировать</span></button>`,
+  ].filter(Boolean).join("");
+  let econ = "";
+  try {
+    econ = p.products.map(x => {
+      const [, t] = calc({...p, products: [x]}, PRICES, 0, 0);
+      const delta = Math.round(t.payout_m2 - t.floor);
+      return `<div class="m-econ-r"><div><b>${x.quantity} уп · ${e(tileFormat(String(x.offer_id), x.name) || x.offer_id)}</b><small>${e(shortName(x.name).replace(/^Керамогранит\s+/i, ""))}</small></div>` +
+        `<div class="m-econ-v ${CLS[t.status[0]]}"><b>${money(t.payout_m2)} ₽/м²</b><small>${delta < 0 ? `−${-delta} ₽ ниже порога` : `+${delta} ₽ к порогу`}</small></div></div>`;
+    }).join("");
+  } catch {}
+  const primary = !ADMIN() || !SCRIPT_URL ? "" : !d && live ? `<button type="button" class="f1 m-go" data-sendsheet="${e(p.posting_number)}">${ic("send")}Отправить курьеру</button>`
+    : d && d.status !== "Отменён" && p.status !== "cancelled" && (needOzon || !done) ? `<button type="button" class="f1 m-go ok" data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">${ic("check")}${done ? "Отметить доставленным в Ozon" : "Доставлено"}</button>` : "";
   $("sheetPanel").innerHTML = `<div class="grab"></div>
-<div class="shead"><div><b>${d ? e(d.cb) + " · " : ""}${p.products.map(x => x.quantity + " уп").join(" + ")}</b>
-<div class="mut">${e(p.posting_number)}${d && d.address ? " · " + e(d.address) : ""}</div></div>${badge(p.status)}</div>
-${p.status === "cancelled" ? "" : timelineHtml(orderSteps(p, d))}
-${d && courierNotes(d.courier_comment).text ? `<div class="sum" style="margin:8px 0 0"><div class="grow"><div class="k">Комментарий курьера</div><div style="white-space:pre-line">${e(courierNotes(d.courier_comment).text)}</div></div></div>` : ""}
-${d && (courierNotes(d.courier_comment).enroute || courierNotes(d.courier_comment).onsite) ? `<div class="mut" style="margin:8px 0 0">${[courierNotes(d.courier_comment).enroute && "В пути · " + courierNotes(d.courier_comment).enroute.at, courierNotes(d.courier_comment).onsite && "На месте · " + courierNotes(d.courier_comment).onsite.at].filter(Boolean).join(" · ")}</div>` : ""}
-${callRow || foremanRow || (d && !done) ? `<div class="sgroup">Связь</div>${callRow}${foremanRow}${d && !done ? `<button class="sitem" data-remind="${e(p.posting_number)}">${ic("bell")}Напомнить курьеру</button>` : ""}` : ""}
-<div class="sgroup">Заказ</div>
-${ozonInfoHtml(info.ozon)}
-<button class="sitem" data-ozon-info="${e(p.posting_number)}">${ic("truck")}Обновить данные из Ozon</button>
-${d && ADMIN() && SCRIPT_URL ? `<details class="sitem-details"><summary class="sitem">${ic("edit")}Пометка, время и прораб · оплата</summary>` +
+<div class="m-sh-head"><div><div class="m-eyebrow"><span class="m-chip ${st.cls}">${e(st.chip)}</span>${d && d.cb ? `<button type="button" class="m-cb" data-edit-cb="${e(p.posting_number)}" data-cur-cb="${e(d.cb)}">${e(d.cb)}${ic("edit", "s")}</button>` : ""}</div>
+<h2>${e(area)}</h2><div class="mut">${e(rest)}</div></div>
+<button type="button" class="m-x" data-close aria-label="Закрыть">${ic("x")}</button></div>
+<div class="m-qas">${qa}</div>
+<div class="m-facts">
+  <div><span>Груз</span><b>${e(fmtLine(p))}</b><small>${kgText(orderKg(p))}</small></div>
+  <div><span>${d ? "Когда" : "Окно Ozon"}</span><b>${e(d ? whenLine(d, info, agreementOf(d)) : ozWindow(p) || "—")}</b><small>${d && ozWindow(p) ? "Ozon: " + e(ozWindow(p)) : "время московское"}</small></div>
+  <div><span>Подъём</span><b>${e(d ? d.unload || "Нет" : unloadText(p.prr_option))}</b><small>${d ? "Рашаду " + rub((Number(d.delivery) || 0) + (Number(d.lift) || 0)) : "оплата при отправке"}</small></div>
+</div>
+
+${notes.text ? `<div class="m-quote"><span>Комментарий Рашада</span>${e(notes.text)}</div>` : ""}
+${info.note ? `<div class="m-quote soft"><span>Пометка для курьера</span>${e(info.note)}</div>` : ""}
+<div class="sgroup">Путь заказа · время московское</div>
+${flowTimeline(p)}
+${d && ozState(p) ? `<div class="m-ozs ${ozState(p)}">${OZ_LINE[ozState(p)]}</div>` : ""}
+${econ ? `<div class="sgroup">Экономика · только для вас</div><div class="m-econ">${econ}</div>` : ""}
+<div class="sgroup">Ещё</div>
+${d && ADMIN() && SCRIPT_URL ? `<details class="sitem-details"><summary class="sitem">${ic("edit")}Изменить дату, время, прораба, оплату${ic("chev", "s m-chev")}</summary>` +
   `<form data-schedule="${e(p.posting_number)}">${deliveryFields(d, p)}<button>Сохранить изменения</button></form></details>` : ""}
-<button class="sitem" data-open="${e(p.posting_number)}">${ic("chart")}Расчёт ₽/м²</button>
-<button class="sitem" data-copy="${i}">${ic("copy")}Скопировать для отчёта</button>
-${d && (needOzon || !done) && ADMIN() && SCRIPT_URL ? `<button class="ok wide" data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">${doneBtnText}</button>` : ""}
-<button class="text wide" data-close>Закрыть</button>`;
+<button class="sitem" data-open="${e(p.posting_number)}">${ic("chart")}Полный расчёт ₽/м²</button>
+<details class="sitem-details"><summary class="sitem">${ic("orders")}Данные Ozon${ic("chev", "s m-chev")}</summary>${ozonInfoHtml(info.ozon)}
+<button class="sitem" data-ozon-info="${e(p.posting_number)}">${ic("refresh")}Обновить данные из Ozon</button></details>
+<div class="m-pn-line">Отправление <b>${e(p.posting_number)}</b> · ${e(ago(p.in_process_at))}</div>
+${primary ? `<div class="sdock">${primary}</div>` : ""}`;
   sheetShow();
 }
 const closeSheet = sheetHide;
@@ -922,12 +1093,84 @@ async function loadPays() {
     if (!/Неизвестное действие/.test(err.message || "")) PAYS_ERR = "Не удалось загрузить выплаты";
   }
 }
+// Раздел «Курьер»: карточка Рашада (связь, батарея, прогресс дня) и выплаты
+function drawCourier() {
+  const el = $("rashadCard");
+  if (!el) return;
+  if (!(ADMIN() && SCRIPT_URL)) { el.innerHTML = `<div class="m-empty"><div class="m-empty-ic">${ic("link")}</div><b>Таблица доставок не подключена</b><p>Вставьте ссылку доступа в настройках.</p><button type="button" class="m-btn tint" data-view="settings">Открыть настройки</button></div>`; return; }
+  const latest = RASHAD && RASHAD.latest, on = rashadOnline(latest), today = todayStr();
+  const rows = rashadDeliveries(Object.values(DELIV || {}));
+  let active = 0, accepted = 0, agreed = 0, enroute = 0, onsite = 0, doneToday = 0, kg = 0;
+  for (const r of rows) {
+    if (r.status === "Доставлен" && String(r.delivered_at || "").includes(today.slice(0, 5))) doneToday++;
+    if (r.status !== "Новый" && r.status !== "Согласован") continue;
+    const p = ORDERS.find(x => x.posting_number === r.posting);
+    if (p && (p.status === "cancelled" || p.status === "delivered")) continue;
+    active++;
+    if (p) kg += orderKg(p);
+    const n = courierNotes(r.courier_comment);
+    if (isAccepted(r)) accepted++;
+    if (agreementOf(r)) agreed++;
+    if (n.enroute && !n.onsite) enroute++;
+    if (n.onsite) onsite++;
+  }
+  const total = active + doneToday, pct = total ? doneToday / total : 0;
+  const batt = latest && latest.battery != null ? Math.round(latest.battery * 100) : null;
+  const stat = (v, t) => `<div><b>${v}</b><span>${t}</span></div>`;
+  el.innerHTML = `<section class="m-card m-rashad">
+    <div class="m-rh"><span class="m-ava ${on ? "on" : ""}">Р</span><div class="grow"><b>Рашад</b><span class="${on ? "m-on" : ""}" data-rseen>${e(geoSeenText(latest, Date.now()))}</span></div>
+    ${batt != null ? `<span class="m-batt ${batt < 20 ? "low" : ""}" title="Заряд телефона"><i style="--b:${batt}"></i>${batt}%</span>` : ""}</div>
+    <div class="m-prog"><div class="m-prog-h"><span>Сегодня</span><b>${doneToday} из ${total} доставлено</b></div><div class="m-bar"><i style="--p:${pct}"></i></div></div>
+    <div class="m-rstats">${stat(accepted, "принял")}${stat(agreed, "согласовал")}${stat(enroute, "в пути")}${stat(onsite, "на месте")}${stat(kgText(kg).replace("~", ""), "в машине")}</div>
+    <div class="m-ract"><button type="button" class="m-btn tint" data-view="map">${ic("map")}На карте</button>
+    <a class="m-btn ghost" href="courier.html?admin=1" target="_blank" rel="noopener">${ic("truck")}Экран Рашада</a></div>
+    <p class="m-hint">Местоположение приходит, пока у Рашада открыто приложение.</p>
+  </section>${rashadOrdersHtml()}`;
+}
+
+function rashadOrdersHtml() {  // заказы у Рашада с текущим этапом
+  const items = (ORDERS || []).map((p, i) => [p, i]).filter(([p]) => !isFbs(p) && otabCategory(p) === "courier").map(([p, i]) => [p, i, flowOf(p)]).sort((a, b) => b[2].cur - a[2].cur);
+  if (!items.length) return "";
+  return `<section class="m-card m-board"><div class="m-card-h"><h2>Сейчас у Рашада <em>${items.length}</em></h2></div><ul>${items.map(([p, i, f]) => {
+    const d = DELIV[p.posting_number];
+    return `<li><button type="button" class="m-brow k-${f.now.k}" data-board="${i}"><span class="m-brow-ic">${ic(f.now.icon, "s")}</span>` +
+      `<span class="m-brow-t"><b>${e(d && d.cb ? d.cb : "Без ЦБ")} · ${e(addrParts((d && d.address) || "")[0])}</b><small>${e(fmtLine(p))}</small></span>` +
+      `<span class="m-brow-s"><b>${e(f.now.label)}</b><small>${e(f.now.when || "")}</small></span><span class="m-brow-bar"><i style="--p:${f.cur / 6}"></i></span></button></li>`;
+  }).join("")}</ul></section>`;
+}
+function payoutsHtml() {
+  if (PAYS_ERR) return `<section class="m-card m-errcard" role="alert"><div class="m-empty-ic red">${ic("alert")}</div><b>Не удалось загрузить выплаты</b>
+    <p>Таблица сейчас не ответила. Суммы не показываем, чтобы не перепутать начисленное с остатком к оплате.</p>
+    <button type="button" class="m-btn pri" data-pay-retry>${ic("refresh")}Повторить</button></section>`;
+  const rep = deliveryReport(rashadDeliveries(Object.values(DELIV)), PAYS);
+  const left = rep.hasPayments ? rep.left : rep.done.pay;
+  const today = new Date().toISOString().slice(0, 10);
+  const pays = [...rep.payments].reverse().map(p => `<li><div><b>${rub(num(p.amount))}</b><small>${e(p.date)}${p.comment ? " · " + e(p.comment) : ""}</small></div>` +
+    `${p.id ? `<button type="button" class="m-del" data-unpay="${e(p.id)}" aria-label="Удалить выплату">${ic("x", "s")}</button>` : ""}</li>`).join("");
+  const months = rep.months.map(m => `<li><div><b>${e(m.label)}</b><small>${plural(m.n, "доставка", "доставки", "доставок")} · доставка ${rub(m.delivery)} · подъём ${rub(m.lift)}</small></div><b>${rub(m.pay)}</b></li>`).join("");
+  return `<section class="m-card m-payouts">
+    <div class="m-card-h"><h2>Выплаты Рашаду</h2>${rep.active.n ? `<span class="mut">в работе ${rub(rep.active.pay)}</span>` : ""}</div>
+    <div class="m-money3">
+      <div><span>Начислено</span><b class="money" data-count="${Math.round(rep.done.pay)}"><span>${money(rep.done.pay)}</span><small>₽</small></b></div>
+      <div><span>Выплачено</span><b class="money" data-count="${Math.round(rep.paid)}"><span>${money(rep.paid)}</span><small>₽</small></b></div>
+      <div class="hl ${left < 0 ? "neg" : ""}"><span>${left < 0 ? "Переплата" : "Осталось"}</span><b class="money" data-count="${Math.round(Math.abs(left))}"><span>${money(left)}</span><small>₽</small></b></div>
+    </div>
+    ${rep.hasPayments ? `<form class="m-payform" data-pay>
+      <input name="amount" inputmode="numeric" placeholder="Сумма, ₽" aria-label="Сумма выплаты" required>
+      <input name="date" type="date" value="${today}" aria-label="Дата выплаты">
+      <input name="comment" placeholder="Комментарий, например «наличные»" aria-label="Комментарий">
+      <button class="m-btn pri">${ic("check")}Записать выплату</button></form>
+      <h3 class="m-sub">История выплат</h3>${pays ? `<ul class="m-rows">${pays}</ul>` : '<p class="mut">Выплат пока не записано</p>'}`
+      : '<p class="mut">Чтобы учитывать выплаты, обновите скрипт таблицы.</p>'}
+    ${months ? `<details class="m-months"><summary>${ic("cal", "s")}По месяцам${ic("chev", "s m-chev")}</summary><ul class="m-rows">${months}</ul></details>` : ""}
+  </section>`;
+}
 function drawReport() {
   const open = !!document.querySelector("#report details[open]");
-  $("dlvLink").hidden = !(ADMIN() && SCRIPT_URL);
-  $("report").innerHTML = ADMIN() && SCRIPT_URL ? reportHtml(deliveryReport(rashadDeliveries(Object.values(DELIV)), PAYS),
-    {title: "Выплаты и расчёт с курьером", leftLabel: "", admin: true, paysError: PAYS_ERR}) : "";
+  $("report").innerHTML = ADMIN() && SCRIPT_URL ? payoutsHtml() : "";
   if (open) document.querySelector("#report details")?.setAttribute("open", "");
+  tickCount($("report"));
+  drawCourier();
 }
 
 $("report").addEventListener("submit", async ev => {
@@ -942,6 +1185,8 @@ $("report").addEventListener("submit", async ev => {
       date: d.date.value ? d.date.value.split("-").reverse().join(".") : "", comment: d.comment.value.trim()}});
     PAYS.push(p);
     drawReport();
+    drawOwnerDash();
+    toast("Выплата записана ✓");
   } catch (err) {
     toast(err.message, true);
     btn.disabled = false;
@@ -960,6 +1205,7 @@ $("report").addEventListener("click", async ev => {
     await sheetApi({action: "unpay", key: ADMIN(), id: b.dataset.unpay});
     PAYS = PAYS.filter(p => p.id !== b.dataset.unpay);
     drawReport();
+    drawOwnerDash();
   } catch (err) { toast(err.message, true); }
 });
 
@@ -1018,7 +1264,8 @@ function readDeliveryFields(form) {
     time: f.time?.value.trim() || "",
     foreman: f.foreman ? foremanPhone(f.foreman.value) : "",
     note: f.note?.value.trim() || "",
-    delivery_pay: f.delivery_pay?.value.trim() ?? ""
+    delivery_pay: f.delivery_pay?.value.trim() ?? "",
+    lift_pay: f.lift_pay?.value.trim() ?? ""
   };
 }
 
@@ -1125,23 +1372,35 @@ function drawDlvState() {
     : "Не подключено — вставьте вашу ссылку доступа";
   $("dlvIc").className = "lic " + (ADMIN() ? "g" : "a");
 }
-// Нижние вкладки: «Заказы» — список, «Расчёт» — поле номера и расчёт ₽/м², «Настройки»
+// Разделы: «Заказы», «Карта», «Курьер», «Расчёт», «Настройки» — нижнее меню на телефоне, боковое на компьютере
+const VIEWS = {orders: "Заказы", map: "Карта", courier: "Курьер", calc: "Расчёт ₽/м²", settings: "Настройки"};
 function setView(v) {
+  if (!VIEWS[v]) v = "orders";
+  const was = document.body.dataset.view;
   document.body.dataset.view = v;
   const st = v === "settings";
   $("settings").hidden = !st;
-  $("ltTitle").textContent = st ? "Настройки" : v === "calc" ? "Расчёт ₽/м²" : "Заказы";
-  $("ltSub").hidden = st;
-  $("gear").setAttribute("aria-expanded", st);
-  document.querySelectorAll(".tabbar [data-view]").forEach(b => b.setAttribute("aria-selected", b.dataset.view === v));
+  $("ltTitle").textContent = VIEWS[v];
+  $("ltSub").hidden = st || v === "calc";
+  document.querySelectorAll(".m-nav [data-view], .m-side [data-view]").forEach(b => {
+    if (b.dataset.view === v) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+  });
   if (st) { mountThemeSwitch($("themeSw")); drawDlvState(); }
-  scrollTo({top: 0});
+  if (v === "courier") { drawCourier(); tickCount($("report")); }
+  if (mapVisible() && ORDERS.length) { if (was !== v) OMAP_KEY = ""; drawOwnerMap(); setTimeout(() => OMAP && OMAP.resize(), 60); }
+  if (was !== v) {
+    const pane = document.querySelector(`[data-pane~="${v}"]`) || $("settings");
+    if (pane && !REDUCED() && v !== "map" && was !== "map") { pane.classList.remove("m-enter"); void pane.offsetWidth; pane.classList.add("m-enter"); }
+    scrollTo({top: 0});
+  }
 }
-document.querySelector(".tabbar").addEventListener("click", ev => {
-  const b = ev.target.closest("button[data-view]");
+document.addEventListener("click", ev => {
+  const b = ev.target.closest && ev.target.closest("button[data-view], [data-go]");
   if (!b) return;
-  setView(b.dataset.view);
-  if (b.dataset.view === "calc" && !$("out").innerHTML) $("n").focus();
+  const v = b.dataset.view || b.dataset.go;
+  if (!$("sheet").hidden) closeSheet();
+  setView(v);
+  if (v === "calc" && !$("out").innerHTML) $("n").focus();
 });
 $("accessForm").onsubmit = ev => {
   ev.preventDefault();
@@ -1403,6 +1662,25 @@ $("app").addEventListener("click", async ev => {
   }
 });
 $("reload").onclick = () => busyBtn($("reload"), () => loadOrders());
+// Новые элементы главного экрана: «В работе», карта, «Показать ещё»
+$("app").addEventListener("click", ev => {
+  const br = ev.target.closest("[data-board]");
+  if (br) { openSheet(+br.dataset.board); return; }
+  if (ev.target.closest("[data-showdone]")) { SHOW_DONE = true; drawOrders(); return; }
+  const fly = ev.target.closest("[data-flyto], [data-mapgo]");
+  if (fly) {
+    const num = fly.dataset.flyto || fly.dataset.mapgo, d = DELIV[num], p = ORDERS.find(x => x.posting_number === num), a = (p && p.customer || {}).address || {};
+    const ll = d && d.lat ? [+d.lat, +d.lon] : a.latitude ? [+a.latitude, +a.longitude] : null;
+    if (fly.dataset.mapgo) { closeSheet(); setView("map"); }
+    if (ll) setTimeout(() => OMAP && OMAP.flyTo({center: [ll[1], ll[0]], zoom: 14, duration: REDUCED() ? 0 : 700}), fly.dataset.mapgo ? 250 : 0);
+    if (fly.dataset.flyto && p) openSheet(ORDERS.indexOf(p));
+  }
+});
+$("reload2").onclick = () => busyBtn($("reload2"), () => loadOrders());
+function skelKpis() {
+  return `<div class="m-kpis m-sk" aria-hidden="true">${'<div class="m-kpi"><i class="skl w50 xs"></i><i class="skl ttl w40"></i><i class="skl w70 xs"></i></div>'.repeat(4)}</div>`;
+}
+
 $("export").onclick = () => {
   const cell = value => '"' + String(value ?? "").replace(/"/g, '""') + '"';
   const rows = [["Отправление", "Заказ Ozon", "Статус", "Создан", "Отгрузка до", "ЦБ", "Получатель", "Телефон", "Адрес", "Товары", "Вес, кг", "Доставка", "Окно доставки", "Склад"]];

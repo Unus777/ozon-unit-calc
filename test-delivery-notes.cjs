@@ -33,7 +33,8 @@ assert.equal(geoKept[1].comment, undefined);
 assert.equal(geoKept[1].lat, 1);
 assert.equal(geoVm.recordHeartbeat(Array.from({length: 50}, (_, i) => ({ts: i})), {ts: 7}, now).length, 50);
 const courierPage = read('courier.html');
-assert.match(courierPage, /Где вы на смене/);
+assert.doesNotMatch(courierPage, /Где вы на смене|Местоположение передаётся/);  // гео запрашивается молча
+assert.match(courierPage, /function heartbeat/);
 assert.match(courierPage, /action: "ping"/);
 assert.match(courierPage, /90000/);
 assert.match(read('index.html'), /action: "where"/);

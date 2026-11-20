@@ -44,7 +44,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 @media(prefers-reduced-motion:reduce){.sp-logo,.sp-logo::before,.sp-logo::after,.sp-road::before,.sp-truck,.sp-truck svg{animation:none}
 .sp-logo::before,.sp-logo::after{display:none}.sp-truck{transform:translateX(69px)}#splash,.sp-in{transition:none}}
 </style>
-<link rel="stylesheet" href="style.css?v=43">
+<link rel="stylesheet" href="style.css?v=44">
 <link rel="icon" href="icons/courier.svg?v=39" type="image/svg+xml">
 <link rel="icon" href="icons/courier-32.png?v=39" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/courier-180.png?v=39" sizes="180x180">
@@ -59,18 +59,12 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 <header class="hdr"><div class="bar">
 <div class="logo" aria-hidden="true">А</div>
 <div class="grow"><div class="brand">Доставки <span id="subtitle">Алмалы</span></div></div>
-<span id="geoState" class="geo-on" hidden>Местоположение передаётся</span>
 <button class="ibtn" id="themeBtn" aria-label="Сменить тему"></button><button class="ibtn" id="reload" aria-label="Обновить"></button>
 </div></header>
 <main style="padding-top:8px">
 <div class="card" id="nokey" hidden><h3>Нет доступа</h3><p class="mut">Откройте ссылку, которую прислал владелец магазина.</p></div>
 
 <div id="app" hidden>
-<div class="card" id="geoAsk" hidden>
-<h3>Где вы на смене</h3>
-<p class="mut">Пока это приложение открыто, раз в минуту Юнус видит вашу точку на карте. В фоне телефон её не отправляет. Если отказаться, уйдёт только время, когда приложение было открыто.</p>
-<div class="actions two" style="margin-top:10px"><button type="button" id="geoYes">Поделиться местоположением</button><button type="button" class="soft" id="geoNo">Не сейчас</button></div>
-</div>
 <div class="card" id="notif" hidden></div>
 <div id="driverHero"></div>
 <div id="owed"></div>
@@ -954,40 +948,21 @@ async function setupNotif() {
   };
 }
 
-let GEO_SHARE = false;
-function geoFlag(on) { const el = $("geoState"); if (el) el.hidden = !on; }
+// Пульс курьера: время и (если телефон разрешил) точка. Разрешение спрашивает сам браузер один раз;
+// отказ — уходит только время, когда приложение было открыто. Режим владельца пульс не шлёт.
 function readPos() {
   if (!navigator.geolocation) return Promise.resolve(null);
   return new Promise(resolve => navigator.geolocation.getCurrentPosition(
     p => resolve(p), () => resolve(null), {enableHighAccuracy: true, timeout: 8000, maximumAge: 60000}));
 }
 async function heartbeat() {
-  if (!KEY || document.hidden) return;
+  if (!KEY || IS_ADMIN || document.hidden) return;
   const data = {ts: Date.now()};
-  if (GEO_SHARE) {
-    const pos = await readPos();
-    if (pos) { data.lat = pos.coords.latitude; data.lng = pos.coords.longitude; data.acc = pos.coords.accuracy; geoFlag(true); }
-    else geoFlag(false);
-  } else geoFlag(false);
+  const pos = await readPos();
+  if (pos) { data.lat = pos.coords.latitude; data.lng = pos.coords.longitude; data.acc = pos.coords.accuracy; }
   try { const bat = navigator.getBattery ? await navigator.getBattery() : null; if (bat && bat.level != null) data.battery = bat.level; } catch {}
   try { await api({action: "ping", data}); } catch {}
 }
-function chooseGeo(on) {
-  GEO_SHARE = on;
-  try { localStorage.setItem("dlv_geo", on ? "1" : "0"); } catch {}
-  $("geoAsk").hidden = true;
-  heartbeat();
-}
-function startGeo() {
-  let saved = "";
-  try { saved = localStorage.getItem("dlv_geo") || ""; } catch {}
-  if (!saved) { $("geoAsk").hidden = false; return; }
-  GEO_SHARE = saved === "1";
-  heartbeat();
-}
-if ($("geoYes")) $("geoYes").onclick = () => chooseGeo(true);
-if ($("geoNo")) $("geoNo").onclick = () => chooseGeo(false);
-
 if (KEY) {
   $("courierTabs").hidden = false;
   $("app").hidden = false;
@@ -996,7 +971,7 @@ if (KEY) {
   load();
   if (IS_ADMIN) document.querySelector(".brand span").textContent = "режим владельца";
   else setupNotif();
-  startGeo();
+  heartbeat();
   setInterval(() => { if (!document.hidden) heartbeat(); }, 90000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) heartbeat(); });
   setInterval(() => { if (!document.hidden) load(); }, 60000);
