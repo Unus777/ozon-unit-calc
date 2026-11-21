@@ -54,27 +54,59 @@ function archiveRange(list, from, to) {
     .sort((a, b) => (b[2].day || "").localeCompare(a[2].day || ""));
 }
 
+// Доставка и подъём, которые оплатил клиент, по данным Ozon: delivery_price и prr_option.price отправления
+// (/v3/posting/fbs/get; в списке /v4/posting/fbs/list их может не быть — тогда берём из кэша, заполненного запросом get).
+function ozonLogistics(p, cache) {
+  const prr = (p && p.prr_option) || {};
+  const own = {delivery: parseFloat(p && p.delivery_price) || 0, lift: prr.code && prr.code !== "none" ? parseFloat(prr.price) || 0 : 0};
+  const c = cache && p && cache[p.posting_number];
+  const hasOwn = p && p.delivery_price != null && String(p.delivery_price) !== "";
+  if (!hasOwn && c) return {delivery: Number(c.delivery) || 0, lift: own.lift || Number(c.lift) || 0, known: true};
+  return Object.assign(own, {known: hasOwn || !!prr.code});
+}
+// Оплата Рашаду: вписанное вручную (> 0) всегда главнее; пусто или 0 — берём из Ozon и помечаем auto
+function courierPay(row, oz) {
+  const d = num(row && row.delivery), l = num(row && row.lift);
+  return {delivery: d > 0 ? d : oz.delivery, lift: l > 0 ? l : oz.lift,
+    deliveryAuto: !(d > 0) && oz.delivery > 0, liftAuto: !(l > 0) && oz.lift > 0};
+}
 // Деньги заказа: товар из Ozon, доставка и подъём клиента, оплата Рашаду, экономика товара и итоговая прибыль.
-function orderMoney(p, row, prices) {
+function orderMoney(p, row, prices, cache) {
   const goods = (p.products || []).reduce((s, x) => s + (parseFloat(x.price && x.price.amount != null ? x.price.amount : x.price) || 0) * (Number(x.quantity) || 0), 0);
-  const prr = p.prr_option || {};
-  const clientDelivery = parseFloat(p.delivery_price) || 0;
-  const clientLift = prr.code && prr.code !== "none" ? parseFloat(prr.price) || 0 : 0;
-  const sent = !!row;
-  const cDelivery = sent ? num(row.delivery) : clientDelivery, cLift = sent ? num(row.lift) : clientLift;
-  const courier = cDelivery + cLift;
+  const oz = ozonLogistics(p, cache);
+  const pay = courierPay(row, oz);
+  const courier = pay.delivery + pay.lift;
   let t = null;
   try { t = calc(p, prices || {}, 0, 0)[1]; } catch { t = null; }
   const goodsProfit = t ? t.profit : null;
-  const profit = t ? goodsProfit + clientDelivery + clientLift - courier : null;
-  return {goods, clientDelivery, clientLift, client: goods + clientDelivery + clientLift, courierDelivery: cDelivery, courierLift: cLift, courier,
-    planned: !sent, t, goodsProfit, profit, perM2: t ? t.payout_m2 : null, floor: t ? t.floor : null,
+  const profit = t ? goodsProfit + oz.delivery + oz.lift - courier : null;
+  return {goods, clientDelivery: oz.delivery, clientLift: oz.lift, client: goods + oz.delivery + oz.lift, ozKnown: oz.known,
+    courierDelivery: pay.delivery, courierLift: pay.lift, courier, deliveryAuto: pay.deliveryAuto, liftAuto: pay.liftAuto,
+    auto: pay.deliveryAuto || pay.liftAuto, planned: !row, t, goodsProfit, profit, perM2: t ? t.payout_m2 : null, floor: t ? t.floor : null,
     level: t ? t.status[0] : ""};
 }
-function sumMoney(list, deliv, prices) {
+// Строки у Рашада (ещё в работе), где доставка или подъём не вписаны, а в Ozon сумма есть: что дописать в лист.
+// keep — отправления, где менеджер сам поставил 0: их не трогаем.
+function ozonPayFill(p, row, cache, keep) {
+  if (!p || !row || isAlmalyFbs(p) || isFbsSheetRow(row) || (keep && keep[p.posting_number])) return null;
+  if (row.status !== "Новый" && row.status !== "Согласован") return null;
+  const pay = courierPay(row, ozonLogistics(p, cache));
+  if (!pay.deliveryAuto && !pay.liftAuto) return null;
+  const out = {};
+  if (pay.deliveryAuto) out.delivery = String(pay.delivery);
+  if (pay.liftAuto) out.lift = String(pay.lift);
+  return out;
+}
+// Поле формы: пусто → значение из Ozon; число (в т. ч. 0) → как вписано
+function payField(raw, ozValue) {
+  const v = String(raw == null ? "" : raw).trim();
+  if (v === "" || isNaN(Number(v.replace(/\s/g, "")))) return {value: Number(ozValue) || 0, auto: true};
+  return {value: Number(v.replace(/\s/g, "")), auto: false};
+}
+function sumMoney(list, deliv, prices, cache) {
   const s = {n: 0, goods: 0, courier: 0, profit: 0, profitKnown: true};
   for (const [p] of list) {
-    const m = orderMoney(p, deliv[p.posting_number], prices);
+    const m = orderMoney(p, deliv[p.posting_number], prices, cache);
     s.n++; s.goods += m.goods; s.courier += m.courier;
     if (m.profit == null) s.profitKnown = false; else s.profit += m.profit;
   }
@@ -93,7 +125,7 @@ function editPatch(row, next) {
   return patch;
 }
 
-if (typeof module !== "undefined") module.exports = {dayIso, isoToRu, addDaysIso, orderDay, dayBuckets, archiveRange, orderMoney, sumMoney, editPatch};
+if (typeof module !== "undefined") module.exports = {dayIso, isoToRu, addDaysIso, orderDay, dayBuckets, archiveRange, ozonLogistics, courierPay, orderMoney, ozonPayFill, payField, sumMoney, editPatch};
 
 // Значки для новых кнопок карточки (остальные — в config.js)
 if (typeof ICONS !== "undefined") Object.assign(ICONS, {

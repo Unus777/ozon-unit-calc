@@ -307,6 +307,7 @@ async function swRun(notice, {list = [ROW], hour = '2026-11-05T11:05:00Z', badge
   context.ADMIN = () => 'test-key';
   context.ownerKey = ownerKey;
   vm.runInContext(read('calc.js'), context);
+  vm.runInContext(read('days.js'), context);
   const written = [];
   const realSheet = context.sheetApi;
   context.sheetApi = async req => { written.push(req); return {posting: req.data.posting, pushed: true}; };
@@ -327,6 +328,8 @@ async function swRun(notice, {list = [ROW], hour = '2026-11-05T11:05:00Z', badge
   assert.equal(written.length, 1);
   assert.equal(written[0].action, 'create');
   assert.equal(written[0].data.cb, 'ЦБ-970');
+  assert.equal(written[0].data.delivery, 1500);  // поле пустое — доставка из Ozon (delivery_price)
+  assert.equal(written[0].data.lift, 700);        // подъём из prr_option.price
   assert.equal(written[0].data.address, 'Химки, ул. Тестовая, 1');
   assert.match(written[0].data.comment, /01234567-0001-2, 01234567-0001-3/);
   assert.match(written[0].data.comment, /домофон 12/);

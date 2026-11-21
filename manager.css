@@ -746,3 +746,8 @@ border-radius:14px;background:var(--card);color:var(--fg);text-align:left;box-sh
 .mgr .o-date input{flex:1;width:auto}
 @media(min-width:720px){.o-seg{flex:0 1 420px}.o-date{flex:0 0 220px}}
 body:not([data-view="orders"]) #searchBtn{display:none}
+
+.o-oz{display:inline-flex;align-items:center;height:18px;padding:0 6px;margin-left:4px;border-radius:99px;background:var(--acc-bg);color:var(--acc);font-style:normal;font-size:11px;font-weight:700;vertical-align:1px;white-space:nowrap}
+.o-oz.off{display:none}
+.o-ozhint{margin:8px 0 0;font-size:12.5px;color:var(--mut);line-height:1.35}
+.o-form .o-ozhint{margin:-2px 2px 0}

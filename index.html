@@ -45,7 +45,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 .sp-logo::before,.sp-logo::after{display:none}.sp-truck{transform:translateX(69px)}#splash,.sp-in{transition:none}}
 </style>
 <link rel="stylesheet" href="style.css?v=44">
-<link rel="stylesheet" href="manager.css?v=3">
+<link rel="stylesheet" href="manager.css?v=4">
 <link rel="icon" href="icons/owner.svg?v=39" type="image/svg+xml">
 <link rel="icon" href="icons/owner-32.png?v=39" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/owner-180.png?v=39" sizes="180x180">
@@ -197,7 +197,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 <script src="fbs.js?v=40"></script>
 <script src="push.js?v=39"></script>
 <script src="alarm.js?v=39"></script>
-<script src="days.js?v=1"></script>
+<script src="days.js?v=2"></script>
 <script>
 const API = "https://api-seller.ozon.ru";
 // Статусы Ozon → понятные этапы; неизвестный статус показываем как есть
@@ -323,10 +323,10 @@ async function sendToCourier(number, cbRaw, details) {
   const lat = a.latitude || "";
   const lon = a.longitude || "";
   const unload = unloadText(prr);
-  let delivery = 0;
-  if (details.delivery_pay !== "" && !isNaN(Number(details.delivery_pay))) delivery = Number(details.delivery_pay);
-  else delivery = parseFloat(posting.delivery_price) || 0;
-  const lift = details.lift_pay !== undefined && details.lift_pay !== "" && !isNaN(Number(details.lift_pay)) ? Number(details.lift_pay) : parseFloat(prr.price) || 0;
+  // вписано вручную — главнее; пустое поле — сумма из Ozon (delivery_price и prr_option.price)
+  const ozl = ozonLogistics(posting, typeof ozPayCache === "function" ? ozPayCache() : null);
+  const delivery = payField(details.delivery_pay, ozl.delivery).value;
+  const lift = payField(details.lift_pay, ozl.lift).value;
   let courierInfo = null;
   try { courierInfo = courierOzonData(posting); } catch {}  // кривой ответ Ozon не должен останавливать запись в таблицу
   const data = {
@@ -403,6 +403,8 @@ async function loadOrders(silent) {
     }
     await loadDeliveries();
     await syncDeliveredFromOzon(postings);
+    await fillOzonPayCache(postings);
+    await syncOzonPay(postings);
     await loadPays();
     drawReport();
     ORDERS = postings; PRICES = prices;
@@ -479,6 +481,37 @@ async function notifyCourierCancel(row) {
     await sheetApi({action: "remind", key: ADMIN(), posting: row.posting,
       text: `Заказ отменён в Ozon${row.cb ? " · " + row.cb : ""}. Везти не нужно.`, jwts});
   } catch {}  // статус уже записан: нет ключа пуша — курьер увидит отмену при обновлении списка
+}
+// ---------- доставка и подъём из Ozon, если менеджер их не вписал ----------
+// Кэш сумм из /v3/posting/fbs/get (только чтение): в списке отправлений delivery_price может не прийти.
+const ozPayCache = () => { try { return JSON.parse(store.get("oz_pay") || "{}"); } catch { return {}; } };
+const ozPayKeep = () => { try { return JSON.parse(store.get("oz_pay_keep") || "{}"); } catch { return {}; } };
+function ozPayKeepSet(posting, on) { const k = ozPayKeep(); if (on) k[posting] = 1; else delete k[posting]; store.set("oz_pay_keep", JSON.stringify(k)); }
+async function fillOzonPayCache(postings) {
+  const cache = ozPayCache(), fresh = Date.now() - 30 * 864e5;
+  const need = postings.filter(p => !isFbs(p) && p.status !== "cancelled" && (p.delivery_price == null || String(p.delivery_price) === "")
+    && !cache[p.posting_number] && new Date(p.in_process_at) > fresh && (DELIV[p.posting_number] || ["ship", "way"].includes(stage(p.status)[0]))).slice(0, 25);
+  for (const p of need) {
+    try {
+      const r = (await ozon("/v3/posting/fbs/get", {posting_number: p.posting_number})).result || {};
+      const oz = ozonLogistics(Object.assign({prr_option: p.prr_option}, r), null);
+      cache[p.posting_number] = {delivery: oz.delivery, lift: oz.lift, ts: Date.now()};
+    } catch {}
+  }
+  if (need.length) {
+    const keep = Object.entries(cache).sort((a, b) => b[1].ts - a[1].ts).slice(0, 500);
+    store.set("oz_pay", JSON.stringify(Object.fromEntries(keep)));
+  }
+}
+// У Рашада в работе, а доставка или подъём пустые (0): дописываем в лист суммы из Ozon, чтобы выплаты и экран Рашада совпадали
+async function syncOzonPay(postings) {
+  if (!ADMIN() || !SCRIPT_URL) return;
+  const cache = ozPayCache(), keep = ozPayKeep();
+  for (const p of postings) {
+    const fill = ozonPayFill(p, DELIV[p.posting_number], cache, keep);
+    if (!fill) continue;
+    try { DELIV[p.posting_number] = await sheetApi({action: "update", key: ADMIN(), posting: p.posting_number, data: fill}); } catch {}
+  }
 }
 async function syncDeliveredFromOzon(postings) {
   if (!ADMIN() || !SCRIPT_URL) return;
@@ -812,7 +845,7 @@ function drawOrders(anim) {
   } else if (OTAB === "archive") {
     const [from, to] = archivePeriod();
     const list = archiveRange(b.archive, from, to), done = list.filter(x => x[2].kind === "done"), cancel = list.filter(x => x[2].kind !== "done");
-    const s = sumMoney(done, DELIV, PRICES);
+    const s = sumMoney(done, DELIV, PRICES, ozPayCache());
     const chips = [["1", "Вчера"], ["7", "7 дней"], ["30", "30 дней"], ["all", "Всё"]].map(([k, v]) => `<button type="button" data-arch="${k}" aria-pressed="${ARCH.preset === k}">${v}</button>`).join("");
     html = `<div class="o-arch"><div class="o-seg">${chips}</div><label class="o-date">${ic("cal", "s")}<input type="date" id="archDay" value="${ARCH.preset === "day" ? ARCH.from : ""}" max="${addDaysIso(todayIso(), -1)}" aria-label="Выбрать день"></label></div>
       <div class="o-sum3 arch"><div><span>Доставлено</span><b>${s.n}</b></div><div><span>Товар</span><b>${money(s.goods)} ₽</b></div><div><span>Рашаду</span><b>${money(s.courier)} ₽</b></div><div class="${s.profit < 0 ? "neg" : "pos"}"><span>Прибыль</span><b>${s.profitKnown ? money(s.profit) + " ₽" : "—"}</b></div></div>`;
@@ -848,7 +881,7 @@ function drawOwnerDash(b) {
     }
     b = b || BUCKETS();
     if (OTAB !== "today" || FIND) { el.innerHTML = ""; return; }
-    const t = b.today, all = t.work.concat(t.done), s = sumMoney(all, DELIV, PRICES);
+    const t = b.today, all = t.work.concat(t.done), s = sumMoney(all, DELIV, PRICES, ozPayCache());
     const total = all.length, pct = total ? t.done.length / total : 0;
     const late = t.work.filter(x => x[2].late).length, notAcc = t.work.filter(([p]) => !isAccepted(DELIV[p.posting_number])).length;
     const ozLate = (ORDERS || []).filter(p => !isFbs(p) && ozState(p) === "late").length;
@@ -931,7 +964,7 @@ function statusPill(p, o) {
 function moneyRow(m, cat) {
   if (cat === "cancel") return "";
   const prof = m.profit == null ? "—" : (m.profit < 0 ? "−" : "") + money(m.profit) + " ₽";
-  return `<div class="o-money"><div><span>Товар</span><b>${money(m.goods)} ₽</b></div><div><span>${m.planned ? "Рашаду (план)" : "Рашаду"}</span><b>${money(m.courier)} ₽</b></div>` +
+  return `<div class="o-money"><div><span>Товар</span><b>${money(m.goods)} ₽</b></div><div><span>${m.planned ? "Рашаду (план)" : m.auto ? "Рашаду · Ozon" : "Рашаду"}</span><b>${money(m.courier)} ₽</b></div>` +
     `<div class="lv-${m.level || "x"} ${m.profit != null && m.profit < 0 ? "neg" : ""}"><span>Прибыль</span><b>${prof}</b></div></div>`;
 }
 function orderCard(p, i, n = 0, o) {
@@ -943,7 +976,7 @@ function orderCard(p, i, n = 0, o) {
   const time = d ? (info.time || (agreementOf(d) || {}).slot || "") : "";
   const when = d ? (d.date && d.date !== todayStr() ? shortDate(d.date) + (time ? ", " + time : "") : time || (d.date ? "" : "без даты")) : ozWindow(p).replace(/ МСК$/, "");
   const unload = d ? d.unload : unloadText(p.prr_option);
-  const m = orderMoney(p, d, PRICES);
+  const m = orderMoney(p, d, PRICES, ozPayCache());
   const act = primaryActions(p, i);
   return `<article class="o-card st-${st.cat}${o.late ? " late" : ""}" data-card="${i}" tabindex="0" aria-haspopup="dialog" style="--i:${Math.min(n, 10)}">
     <header class="o-card-h">${d && d.cb ? `<span class="o-cb">${e(d.cb)}</span>` : st.cat === "new" ? `<span class="o-cb need">Без ЦБ</span>` : ""}${statusPill(p, o)}${when ? `<span class="o-when ${d && !d.date ? "warn" : ""}">${ic("clock", "s")}${e(when)}</span>` : ""}</header>
@@ -977,7 +1010,7 @@ function openSendSheet(posting, rep) {
   if (isFbs(p)) { OTAB = "fbs"; drawOrders(true); toast("FBS остаётся на складе и Рашаду не отправляется"); return; }
   const a = (p.customer || {}).address || {}, prr = p.prr_option || {};
   const [area, rest] = addrParts(a.address_tail || a.city || "Адрес из заказа Ozon");
-  const dlv = Math.round(parseFloat(p.delivery_price) || 0), lift = Math.round(parseFloat(prr.price) || 0);
+  const ozl = ozonLogistics(p, ozPayCache()), dlv = Math.round(ozl.delivery), lift = Math.round(ozl.lift);
   const iso = off => { const d = new Date(Date.now() + off * 864e5); return new Intl.DateTimeFormat("en-CA", {timeZone: "Europe/Moscow"}).format(d); };
   const win = ozWindow(p);
   const old = rep && DELIV[rep.old], oi = old ? deliveryDetails(old.comment) : {};
@@ -995,8 +1028,9 @@ ${old ? `<div class="o-replnote">${ic("swap", "s")}<span>После отправ
 <form class="send m-send" data-send="${e(posting)}"${old ? ` data-replold="${e(rep.old)}"` : ""}>
   <label class="m-cbfield"><span>Номер ЦБ из 1С</span><span class="pref">ЦБ-<input name="cb" placeholder="970" value="${e(oCb)}" aria-label="Номер ЦБ" inputmode="numeric" autocomplete="off" required></span></label>
   <div class="m-pay"><div class="m-pay-h"><span>Оплата Рашаду</span><b id="sendTotal">${rub(dlv + lift)}</b></div>
-    <div class="g2"><label>Доставка, ₽<input name="delivery_pay" inputmode="numeric" value="${dlv || ""}" placeholder="0"></label>
-    <label>Подъём, ₽<input name="lift_pay" inputmode="numeric" value="${lift || ""}" placeholder="0"></label></div></div>
+    <div class="g2"><label><span>Доставка, ₽<i class="o-oz${dlv ? "" : " off"}">из Ozon</i></span><input name="delivery_pay" inputmode="numeric" value="" placeholder="${dlv}" data-oz="${dlv}"></label>
+    <label><span>Подъём, ₽<i class="o-oz${lift ? "" : " off"}">из Ozon</i></span><input name="lift_pay" inputmode="numeric" value="" placeholder="${lift}" data-oz="${lift}"></label></div>
+    <p class="o-ozhint">${dlv || lift ? "Пусто — возьмём сумму из Ozon. Впишите своё, если платите Рашаду иначе." : "В заказе Ozon нет суммы доставки и подъёма — впишите оплату Рашаду."}</p></div>
   <div class="m-fl"><span>Когда везти</span>
     <div class="m-seg" role="group" aria-label="День доставки">
       <button type="button" data-day="${iso(0)}" aria-pressed="${oDate === iso(0)}">Сегодня</button><button type="button" data-day="${iso(1)}" aria-pressed="${oDate === iso(1)}">Завтра</button>
@@ -1017,7 +1051,9 @@ ${old ? `<div class="o-replnote">${ic("swap", "s")}<span>После отправ
 document.addEventListener("input", ev => {
   const f = ev.target.closest && ev.target.closest("form[data-send]");
   if (!f) return;
-  const sum = (Number(f.elements.delivery_pay.value) || 0) + (Number(f.elements.lift_pay.value) || 0);
+  const pf = el => payField(el.value, el.dataset.oz);
+  const sum = pf(f.elements.delivery_pay).value + pf(f.elements.lift_pay).value;
+  [f.elements.delivery_pay, f.elements.lift_pay].forEach(el => el.closest("label").querySelector(".o-oz")?.classList.toggle("off", !pf(el).auto || !(Number(el.dataset.oz) > 0)));
   ["sendTotal", "sendTotal2"].forEach(id => { if ($(id)) $(id).textContent = rub(sum); });
   if (ev.target.name === "date") f.querySelectorAll("[data-day]").forEach(b => b.setAttribute("aria-pressed", b.dataset.day === ev.target.value));
   if (ev.target.name === "time") f.querySelectorAll("[data-slot]").forEach(b => b.setAttribute("aria-pressed", b.dataset.slot === ev.target.value));
@@ -1050,7 +1086,8 @@ function orderSteps(p, d) {
 // Карточка заказа: справа на компьютере, шторкой снизу на телефоне. Всё в одном месте: путь, данные, расчёт, правка, отмена.
 let EDITING = "";
 function moneyBlock(p, d) {
-  const m = orderMoney(p, d, PRICES), t = m.t;
+  const m = orderMoney(p, d, PRICES, ozPayCache()), t = m.t;
+  const oz = x => x ? ' <i class="o-oz">из Ozon</i>' : "";
   const row = (k, v, cls = "", sub = "") => `<div class="o-li ${cls}"><span>${k}${sub ? `<small>${sub}</small>` : ""}</span><b>${v}</b></div>`;
   const minus = x => "−" + money(x) + " ₽", plus = x => money(x) + " ₽";
   const goods = (p.products || []).map(x => {
@@ -1060,10 +1097,10 @@ function moneyBlock(p, d) {
   const lvl = m.level ? `<span class="o-m2 lv-${m.level}">${money(m.perM2)} ₽/м² · порог ${money(m.floor)}</span>` : "";
   return `<section class="o-box o-calc"><div class="o-box-h"><h3>${ic("chart", "s")}Расчёт по заказу</h3>${lvl}</div>
     ${goods}
-    ${m.clientDelivery ? row("Доставка от клиента", plus(m.clientDelivery)) : ""}${m.clientLift ? row("Подъём от клиента", plus(m.clientLift)) : ""}
+    ${m.clientDelivery ? row("Доставка от клиента", plus(m.clientDelivery), "", "по данным Ozon") : ""}${m.clientLift ? row("Подъём от клиента", plus(m.clientLift), "", "по данным Ozon") : ""}${!m.clientDelivery && !m.clientLift ? row("Доставка и подъём", "в Ozon нет суммы", "mut") : ""}
     ${row("Клиент платит", plus(m.client), "tot")}
     ${t ? row(`Комиссия Ozon, эквайринг, сбор`, minus(t.commission + t.acquiring + t.fee)) + row("НДС к уплате", minus(t.vat)) + row("Себестоимость плитки", minus(t.cost)) : ""}
-    ${row(m.planned ? "Рашаду (план)" : "Рашаду", minus(m.courier), "", `доставка ${money(m.courierDelivery)} + подъём ${money(m.courierLift)}`)}
+    ${row(m.planned ? "Рашаду (план)" : "Рашаду", minus(m.courier), "", `доставка ${money(m.courierDelivery)}${oz(m.deliveryAuto)} + подъём ${money(m.courierLift)}${oz(m.liftAuto)}`)}
     ${m.profit != null ? row("Прибыль по заказу", (m.profit < 0 ? "−" : "") + money(m.profit) + " ₽", "tot " + (m.profit < 0 ? "neg" : "pos")) : row("Прибыль", "не считается — не плитка 60×60/60×120", "mut")}
     <button type="button" class="o-link" data-open="${e(p.posting_number)}">${ic("calc", "s")}Подробный расчёт ₽/м²</button>
   </section>`;
@@ -1090,6 +1127,7 @@ function editForm(p, d) {
   const dm = /^(\d\d)\.(\d\d)\.(\d{4})$/.exec(d.date || ""), dateVal = dm ? `${dm[3]}-${dm[2]}-${dm[1]}` : "";
   const t = todayIso();
   const f = (n, label, v, attrs = "") => `<label><span>${label}</span><input name="${n}" value="${e(v ?? "")}" ${attrs}></label>`;
+  const ozl = ozonLogistics(p, ozPayCache()), pay = courierPay(d, ozl);
   return `<form class="o-box o-form" data-editform="${e(p.posting_number)}">
     <div class="o-box-h"><h3>${ic("edit", "s")}Изменить заказ</h3><button type="button" class="o-edit-btn" data-editcancel>Отмена</button></div>
     <label><span>Адрес</span><textarea name="address" rows="2" required>${e(d.address)}</textarea></label>
@@ -1099,8 +1137,9 @@ function editForm(p, d) {
     <label><span>Время</span><input name="time" value="${e(info.time)}" placeholder="Например: с 14:00 до 16:00" maxlength="100">
       <span class="slots">${DELIVERY_SLOTS.map(x => `<button type="button" data-slot="${x}" aria-pressed="${x === info.time}">${slotLabel(x)}</button>`).join("")}</span></label>
     <div class="o-f2">${f("packs", "Упаковки / товар", d.packs)}${f("unload", "Разгрузка", d.unload, 'placeholder="Нет / Лифт, эт. 5"')}</div>
-    <div class="o-f2">${f("delivery", "Доставка Рашаду, ₽", d.delivery, 'inputmode="numeric"')}${f("lift", "Подъём Рашаду, ₽", d.lift, 'inputmode="numeric"')}</div>
-    <div class="o-total">Рашаду всего: <b data-edittotal>${rub(num(d.delivery) + num(d.lift))}</b></div>
+    <div class="o-f2">${f("delivery", `Доставка, ₽<i class="o-oz${pay.deliveryAuto ? "" : " off"}">из Ozon</i>`, num(d.delivery) > 0 ? d.delivery : "", `inputmode="numeric" placeholder="${ozl.delivery}" data-oz="${ozl.delivery}"`)}${f("lift", `Подъём, ₽<i class="o-oz${pay.liftAuto ? "" : " off"}">из Ozon</i>`, num(d.lift) > 0 ? d.lift : "", `inputmode="numeric" placeholder="${ozl.lift}" data-oz="${ozl.lift}"`)}</div>
+    <p class="o-ozhint">Пустое поле — сумма из Ozon (доставка ${money(ozl.delivery)} ₽, подъём ${money(ozl.lift)} ₽). Вписанное вами главнее.</p>
+    <div class="o-total">Рашаду всего: <b data-edittotal>${rub(pay.delivery + pay.lift)}</b></div>
     ${f("foreman", "Телефон прораба", info.foreman, 'type="tel" placeholder="+7 900 000-00-00"')}
     <label><span>Пометка для Рашада</span><textarea name="note" rows="2" maxlength="2000">${e(info.note)}</textarea></label>
     <p class="m-hint">${ic("pin", "s")}При смене адреса точка на карте найдётся заново. Рашад получит уведомление об изменении.</p>
@@ -1186,12 +1225,14 @@ async function saveEditForm(form) {
   let ozonInfo = info.ozon ? Object.assign({}, info.ozon) : null;
   const name = String(v.name || "").trim();
   if (name !== String(form.elements.name.defaultValue || "").trim()) ozonInfo = Object.assign(ozonInfo || {}, {customer: name});
+  const dPay = payField(v.delivery, form.elements.delivery.dataset.oz), lPay = payField(v.lift, form.elements.lift.dataset.oz);
+  ozPayKeepSet(posting, (!dPay.auto && dPay.value === 0) || (!lPay.auto && lPay.value === 0));  // вписанный 0 — не подменять суммой Ozon
   const phoneDigits = String(v.phone || "").replace(/\D/g, "").replace(/^8(?=\d{10}$)/, "7");
   const next = {
     cb: normalizeCb(v.cb), address: String(v.address || "").trim(), date: v.date ? v.date.split("-").reverse().join(".") : "",
     phone: phoneDigits ? "+" + phoneDigits : "", ext: String(v.ext || "").replace(/\D/g, ""),
     packs: String(v.packs || "").trim(), unload: String(v.unload || "").trim() || "Нет",
-    delivery: String(num(v.delivery)), lift: String(num(v.lift)),
+    delivery: String(dPay.value), lift: String(lPay.value),
     comment: deliveryComment({note: v.note, time: v.time, foreman: v.foreman, agreed: info.agreed, ozon: ozonInfo}),
   };
   if (!next.address) throw new Error("Укажите адрес");
@@ -2031,7 +2072,9 @@ $("app").addEventListener("input", ev => {
   const f = ev.target.closest && ev.target.closest("form[data-editform]");
   if (!f) return;
   const out = f.querySelector("[data-edittotal]");
-  if (out) out.textContent = rub(num(f.elements.delivery.value) + num(f.elements.lift.value));
+  const pf = el => payField(el.value, el.dataset.oz);
+  if (out) out.textContent = rub(pf(f.elements.delivery).value + pf(f.elements.lift).value);
+  [f.elements.delivery, f.elements.lift].forEach(el => el.closest("label").querySelector(".o-oz")?.classList.toggle("off", !pf(el).auto || !(Number(el.dataset.oz) > 0)));
   if (ev.target.name === "date") f.querySelectorAll("[data-day]").forEach(b => b.setAttribute("aria-pressed", b.dataset.day === ev.target.value));
 });
 $("app").addEventListener("submit", async ev => {

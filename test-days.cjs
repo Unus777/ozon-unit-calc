@@ -84,6 +84,32 @@ assert.equal(s.n, 3);
 assert.equal(s.goods, 90000);
 assert.equal(s.courier, 12000);
 
+// доставка и подъём из Ozon, если не вписаны вручную
+const ozP = post('O', 'delivering');
+assert.deepEqual(JSON.parse(JSON.stringify(ctx.ozonLogistics(ozP))), {delivery: 2500, lift: 1500, known: true});
+assert.equal(ctx.ozonLogistics(post('N', 'delivering', {prr_option: {code: 'none', price: '900'}})).lift, 0);   // подъём не заказан
+const bare = post('L', 'delivering', {delivery_price: undefined, prr_option: undefined});
+assert.equal(ctx.ozonLogistics(bare).delivery, 0);
+assert.equal(ctx.ozonLogistics(bare, {L: {delivery: 1800, lift: 600}}).delivery, 1800);   // из кэша /v3/posting/fbs/get
+const emptyRow = row('O', 'Новый', '21.11.2026', {delivery: '', lift: '0'});
+const auto = ctx.orderMoney(ozP, emptyRow, prices);
+assert.equal(auto.courier, 4000);                // пусто/0 в листе → 2500 + 1500 из Ozon
+assert.equal(auto.deliveryAuto, true); assert.equal(auto.liftAuto, true); assert.equal(auto.auto, true);
+assert.ok(Math.abs(auto.profit - t.profit) < 1e-6);   // клиент заплатил ровно столько, сколько ушло Рашаду
+const manual = ctx.orderMoney(ozP, row('O', 'Новый', '', {delivery: '3200', lift: ''}), prices);
+assert.equal(manual.courierDelivery, 3200);      // вписанное вручную главнее
+assert.equal(manual.courierLift, 1500);
+assert.equal(manual.deliveryAuto, false); assert.equal(manual.liftAuto, true);
+assert.deepEqual(JSON.parse(JSON.stringify(ctx.ozonPayFill(ozP, emptyRow, null, {}))), {delivery: '2500', lift: '1500'});
+assert.equal(ctx.ozonPayFill(ozP, emptyRow, null, {O: 1}), null);                              // менеджер сам поставил 0
+assert.equal(ctx.ozonPayFill(ozP, row('O', 'Доставлен', '', {delivery: ''}), null, {}), null);  // старые выплаты не трогаем
+assert.equal(ctx.ozonPayFill(ozP, row('O', 'Новый', '', {delivery: '3000', lift: '900'}), null, {}), null);
+assert.equal(ctx.ozonPayFill(P[9], row('FBS', 'Новый', '', {delivery: ''}), null, {}), null);  // FBS не трогаем
+assert.deepEqual(JSON.parse(JSON.stringify(ctx.payField('', 2500))), {value: 2500, auto: true});
+assert.deepEqual(JSON.parse(JSON.stringify(ctx.payField('0', 2500))), {value: 0, auto: false});
+assert.deepEqual(JSON.parse(JSON.stringify(ctx.payField(' 1 800 ', 2500))), {value: 1800, auto: false});
+assert.match(read('index.html'), /payField\(details\.delivery_pay/);
+
 // правка карточки: только изменённые поля, служебные не уходят
 const patch = ctx.editPatch({cb: 'ЦБ-1', address: 'Москва', phone: "'+79160000000", date: '21.11.2026', delivery: '3000', lift: '0', status: 'Новый', pay: '3000'},
   {cb: 'ЦБ-1', address: 'Химки, ул. Мира, 1', phone: '+79160000000', date: '22.11.2026', delivery: '3000', lift: '500', status: 'Доставлен', pay: '1'});
