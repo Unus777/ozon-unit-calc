@@ -45,7 +45,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 .sp-logo::before,.sp-logo::after{display:none}.sp-truck{transform:translateX(69px)}#splash,.sp-in{transition:none}}
 </style>
 <link rel="stylesheet" href="style.css?v=44">
-<link rel="stylesheet" href="manager.css?v=1">
+<link rel="stylesheet" href="manager.css?v=3">
 <link rel="icon" href="icons/owner.svg?v=39" type="image/svg+xml">
 <link rel="icon" href="icons/owner-32.png?v=39" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/owner-180.png?v=39" sizes="180x180">
@@ -63,15 +63,15 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
     <button type="button" data-view="orders" aria-current="page"><span data-ic="orders"></span>Заказы<i class="m-badge" data-badge hidden></i></button>
     <button type="button" data-view="map"><span data-ic="map"></span>Карта</button>
     <button type="button" data-view="courier"><span data-ic="truck"></span>Курьер</button>
-    <button type="button" data-view="calc"><span data-ic="calc"></span>Расчёт ₽/м²</button>
     <button type="button" data-view="settings"><span data-ic="settings"></span>Настройки</button>
   </nav>
-  <div class="m-side-foot">Алмалы-Керамик · v4.0</div>
+  <div class="m-side-foot">Алмалы-Керамик · v5.0</div>
 </aside>
 <header class="m-top"><div class="m-top-in">
   <div class="logo m-mob" aria-hidden="true">А</div>
   <div class="grow"><h1 id="ltTitle">Заказы</h1><div class="m-subt" id="ltSub">Загружаем…</div></div>
   <button type="button" class="m-presence off" id="presence" data-view="courier" hidden><span class="dot"></span><span id="presenceTxt">Рашад</span></button>
+  <button type="button" class="m-ibtn" id="searchBtn" aria-label="Поиск заказа" aria-expanded="false" title="Поиск"><span data-ic="search"></span></button>
   <button type="button" class="m-ibtn" id="reload" aria-label="Обновить заказы" title="Обновить"><span data-ic="refresh"></span></button>
 </div></header>
 <main class="m-main">
@@ -98,7 +98,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
   <div class="m-set-row"><div class="lic"><span data-ic="key"></span></div><div class="grow">Client-Id<small>Ключи хранятся только в этом браузере</small></div><b class="m-mono" id="cidMask"></b></div>
   <button type="button" class="m-btn ghost danger" id="forgetBtn"><span data-ic="refresh"></span>Сменить ключи Ozon</button></section>
 </div>
-<p class="m-ver">Алмалы Доставка · v4.0 · сверка с Ozon каждые 2 минуты</p>
+<p class="m-ver">Алмалы Доставка · v5.0 · сверка с Ozon каждые 2 минуты</p>
 </section>
 
 <section class="m-card m-keys" id="keys" hidden>
@@ -114,6 +114,11 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 
 <div id="app" hidden>
 <section class="m-pane m-orders" data-pane="orders map">
+  <div class="o-head" id="ohead">
+    <div class="o-tabs" role="tablist" aria-label="Разделы заказов" id="otabs"></div>
+    <form class="m-search o-search" id="searchBox" role="search" hidden><span data-ic="search"></span>
+      <input id="find" type="search" placeholder="ЦБ, адрес, имя, телефон, отправление" aria-label="Найти заказ" autocomplete="off"></form>
+  </div>
   <div id="ownerDash"></div>
   <section id="omapBox" class="m-mappane">
   <div class="m-map">
@@ -134,13 +139,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
     </div>
   </div>
 </section>
-  <div id="board"></div>
-  <div class="m-listwrap">
-  <div class="m-tools">
-    <form class="m-search" id="findForm" role="search"><span data-ic="search"></span>
-      <input id="find" type="search" placeholder="Поиск: ЦБ, адрес, имя, телефон, отправление" aria-label="Найти заказ" autocomplete="off"></form>
-    <div class="m-chips" role="tablist" aria-label="Фильтр заказов" id="otabs"></div>
-  </div>
+  <div class="o-list">
   <div id="fbsLive" class="fbs-live" role="status" aria-live="polite"></div>
   <div id="orders"></div>
   </div>
@@ -190,7 +189,6 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
   <button type="button" data-view="orders" aria-current="page"><span data-ic="orders"></span>Заказы<i class="m-badge" data-badge hidden></i></button>
   <button type="button" data-view="map"><span data-ic="map"></span>Карта</button>
   <button type="button" data-view="courier"><span data-ic="truck"></span>Курьер</button>
-  <button type="button" data-view="calc"><span data-ic="calc"></span>Расчёт</button>
   <button type="button" data-view="settings"><span data-ic="settings"></span>Ещё</button>
 </div></nav>
 
@@ -199,6 +197,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 <script src="fbs.js?v=40"></script>
 <script src="push.js?v=39"></script>
 <script src="alarm.js?v=39"></script>
+<script src="days.js?v=1"></script>
 <script>
 const API = "https://api-seller.ozon.ru";
 // Статусы Ozon → понятные этапы; неизвестный статус показываем как есть
@@ -444,7 +443,7 @@ function ownerAlerts(postings) {
     let v = {};
     try { v = JSON.parse(store.get("oz_seen") || "{}"); } catch {}
     v[it.id] = Date.now(); save(v);
-    OTAB = "new"; drawOrders();
+    OTAB = "fresh"; drawOrders();
   }});
 }
 
@@ -524,8 +523,8 @@ async function checkPending() {
   if (changed && ORDERS.length) drawOrders();
 }
 setInterval(checkPending, 30000);
-let OTAB = "all", FIND = "";
-$("findForm").addEventListener("submit", ev => ev.preventDefault());
+let OTAB = "today", FIND = "";
+$("searchBox").addEventListener("submit", ev => ev.preventDefault());
 $("find").addEventListener("input", () => { FIND = $("find").value.trim().toLowerCase(); drawOrders(true); });
 
 const CLS = {red: "c-r", yellow: "c-a", green: "c-g"};
@@ -709,7 +708,7 @@ function rashadOnline(latest) { return !!(latest && latest.ts && Date.now() - la
 function drawRashad() {
   const latest = RASHAD && RASHAD.latest, now = Date.now(), seen = geoSeenText(latest, now), on = rashadOnline(latest);
   const short = !latest || !latest.ts ? "нет связи" : on ? "в сети" : seen.split(" · ")[0].replace("Был в сети ", "");
-  if ($("presenceTxt")) { $("presenceTxt").textContent = "Рашад · " + short; $("presence").classList.toggle("off", !on); }
+  if ($("presenceTxt")) { $("presenceTxt").innerHTML = `Рашад<span class="m-pr-x"> · ${e(short)}</span>`; $("presence").classList.toggle("off", !on); }
   if ($("mapRashad")) $("mapRashad").innerHTML = `<span class="m-ava sm ${on ? "on" : ""}">Р</span><span><b>Рашад</b><small>${e(seen)}</small></span>`;
   document.querySelectorAll("[data-rseen]").forEach(x => { x.textContent = seen; });
   if (!OMAP || !OMAP.getSource) return;
@@ -746,70 +745,100 @@ $("mapRashad").onclick = () => { const ll = rashadLL() || (RASHAD && RASHAD.late
   if (ll && OMAP) OMAP.flyTo({center: [ll[1], ll[0]], zoom: 13, duration: REDUCED() ? 0 : 600}); else if (!ll) toast("Рашад ещё не передавал местоположение"); };
 addEventListener("resize", () => { if (mapVisible()) { drawOwnerMap(); OMAP && OMAP.resize(); } });
 
-// ---------- список заказов: сводка, поиск, фильтры, группы по действию ----------
-const GROUPS = {
-  new: ["Нужно отправить курьеру", "send"],
-  courier: ["У Рашада", "truck"],
-  done: ["Доставлено", "checkc"],
-  cancel: ["Отменено", "x"],
-};
-const OTABS = {all: "Все", new: "Отправить", courier: "У Рашада", done: "Доставлено", cancel: "Отменено", fbs: "FBS склад"};
-let SHOW_DONE = false;
+// ---------- главный экран: «Сегодня», «Новые», «Впереди», «Архив» ----------
+const OTABS = {today: "Сегодня", fresh: "Новые", ahead: "Впереди", archive: "Архив"};
+const ARCH = {preset: "7", from: "", to: ""};
+let SHOW_CANCEL = false;
+const todayIso = () => mskDay(Date.now());
+const WD = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
+function dayTitle(iso) {
+  const t = todayIso();
+  const d = new Date(iso + "T12:00:00Z"), label = d.toLocaleDateString("ru-RU", {day: "numeric", month: "long", timeZone: "UTC"});
+  if (iso === t) return "Сегодня, " + label;
+  if (iso === addDaysIso(t, 1)) return "Завтра, " + label;
+  if (iso === addDaysIso(t, -1)) return "Вчера, " + label;
+  return WD[d.getUTCDay()][0].toUpperCase() + WD[d.getUTCDay()][1] + ", " + label;
+}
+function archivePeriod() {
+  const t = todayIso();
+  if (ARCH.preset === "1") return [addDaysIso(t, -1), addDaysIso(t, -1)];
+  if (ARCH.preset === "7") return [addDaysIso(t, -7), addDaysIso(t, -1)];
+  if (ARCH.preset === "30") return [addDaysIso(t, -30), addDaysIso(t, -1)];
+  if (ARCH.preset === "day") return [ARCH.from, ARCH.from];
+  return ["", ""];
+}
+function BUCKETS() { return dayBuckets(ORDERS.map((p, i) => [p, i]), DELIV, todayIso()); }
+
 function drawOrders(anim) {
-  const counts = {all: 0, new: 0, courier: 0, fbs: 0, done: 0, cancel: 0};
-  ORDERS.forEach(p => {
-    const cat = otabCategory(p);
-    if (cat !== "fbs") counts.all++;
-    counts[cat]++;
-  });
-  $("otabs").innerHTML = Object.entries(OTABS).filter(([k]) => k !== "fbs" || counts.fbs).map(([k, v]) => {
-    const cnt = counts[k] || 0;
-    return `<button type="button" role="tab" data-otab="${k}" aria-selected="${OTAB === k}" class="${k === "new" && cnt ? "hot" : ""}">${v}${cnt ? `<em>${cnt}</em>` : ""}</button>`;
+  const b = BUCKETS();
+  const nAhead = Object.values(b.upcoming).reduce((s, l) => s + l.length, 0);
+  const counts = {today: b.today.work.length + b.today.done.length, fresh: b.fresh.send.length + b.fresh.nodate.length, ahead: nAhead, archive: 0, fbs: b.fbs};
+  if (OTAB === "fbs" && !b.fbs) OTAB = "today";
+  if (!OTABS[OTAB] && OTAB !== "fbs") OTAB = "today";
+  document.body.dataset.tab = FIND ? "search" : OTAB;
+  $("otabs").innerHTML = Object.entries(OTABS).map(([k, v]) => {
+    const cnt = counts[k] || 0, hot = k === "fresh" && b.fresh.send.length;
+    return `<button type="button" role="tab" data-otab="${k}" aria-selected="${OTAB === k && !FIND}" class="${hot ? "hot" : ""}">${v}${cnt ? `<em>${cnt}</em>` : ""}</button>`;
   }).join("");
-  document.querySelectorAll("[data-badge]").forEach(b => { b.hidden = !counts.new; b.textContent = counts.new || ""; });
+  document.querySelectorAll("[data-badge]").forEach(x => { x.hidden = !b.fresh.send.length; x.textContent = b.fresh.send.length || ""; });
 
-  const cbNum = p => parseInt(String(DELIV[p.posting_number]?.cb || "").replace(/\D/g, "")) || 0;
-  const list = ORDERS.map((p, i) => [p, i]).filter(([p]) => {
-    if (isFbs(p)) return false;
-    if (OTAB !== "all" && otabCategory(p) !== OTAB) return false;
-    if (!FIND) return true;
-    const d = DELIV[p.posting_number], a = p.customer?.address || {};
-    return [p.posting_number, p.order_number, d?.cb, d?.address, d?.phone, p.customer?.name, a.address_tail, a.city].join(" ").toLowerCase().includes(FIND);
-  }).sort(([a], [b]) => new Date(b.in_process_at) - new Date(a.in_process_at) || cbNum(b) - cbNum(a));
-
-  drawOwnerDash();
-  drawBoard();
+  drawOwnerDash(b);
   drawOwnerMap();
   drawCourier();
   const box = $("orders");
   box.classList.toggle("anim", !!anim && !REDUCED());
-  if (OTAB === "fbs") {
-    box.innerHTML = `<div class="m-fbs">${fbsBoardHtml(ORDERS, {deliv: DELIV, local: loadFbsState(fbsStore()), pending: FBS_PENDING_CB})}</div>`;
-    return;
-  }
-  if (!list.length) {
-    const msg = FIND ? ["Ничего не нашли", `По запросу «${e(FIND)}» заказов нет. Проверьте номер ЦБ, адрес или отправление.`]
-      : OTAB === "new" ? ["Всё отправлено", "Новых заказов, которые нужно передать Рашаду, нет."]
-      : OTAB === "courier" ? ["У Рашада пусто", "Отправьте ему заказ из раздела «Отправить»."]
-      : ["Пока пусто", "Здесь появятся заказы из Ozon."];
-    box.innerHTML = `<div class="m-empty"><div class="m-empty-ic">${ic(FIND ? "search" : "checkc")}</div><b>${msg[0]}</b><p>${msg[1]}</p></div>`;
-    return;
-  }
-  const by = {new: [], courier: [], done: [], cancel: []};
-  list.forEach(x => (by[otabCategory(x[0])] || by.new).push(x));
-  by.courier.sort(([a], [b]) => (cardState(b).step || 0) - (cardState(a).step || 0));
+  if (FIND) { box.innerHTML = searchHtml(); return; }
+  if (OTAB === "fbs") { box.innerHTML = `<button type="button" class="m-btn ghost o-back" data-otab="fresh">${ic("back")}К новым заказам</button><div class="m-fbs">${fbsBoardHtml(ORDERS, {deliv: DELIV, local: loadFbsState(fbsStore()), pending: FBS_PENDING_CB})}</div>`; return; }
   let n = 0;
-  box.innerHTML = Object.entries(GROUPS).filter(([k]) => by[k].length).map(([k, [title, icon]]) => {
-    let items = by[k], more = "";
-    if (k === "done" && OTAB === "all" && !SHOW_DONE && items.length > 4) { more = `<button type="button" class="m-more" data-showdone>Показать ещё ${items.length - 4}</button>`; items = items.slice(0, 4); }
-    const head = OTAB === "all" || FIND ? `<h2 class="m-gh m-gh-${k}">${ic(icon, "s")}<span>${title}</span><em>${by[k].length}</em></h2>` : "";
-    const cards = items.map(([p, i]) => orderCard(p, i, n++)).join("");
-    if (k === "cancel" && OTAB === "all" && !FIND) return `<details class="m-group m-cancel"><summary class="m-gh m-gh-cancel">${ic(icon, "s")}<span>${title}</span><em>${by[k].length}</em>${ic("chev", "s m-chev")}</summary><div class="m-cards">${cards}</div></details>`;
-    return `<section class="m-group">${head}<div class="m-cards">${cards}</div>${more}</section>`;
-  }).join("");
+  const cards = list => `<div class="o-cards">${list.map(([p, i, o]) => orderCard(p, i, n++, o)).join("")}</div>`;
+  const sec = (cls, icon, title, list, extra = "", sub = "") => list.length ? `<section class="o-sec ${cls}"><h2 class="o-sh">${ic(icon, "s")}<span>${title}</span><em>${list.length}</em>${sub ? `<small>${sub}</small>` : ""}</h2>${extra}${cards(list)}</section>` : "";
+  const empty = (icon, t, s) => `<div class="m-empty"><div class="m-empty-ic">${ic(icon)}</div><b>${t}</b><p>${s}</p></div>`;
+  let html = "";
+  if (OTAB === "today") {
+    const work = b.today.work.slice().sort(([a], [c]) => flowOf(c).cur - flowOf(a).cur);
+    html = sec("s-work", "truck", "В работе", work)
+      + sec("s-done", "checkc", "Доставлено сегодня", b.today.done.sort(([, , a], [, , c]) => String(c.day).localeCompare(String(a.day))))
+      + (b.today.cancel.length ? `<details class="o-sec s-cancel"${SHOW_CANCEL ? " open" : ""}><summary class="o-sh">${ic("x", "s")}<span>Отменено сегодня</span><em>${b.today.cancel.length}</em>${ic("chev", "s m-chev")}</summary>${cards(b.today.cancel)}</details>` : "");
+    if (!work.length && !b.today.done.length && !b.today.cancel.length)
+      html = empty("cal", "На сегодня заказов нет", b.fresh.send.length ? "Новые заказы ждут отправки во вкладке «Новые»." : "Когда поставите дату «сегодня», заказ появится здесь.");
+  } else if (OTAB === "fresh") {
+    html = sec("s-send", "send", "Нужно отправить Рашаду", b.fresh.send.sort(([a], [c]) => new Date(c.in_process_at) - new Date(a.in_process_at)), "", "нужен ЦБ")
+      + sec("s-nodate", "cal", "У Рашада без даты", b.fresh.nodate, "", "поставьте дату");
+    if (!html) html = empty("checkc", "Всё разобрано", "Новых заказов и заказов без даты нет.");
+    if (b.fbs) html += fbsLink(b.fbs);
+  } else if (OTAB === "ahead") {
+    html = Object.keys(b.upcoming).sort().map(day => sec("s-day", "cal", dayTitle(day), b.upcoming[day])).join("");
+    if (!html) html = empty("cal", "Впереди пусто", "Здесь будут заказы с датой доставки на завтра и позже.");
+  } else if (OTAB === "archive") {
+    const [from, to] = archivePeriod();
+    const list = archiveRange(b.archive, from, to), done = list.filter(x => x[2].kind === "done"), cancel = list.filter(x => x[2].kind !== "done");
+    const s = sumMoney(done, DELIV, PRICES);
+    const chips = [["1", "Вчера"], ["7", "7 дней"], ["30", "30 дней"], ["all", "Всё"]].map(([k, v]) => `<button type="button" data-arch="${k}" aria-pressed="${ARCH.preset === k}">${v}</button>`).join("");
+    html = `<div class="o-arch"><div class="o-seg">${chips}</div><label class="o-date">${ic("cal", "s")}<input type="date" id="archDay" value="${ARCH.preset === "day" ? ARCH.from : ""}" max="${addDaysIso(todayIso(), -1)}" aria-label="Выбрать день"></label></div>
+      <div class="o-sum3 arch"><div><span>Доставлено</span><b>${s.n}</b></div><div><span>Товар</span><b>${money(s.goods)} ₽</b></div><div><span>Рашаду</span><b>${money(s.courier)} ₽</b></div><div class="${s.profit < 0 ? "neg" : "pos"}"><span>Прибыль</span><b>${s.profitKnown ? money(s.profit) + " ₽" : "—"}</b></div></div>`;
+    const byDay = {};
+    done.forEach(x => (byDay[x[2].day] = byDay[x[2].day] || []).push(x));
+    html += Object.keys(byDay).sort().reverse().map(day => sec("s-done", "checkc", dayTitle(day), byDay[day])).join("")
+      + (cancel.length ? `<details class="o-sec s-cancel"><summary class="o-sh">${ic("x", "s")}<span>Отменено за период</span><em>${cancel.length}</em>${ic("chev", "s m-chev")}</summary>${cards(cancel)}</details>` : "");
+    if (!list.length) html += empty("orders", "За этот период пусто", "Выберите другой период или день.");
+  }
+  box.innerHTML = html;
 }
 
-function drawOwnerDash() {
+const fbsLink = n => `<button type="button" class="o-fbs" data-otab="fbs">${ic("box", "s")}<span><b>FBS склад · ${n}</b><small>Отгружает Ozon со склада, Рашаду не уходят</small></span>${ic("chev", "s")}</button>`;
+function searchHtml() {
+  const q = FIND;
+  const hits = ORDERS.map((p, i) => [p, i]).filter(([p]) => {
+    if (isFbs(p)) return false;
+    const d = DELIV[p.posting_number], a = p.customer?.address || {};
+    return [p.posting_number, p.order_number, d?.cb, d?.address, d?.phone, p.customer?.name, a.address_tail, a.city].join(" ").toLowerCase().includes(q);
+  }).map(([p, i]) => [p, i, orderDay(p, DELIV[p.posting_number])]).slice(0, 40);
+  if (!hits.length) return `<div class="m-empty"><div class="m-empty-ic">${ic("search")}</div><b>Ничего не нашли</b><p>По запросу «${e(q)}» заказов нет. Проверьте номер ЦБ, адрес или отправление.</p></div>`;
+  return `<section class="o-sec"><h2 class="o-sh">${ic("search", "s")}<span>Найдено</span><em>${hits.length}</em></h2><div class="o-cards">${hits.map(([p, i, o], n) => orderCard(p, i, n, o)).join("")}</div></section>`;
+}
+
+// Сводка дня: прогресс доставок, товар, оплата Рашаду и прибыль за сегодня
+function drawOwnerDash(b) {
   try {
     const el = $("ownerDash");
     if (!el) return;
@@ -817,33 +846,27 @@ function drawOwnerDash() {
       el.innerHTML = `<div class="m-banner">${ic("link")}<span>Подключите таблицу доставок, чтобы отправлять заказы Рашаду</span><button type="button" class="m-btn tint sm" data-view="settings">Подключить</button></div>`;
       return;
     }
-    const today = todayStr();
-    let toSend = 0, active = 0, agreed = 0, notAcc = 0, kg = 0, doneToday = 0;
-    for (const p of (ORDERS || [])) {
-      if (isFbs(p)) continue;
-      const cat = otabCategory(p), d = DELIV[p.posting_number];
-      if (cat === "new" && ["ship", "way"].includes(stage(p.status)[0])) toSend++;
-      if (cat === "courier") { active++; kg += orderKg(p); if (agreementOf(d)) agreed++; if (!isAccepted(d)) notAcc++; }
-    }
-    for (const r of rashadDeliveries(Object.values(DELIV || {}))) if (r.status === "Доставлен" && String(r.delivered_at || "").includes(today.slice(0, 5))) doneToday++;
-    const rep = deliveryReport(rashadDeliveries(Object.values(DELIV || {})), PAYS);
-    const left = rep.hasPayments ? rep.left : rep.done.pay;
-    const late = (ORDERS || []).filter(p => !isFbs(p) && ozState(p) === "late").length;
-    const kpi = (k, go, label, val, sub, cls = "", icon = "") => `<button type="button" class="m-kpi ${cls}" ${go}><span class="m-kpi-l">${icon ? ic(icon, "s") : ""}${label}</span>` +
-      `<b class="money" data-count="${val}"><span>${money(val)}</span>${k === "rub" ? "<small>₽</small>" : ""}</b><small>${sub}</small></button>`;
-    const pay = PAYS_ERR
-      ? `<button type="button" class="m-kpi warn" data-go="courier"><span class="m-kpi-l">${ic("alert", "s")}Долг курьеру</span><b class="m-kpi-err">Не загрузилось</b><small>Нажмите, чтобы повторить</small></button>`
-      : kpi("rub", 'data-go="courier"', left < 0 ? "Переплата курьеру" : "Долг курьеру", left, rep.hasPayments ? `начислено ${money(rep.done.pay)} · выплачено ${money(rep.paid)}` : "начислено за доставки", "", "user");
+    b = b || BUCKETS();
+    if (OTAB !== "today" || FIND) { el.innerHTML = ""; return; }
+    const t = b.today, all = t.work.concat(t.done), s = sumMoney(all, DELIV, PRICES);
+    const total = all.length, pct = total ? t.done.length / total : 0;
+    const late = t.work.filter(x => x[2].late).length, notAcc = t.work.filter(([p]) => !isAccepted(DELIV[p.posting_number])).length;
+    const ozLate = (ORDERS || []).filter(p => !isFbs(p) && ozState(p) === "late").length;
     const attn = [
-      notAcc && ["courier", `${plural(notAcc, "заказ", "заказа", "заказов")} Рашад ещё не принял`, "amber"],
-      late && ["all", `Ozon не подтвердил доставку · ${late}`, "red"],
+      b.fresh.send.length && ["fresh", `${plural(b.fresh.send.length, "новый заказ ждёт", "новых заказа ждут", "новых заказов ждут")} отправки`, "amber"],
+      b.fresh.nodate.length && ["fresh", `${plural(b.fresh.nodate.length, "заказ", "заказа", "заказов")} у Рашада без даты`, "amber"],
+      late && ["today", `${plural(late, "заказ", "заказа", "заказов")} с прошедшей датой`, "red"],
+      notAcc && ["today", `Рашад ещё не принял ${plural(notAcc, "заказ", "заказа", "заказов")}`, "amber"],
+      ozLate && ["today", `Ozon не подтвердил доставку · ${ozLate}`, "red"],
     ].filter(Boolean);
-    el.innerHTML = `<div class="m-kpis">
-      ${kpi("n", 'data-focus="new"', "К отправке", toSend, toSend ? "нужен ЦБ и оплата" : "всё отправлено", toSend ? "hot" : "", "send")}
-      ${kpi("n", 'data-focus="courier"', "У Рашада", active, active ? `${agreed} согласовано · ${kgText(kg)}` : "сейчас пусто", "", "truck")}
-      ${kpi("n", 'data-focus="done"', "Доставлено сегодня", doneToday, doneToday ? "отлично идём" : "пока ни одной", "good", "checkc")}
-      ${pay}
-    </div>${attn.length ? `<div class="m-attn">${attn.map(([tab, t, c]) => `<button type="button" class="m-attn-i ${c}" data-focus="${tab}"><i></i>${e(t)}${ic("chev", "s")}</button>`).join("")}</div>` : ""}`;
+    const day = new Date().toLocaleDateString("ru-RU", {weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Moscow"});
+    el.innerHTML = `<section class="o-day">
+      <div class="o-day-h"><div><span class="o-day-k">${e(day[0].toUpperCase() + day.slice(1))}</span><b>${total ? `Доставлено <span data-count="${t.done.length}">${t.done.length}</span> из ${total}` : "На сегодня пусто"}</b></div>
+      <div class="o-ring" style="--p:${pct}"><span>${Math.round(pct * 100)}%</span></div></div>
+      <div class="m-bar o-bar"><i style="--p:${pct}"></i></div>
+      <div class="o-sum3"><div><span>Товар</span><b>${money(s.goods)} ₽</b></div><div><span>Рашаду</span><b>${money(s.courier)} ₽</b></div><div class="${s.profit < 0 ? "neg" : "pos"}"><span>Прибыль</span><b>${s.profitKnown ? money(s.profit) + " ₽" : "—"}</b></div></div>
+      ${attn.length ? `<div class="o-attn">${attn.map(([tab, txt, c]) => `<button type="button" class="o-attn-i ${c}" data-focus="${tab}"><i></i><span>${e(txt)}</span>${ic("chev", "s")}</button>`).join("")}</div>` : ""}
+    </section>`;
     tickCount(el);
   } catch (err) {
     console.error("Owner dash error:", err);
@@ -879,59 +902,59 @@ function flowOf(p) {
   const steps = FLOW.map(([k, label, icon], i) => ({k, label, icon, done: i <= cur, when: i <= cur ? whenShort(at[k]) : ""}));
   return {steps, cur, cancelled, now: cancelled ? {k: "cancel", label: "Отменён", icon: "x", when: ""} : steps[cur]};
 }
-function flowLine(p) {  // компактный путь на карточке: точки + «Сейчас: В пути · 09:12»
+// Степпер карточки: Передан → Принял → Согласован → В пути → Доставлен, с подписями под точками
+const MINI = [["sent", "Передан", [1]], ["ack", "Принял", [2]], ["agreed", "Согласован", [3]], ["enroute", "В пути", [4, 5]], ["done", "Доставлен", [6]]];
+function flowLine(p) {
   const f = flowOf(p);
-  return `<div class="m-flow k-${f.now.k}" aria-label="Этап: ${e(f.now.label)}">
-    <ol>${f.steps.map((s, i) => `<li class="${s.done && !f.cancelled ? "on" : ""}${i === f.cur && !f.cancelled ? " cur" : ""}" title="${e(s.label + (s.when ? " · " + s.when : ""))}">${i === f.cur && !f.cancelled ? ic(s.icon, "s") : ""}</li>`).join("")}
-    ${f.cancelled ? `<li class="cur x">${ic("x", "s")}</li>` : ""}</ol>
-    <span class="m-flow-now">${ic(f.now.icon, "s")}<b>${e(f.now.label)}</b>${f.now.when ? `<time>${e(f.now.when)}</time>` : ""}</span></div>`;
+  const curMini = MINI.reduce((c, [, , idx], i) => (f.cur >= idx[0] ? i : c), -1);
+  return `<ol class="o-step${f.cancelled ? " x" : ""}" aria-label="Этап: ${e(f.now.label)}">${MINI.map(([k, label], i) =>
+    `<li class="${i < curMini ? "on" : i === curMini ? "on cur" : ""}"><i></i><span>${label}</span></li>`).join("")}</ol>`;
 }
 function flowTimeline(p) {  // подробный путь в карточке заказа: каждый этап со временем по Москве
   const f = flowOf(p);
   return `<ol class="m-tl k-${f.now.k}">${f.steps.map((s, i) => {
     const state = f.cancelled ? (s.done ? "done" : "off") : i < f.cur ? "done" : i === f.cur ? "cur" : "off";
     return `<li class="${state}"><span class="m-tl-ic">${ic(s.icon, "s")}</span><b>${e(s.label)}</b><time>${e(s.when || (state === "off" ? "" : "—"))}</time></li>`;
-  }).join("")}${f.cancelled ? `<li class="cur cancel"><span class="m-tl-ic">${ic("x", "s")}</span><b>Отменён в Ozon</b><time></time></li>` : ""}</ol>`;
+  }).join("")}${f.cancelled ? `<li class="cur cancel"><span class="m-tl-ic">${ic("x", "s")}</span><b>Отменён</b><time></time></li>` : ""}</ol>`;
 }
-// «В работе»: все заказы, которые ещё не доставлены и не отменены, с текущим этапом
-function drawBoard() {
-  const el = $("board");
-  if (!el) return;
-  const items = (ORDERS || []).map((p, i) => [p, i]).filter(([p]) => !isFbs(p) && (otabCategory(p) === "courier" || (otabCategory(p) === "new" && ["ship", "way"].includes(stage(p.status)[0]))))
-    .map(([p, i]) => [p, i, flowOf(p)]).sort((a, b) => b[2].cur - a[2].cur);
-  if (!items.length) { el.innerHTML = ""; return; }
-  el.innerHTML = `<section class="m-card m-board"><div class="m-card-h"><h2>В работе <em>${items.length}</em></h2><span class="m-board-r" data-rseen></span></div>
-    <ul>${items.map(([p, i, f]) => {
-      const d = DELIV[p.posting_number], a = (p.customer || {}).address || {};
-      return `<li><button type="button" class="m-brow k-${f.now.k}" data-board="${i}"><span class="m-brow-ic">${ic(f.now.icon, "s")}</span>` +
-        `<span class="m-brow-t"><b>${e(d && d.cb ? d.cb : "Без ЦБ")} · ${e(addrParts((d && d.address) || a.address_tail || a.city)[0])}</b><small>${e(fmtLine(p))}</small></span>` +
-        `<span class="m-brow-s"><b>${e(f.now.label)}</b><small>${e(f.now.when || "")}</small></span>` +
-        `<span class="m-brow-bar"><i style="--p:${f.cur / 6}"></i></span></button></li>`;
-    }).join("")}</ul></section>`;
+function drawBoard() {}  // «В работе» теперь раздел вкладки «Сегодня»
+
+// Подпись статуса для карточки: «В пути · 09:12», «Доставлен · 09:40», «Ждёт отправки»
+function statusPill(p, o) {
+  const st = cardState(p), f = flowOf(p);
+  if (st.cat === "cancel") return `<span class="o-pill red">${ic("x", "s")}Отменён</span>`;
+  if (st.cat === "done") { const d = DELIV[p.posting_number], t = d && whenShort(d.delivered_at); return `<span class="o-pill green">${ic("checkc", "s")}Доставлен${t ? " · " + e(t) : ""}</span>`; }
+  if (st.cat === "new") return `<span class="o-pill amber">${ic("send", "s")}${e(st.chip)}</span>`;
+  if (o && o.late) return `<span class="o-pill red">${ic("alert", "s")}Дата прошла</span>`;
+  return `<span class="o-pill ${st.cls}">${ic(f.now.icon, "s")}${e(st.chip)}${f.now.when && f.now.k !== "sent" ? " · " + e(f.now.when) : ""}</span>`;
 }
-function orderCard(p, i, n = 0) {
+function moneyRow(m, cat) {
+  if (cat === "cancel") return "";
+  const prof = m.profit == null ? "—" : (m.profit < 0 ? "−" : "") + money(m.profit) + " ₽";
+  return `<div class="o-money"><div><span>Товар</span><b>${money(m.goods)} ₽</b></div><div><span>${m.planned ? "Рашаду (план)" : "Рашаду"}</span><b>${money(m.courier)} ₽</b></div>` +
+    `<div class="lv-${m.level || "x"} ${m.profit != null && m.profit < 0 ? "neg" : ""}"><span>Прибыль</span><b>${prof}</b></div></div>`;
+}
+function orderCard(p, i, n = 0, o) {
   if (isFbs(p)) return "";
   const d = DELIV[p.posting_number], st = cardState(p), a = (p.customer || {}).address || {};
+  o = o || orderDay(p, d);
   const [area, rest] = addrParts((d && d.address) || a.address_tail || a.city || "Адрес уточняется");
   const info = d ? deliveryDetails(d.comment) : {};
-  const when = d ? whenLine(d, info, agreementOf(d)) : ozWindow(p);
+  const time = d ? (info.time || (agreementOf(d) || {}).slot || "") : "";
+  const when = d ? (d.date && d.date !== todayStr() ? shortDate(d.date) + (time ? ", " + time : "") : time || (d.date ? "" : "без даты")) : ozWindow(p).replace(/ МСК$/, "");
   const unload = d ? d.unload : unloadText(p.prr_option);
-  const cb = d && d.cb ? `<button type="button" class="m-cb" data-edit-cb="${e(p.posting_number)}" data-cur-cb="${e(d.cb)}" aria-label="Изменить номер ЦБ ${e(d.cb)}">${e(d.cb)}${ic("edit", "s")}</button>`
-    : st.cat === "new" ? `<span class="m-cb need">Без ЦБ</span>` : "";
-  const meta = [
-    `<span>${ic("box", "s")}${e(fmtLine(p))} · ${kgText(orderKg(p))}</span>`,
-    when ? `<span class="${d && !d.date ? "warn" : ""}">${ic("clock", "s")}${e(when)}</span>` : "",
-    unload && unload !== "Нет" ? `<span>${ic("lift", "s")}${e(unload)}</span>` : "",
-  ].filter(Boolean).join("");
+  const m = orderMoney(p, d, PRICES);
   const act = primaryActions(p, i);
-  return `<article class="m-oc st-${st.cat}" data-card="${i}" tabindex="0" aria-haspopup="dialog" style="--i:${Math.min(n, 10)}">
-    <div class="m-oc-top">${cb}${st.cat === "done" || st.cat === "cancel" ? `<span class="m-chip ${st.cls}">${e(st.chip)}</span>` : ""}<span class="m-oc-age">${e(ago(p.in_process_at))}</span></div>
-    <div class="m-oc-addr"><b>${e(area)}</b>${rest ? `<span>${e(rest)}</span>` : ""}</div>
-    <div class="m-oc-meta">${meta}</div>
-    ${st.cat === "courier" || st.cat === "new" ? flowLine(p) : ""}
-    <div class="m-oc-foot"><span class="m-oc-pn">${e(p.posting_number)}</span>${act}</div>
+  return `<article class="o-card st-${st.cat}${o.late ? " late" : ""}" data-card="${i}" tabindex="0" aria-haspopup="dialog" style="--i:${Math.min(n, 10)}">
+    <header class="o-card-h">${d && d.cb ? `<span class="o-cb">${e(d.cb)}</span>` : st.cat === "new" ? `<span class="o-cb need">Без ЦБ</span>` : ""}${statusPill(p, o)}${when ? `<span class="o-when ${d && !d.date ? "warn" : ""}">${ic("clock", "s")}${e(when)}</span>` : ""}</header>
+    <div class="o-addr"><b>${e(area)}</b>${rest ? `<span>${e(rest)}</span>` : ""}</div>
+    <div class="o-meta"><span>${ic("box", "s")}${e(fmtLine(p))} · ${kgText(orderKg(p))}</span>${unload && unload !== "Нет" ? `<span>${ic("lift", "s")}${e(unload)}</span>` : ""}</div>
+    ${st.cat === "courier" || st.cat === "done" ? flowLine(p) : ""}
+    ${moneyRow(m, st.cat)}
+    ${act ? `<div class="o-act">${act}</div>` : ""}
   </article>`;
 }
+
 
 function primaryActions(p, i) {
   if (isFbs(p) || !ADMIN() || !SCRIPT_URL) return "";
@@ -948,7 +971,7 @@ function primaryActions(p, i) {
 }
 
 // «Отправить курьеру»: подтверждение в шторке — ЦБ, оплата Рашаду (доставка + подъём), день и время
-function openSendSheet(posting) {
+function openSendSheet(posting, rep) {
   const p = ORDERS.find(x => x.posting_number === posting);
   if (!p) return;
   if (isFbs(p)) { OTAB = "fbs"; drawOrders(true); toast("FBS остаётся на складе и Рашаду не отправляется"); return; }
@@ -957,32 +980,36 @@ function openSendSheet(posting) {
   const dlv = Math.round(parseFloat(p.delivery_price) || 0), lift = Math.round(parseFloat(prr.price) || 0);
   const iso = off => { const d = new Date(Date.now() + off * 864e5); return new Intl.DateTimeFormat("en-CA", {timeZone: "Europe/Moscow"}).format(d); };
   const win = ozWindow(p);
+  const old = rep && DELIV[rep.old], oi = old ? deliveryDetails(old.comment) : {};
+  const om = old && /^(\d\d)\.(\d\d)\.(\d{4})$/.exec(old.date || ""), oDate = om ? `${om[3]}-${om[2]}-${om[1]}` : "";
+  const oCb = old ? String(old.cb || "").replace(/^ЦБ-?/i, "") : "";
   $("sheetPanel").innerHTML = `<div class="grab"></div>
-<div class="m-sh-head"><div><div class="m-eyebrow">${ic("send", "s")}Отправка Рашаду</div><h2>${e(area)}</h2><div class="mut">${e(rest || posting)}</div></div>
+<div class="m-sh-head"><div><div class="m-eyebrow">${ic(old ? "swap" : "send", "s")}${old ? "Замена · вместо " + e(old.cb || rep.old) : "Отправка Рашаду"}</div><h2>${e(area)}</h2><div class="mut">${e(rest || posting)}</div></div>
 <button type="button" class="m-x" data-close aria-label="Закрыть">${ic("x")}</button></div>
 <div class="m-facts">
   <div><span>Груз</span><b>${e(fmtLine(p))}</b><small>${kgText(orderKg(p))}</small></div>
   <div><span>Подъём</span><b>${e(unloadText(prr))}</b><small>${lift ? "в заказе " + rub(lift) : "не заказан"}</small></div>
   <div><span>Окно Ozon</span><b>${e(win || "—")}</b><small>${e(posting)}</small></div>
 </div>
-<form class="send m-send" data-send="${e(posting)}">
-  <label class="m-cbfield"><span>Номер ЦБ из 1С</span><span class="pref">ЦБ-<input name="cb" placeholder="970" aria-label="Номер ЦБ" inputmode="numeric" autocomplete="off" required></span></label>
+${old ? `<div class="o-replnote">${ic("swap", "s")}<span>После отправки заказ <b>${e(old.cb || rep.old)}</b> (${e(addrParts(old.address)[0])}) станет «Отменён», Рашаду придёт уведомление.</span></div>` : ""}
+<form class="send m-send" data-send="${e(posting)}"${old ? ` data-replold="${e(rep.old)}"` : ""}>
+  <label class="m-cbfield"><span>Номер ЦБ из 1С</span><span class="pref">ЦБ-<input name="cb" placeholder="970" value="${e(oCb)}" aria-label="Номер ЦБ" inputmode="numeric" autocomplete="off" required></span></label>
   <div class="m-pay"><div class="m-pay-h"><span>Оплата Рашаду</span><b id="sendTotal">${rub(dlv + lift)}</b></div>
     <div class="g2"><label>Доставка, ₽<input name="delivery_pay" inputmode="numeric" value="${dlv || ""}" placeholder="0"></label>
     <label>Подъём, ₽<input name="lift_pay" inputmode="numeric" value="${lift || ""}" placeholder="0"></label></div></div>
   <div class="m-fl"><span>Когда везти</span>
     <div class="m-seg" role="group" aria-label="День доставки">
-      <button type="button" data-day="${iso(0)}" aria-pressed="false">Сегодня</button><button type="button" data-day="${iso(1)}" aria-pressed="false">Завтра</button>
-      <input name="date" type="date" aria-label="Другая дата"></div>
-    <span class="slots">${DELIVERY_SLOTS.map(x => `<button type="button" data-slot="${x}" aria-pressed="false">${slotLabel(x)}</button>`).join("")}</span>
-    <input name="time" placeholder="или своё время, например: с 9 до 11" maxlength="100" aria-label="Время доставки"></div>
-  <details class="m-more-f"><summary>${ic("note", "s")}Прораб и пометка для курьера${ic("chev", "s m-chev")}</summary>
-    <label>Телефон прораба<input name="foreman" type="tel" placeholder="+7 900 000-00-00" maxlength="30"></label>
-    <label>Пометка для курьера<textarea name="note" rows="3" maxlength="2000" placeholder="Например: позвонить прорабу за час"></textarea></label>
+      <button type="button" data-day="${iso(0)}" aria-pressed="${oDate === iso(0)}">Сегодня</button><button type="button" data-day="${iso(1)}" aria-pressed="${oDate === iso(1)}">Завтра</button>
+      <input name="date" type="date" value="${oDate}" aria-label="Другая дата"></div>
+    <span class="slots">${DELIVERY_SLOTS.map(x => `<button type="button" data-slot="${x}" aria-pressed="${x === oi.time}">${slotLabel(x)}</button>`).join("")}</span>
+    <input name="time" value="${e(oi.time || "")}" placeholder="или своё время, например: с 9 до 11" maxlength="100" aria-label="Время доставки"></div>
+  <details class="m-more-f"${old && (oi.foreman || oi.note) ? " open" : ""}><summary>${ic("note", "s")}Прораб и пометка для курьера${ic("chev", "s m-chev")}</summary>
+    <label>Телефон прораба<input name="foreman" type="tel" value="${e(oi.foreman || "")}" placeholder="+7 900 000-00-00" maxlength="30"></label>
+    <label>Пометка для курьера<textarea name="note" rows="3" maxlength="2000" placeholder="Например: позвонить прорабу за час">${e(old ? [oi.note, "Замена заказа " + (old.cb || rep.old)].filter(Boolean).join("\n") : "")}</textarea></label>
     ${a.comment ? `<p class="m-hint">Комментарий покупателя «${e(a.comment)}» Рашад увидит автоматически.</p>` : ""}
   </details>
   <p class="m-hint">${ic("alert", "s")}Финансы магазина Рашаду не уходят — только адрес, груз и его оплата.</p>
-  <div class="sdock"><button type="button" class="soft" data-close style="flex:0 0 112px">Отмена</button><button class="f1 m-go">${ic("send")}Отправить · <span id="sendTotal2">${rub(dlv + lift)}</span></button></div>
+  <div class="sdock"><button type="button" class="soft" data-close style="flex:0 0 112px">Отмена</button><button class="f1 m-go">${ic(old ? "swap" : "send")}${old ? "Заменить" : "Отправить"} · <span id="sendTotal2">${rub(dlv + lift)}</span></button></div>
 </form>`;
   sheetShow();
   setTimeout(() => $("sheetPanel").querySelector("input[name=cb]")?.focus({preventScroll: true}), 350);
@@ -1020,8 +1047,77 @@ function orderSteps(p, d) {
   ];
 }
 
-// Карточка заказа: справа на компьютере, шторкой снизу на телефоне
-function openSheet(i) {
+// Карточка заказа: справа на компьютере, шторкой снизу на телефоне. Всё в одном месте: путь, данные, расчёт, правка, отмена.
+let EDITING = "";
+function moneyBlock(p, d) {
+  const m = orderMoney(p, d, PRICES), t = m.t;
+  const row = (k, v, cls = "", sub = "") => `<div class="o-li ${cls}"><span>${k}${sub ? `<small>${sub}</small>` : ""}</span><b>${v}</b></div>`;
+  const minus = x => "−" + money(x) + " ₽", plus = x => money(x) + " ₽";
+  const goods = (p.products || []).map(x => {
+    const price = parseFloat(x.price && x.price.amount != null ? x.price.amount : x.price) || 0;
+    return row(`${x.quantity} уп × ${money(price)} ₽`, plus(price * x.quantity), "", e(shortName(x.name).replace(/^Керамогранит\s+/i, "")));
+  }).join("");
+  const lvl = m.level ? `<span class="o-m2 lv-${m.level}">${money(m.perM2)} ₽/м² · порог ${money(m.floor)}</span>` : "";
+  return `<section class="o-box o-calc"><div class="o-box-h"><h3>${ic("chart", "s")}Расчёт по заказу</h3>${lvl}</div>
+    ${goods}
+    ${m.clientDelivery ? row("Доставка от клиента", plus(m.clientDelivery)) : ""}${m.clientLift ? row("Подъём от клиента", plus(m.clientLift)) : ""}
+    ${row("Клиент платит", plus(m.client), "tot")}
+    ${t ? row(`Комиссия Ozon, эквайринг, сбор`, minus(t.commission + t.acquiring + t.fee)) + row("НДС к уплате", minus(t.vat)) + row("Себестоимость плитки", minus(t.cost)) : ""}
+    ${row(m.planned ? "Рашаду (план)" : "Рашаду", minus(m.courier), "", `доставка ${money(m.courierDelivery)} + подъём ${money(m.courierLift)}`)}
+    ${m.profit != null ? row("Прибыль по заказу", (m.profit < 0 ? "−" : "") + money(m.profit) + " ₽", "tot " + (m.profit < 0 ? "neg" : "pos")) : row("Прибыль", "не считается — не плитка 60×60/60×120", "mut")}
+    <button type="button" class="o-link" data-open="${e(p.posting_number)}">${ic("calc", "s")}Подробный расчёт ₽/м²</button>
+  </section>`;
+}
+function infoBlock(p, d) {
+  const a = (p.customer || {}).address || {}, info = d ? deliveryDetails(d.comment) : {};
+  const name = (info.ozon && info.ozon.customer) || (p.customer || {}).name || (p.addressee || {}).name || "";
+  const phone = d ? d.phone : "";
+  const row = (icon, k, v, sub = "") => v ? `<div class="o-ii">${ic(icon, "s")}<div><span>${k}</span><b>${v}</b>${sub ? `<small>${sub}</small>` : ""}</div></div>` : "";
+  const canEdit = d && ADMIN() && SCRIPT_URL;
+  return `<section class="o-box"><div class="o-box-h"><h3>${ic("orders", "s")}Заказ</h3>${canEdit ? `<button type="button" class="o-edit-btn" data-edit="${e(p.posting_number)}">${ic("edit", "s")}Изменить</button>` : ""}</div>
+    ${row("pin", "Адрес", e((d && d.address) || a.address_tail || a.city || "—"), a.comment ? "Покупатель: " + e(a.comment) : "")}
+    ${row("cal", "Когда", e(d ? whenLine(d, info, agreementOf(d)) : ozWindow(p) || "—"), d && ozWindow(p) ? "Окно Ozon: " + e(ozWindow(p)) : "")}
+    ${row("box", "Груз", e(d && d.packs ? d.packs : fmtLine(p)), kgText(orderKg(p)))}
+    ${row("lift", "Разгрузка", e(d ? d.unload || "Нет" : unloadText(p.prr_option)))}
+    ${row("user", "Получатель", e(name), phone ? e(phone) + (d.ext ? " · доб. " + e(d.ext) : "") : "")}
+    ${info.foreman ? row("phone", "Прораб", e(info.foreman)) : ""}
+    ${info.note ? row("note", "Пометка для Рашада", e(info.note)) : ""}
+  </section>`;
+}
+function editForm(p, d) {
+  const info = deliveryDetails(d.comment);
+  const name = (info.ozon && info.ozon.customer) || (p.customer || {}).name || "";
+  const dm = /^(\d\d)\.(\d\d)\.(\d{4})$/.exec(d.date || ""), dateVal = dm ? `${dm[3]}-${dm[2]}-${dm[1]}` : "";
+  const t = todayIso();
+  const f = (n, label, v, attrs = "") => `<label><span>${label}</span><input name="${n}" value="${e(v ?? "")}" ${attrs}></label>`;
+  return `<form class="o-box o-form" data-editform="${e(p.posting_number)}">
+    <div class="o-box-h"><h3>${ic("edit", "s")}Изменить заказ</h3><button type="button" class="o-edit-btn" data-editcancel>Отмена</button></div>
+    <label><span>Адрес</span><textarea name="address" rows="2" required>${e(d.address)}</textarea></label>
+    <div class="o-f2">${f("cb", "Номер ЦБ", String(d.cb || "").replace(/^ЦБ-?/i, ""), 'inputmode="numeric" autocomplete="off"')}${f("name", "Получатель", name, 'autocomplete="off"')}</div>
+    <div class="o-f2">${f("phone", "Телефон клиента", String(d.phone || "").replace(/^'/, ""), 'type="tel" inputmode="tel"')}${f("ext", "Добавочный", d.ext, 'inputmode="numeric"')}</div>
+    <label><span>Дата доставки</span><div class="m-seg o-dayseg"><button type="button" data-day="${t}" aria-pressed="${dateVal === t}">Сегодня</button><button type="button" data-day="${addDaysIso(t, 1)}" aria-pressed="${dateVal === addDaysIso(t, 1)}">Завтра</button><input name="date" type="date" value="${dateVal}" aria-label="Дата доставки"></div></label>
+    <label><span>Время</span><input name="time" value="${e(info.time)}" placeholder="Например: с 14:00 до 16:00" maxlength="100">
+      <span class="slots">${DELIVERY_SLOTS.map(x => `<button type="button" data-slot="${x}" aria-pressed="${x === info.time}">${slotLabel(x)}</button>`).join("")}</span></label>
+    <div class="o-f2">${f("packs", "Упаковки / товар", d.packs)}${f("unload", "Разгрузка", d.unload, 'placeholder="Нет / Лифт, эт. 5"')}</div>
+    <div class="o-f2">${f("delivery", "Доставка Рашаду, ₽", d.delivery, 'inputmode="numeric"')}${f("lift", "Подъём Рашаду, ₽", d.lift, 'inputmode="numeric"')}</div>
+    <div class="o-total">Рашаду всего: <b data-edittotal>${rub(num(d.delivery) + num(d.lift))}</b></div>
+    ${f("foreman", "Телефон прораба", info.foreman, 'type="tel" placeholder="+7 900 000-00-00"')}
+    <label><span>Пометка для Рашада</span><textarea name="note" rows="2" maxlength="2000">${e(info.note)}</textarea></label>
+    <p class="m-hint">${ic("pin", "s")}При смене адреса точка на карте найдётся заново. Рашад получит уведомление об изменении.</p>
+    <button class="m-btn pri o-save">${ic("check")}Сохранить изменения</button>
+  </form>`;
+}
+function dangerBlock(p, d) {
+  if (!d || !ADMIN() || !SCRIPT_URL) return "";
+  const cancelled = d.status === "Отменён", delivered = d.status === "Доставлен";
+  if (p.status === "cancelled") return "";
+  return `<section class="o-danger">
+    ${cancelled ? `<button type="button" class="o-dbtn" data-restore="${e(p.posting_number)}">${ic("undo")}<span><b>Вернуть в работу</b><small>Заказ снова появится у Рашада</small></span></button>`
+      : delivered ? "" : `<button type="button" class="o-dbtn" data-replace="${e(p.posting_number)}">${ic("swap")}<span><b>Заменить на другой заказ</b><small>Этот отменится, Рашаду уйдёт другой с тем же ЦБ и датой</small></span></button>
+      <button type="button" class="o-dbtn red" data-cancelorder="${e(p.posting_number)}">${ic("ban")}<span><b>Отменить заказ</b><small>Рашаду придёт уведомление «Везти не нужно»</small></span></button>`}
+  </section>`;
+}
+function openSheet(i, keepScroll) {
   const p = ORDERS[i];
   if (!p) return;
   if (isFbs(p)) { OTAB = "fbs"; drawOrders(true); toast("Действия FBS — на вкладке склада, Рашаду заказ не уходит"); return; }
@@ -1035,6 +1131,7 @@ function openSheet(i) {
   const live = ["ship", "way"].includes(stage(p.status)[0]);
   const needOzon = d && !["delivered", "cancelled"].includes(p.status) && ozState(p) !== "wait";
   const notes = d ? courierNotes(d.courier_comment) : {};
+  const editing = EDITING === p.posting_number && d;
   const qa = [
     tel ? `<a class="m-qa" href="${e(tel)}">${ic("phone")}<span>Клиенту</span></a>` : live ? `<button type="button" class="m-qa" data-call="${e(p.posting_number)}">${ic("phone")}<span>Клиенту</span></button>` : "",
     foreman ? `<a class="m-qa" href="tel:${e(foreman)}">${ic("user")}<span>Прорабу</span></a>` : "",
@@ -1043,45 +1140,102 @@ function openSheet(i) {
     `<a class="m-qa" href="https://seller.ozon.ru/app/postings/fbs?search=${encodeURIComponent(p.posting_number)}" target="_blank" rel="noopener">${ic("nav")}<span>В Ozon</span></a>`,
     `<button type="button" class="m-qa" data-copy="${i}">${ic("copy")}<span>Копировать</span></button>`,
   ].filter(Boolean).join("");
-  let econ = "";
-  try {
-    econ = p.products.map(x => {
-      const [, t] = calc({...p, products: [x]}, PRICES, 0, 0);
-      const delta = Math.round(t.payout_m2 - t.floor);
-      return `<div class="m-econ-r"><div><b>${x.quantity} уп · ${e(tileFormat(String(x.offer_id), x.name) || x.offer_id)}</b><small>${e(shortName(x.name).replace(/^Керамогранит\s+/i, ""))}</small></div>` +
-        `<div class="m-econ-v ${CLS[t.status[0]]}"><b>${money(t.payout_m2)} ₽/м²</b><small>${delta < 0 ? `−${-delta} ₽ ниже порога` : `+${delta} ₽ к порогу`}</small></div></div>`;
-    }).join("");
-  } catch {}
-  const primary = !ADMIN() || !SCRIPT_URL ? "" : !d && live ? `<button type="button" class="f1 m-go" data-sendsheet="${e(p.posting_number)}">${ic("send")}Отправить курьеру</button>`
+  const primary = !ADMIN() || !SCRIPT_URL || editing ? "" : !d && live ? `<button type="button" class="f1 m-go" data-sendsheet="${e(p.posting_number)}">${ic("send")}Отправить курьеру</button>`
     : d && d.status !== "Отменён" && p.status !== "cancelled" && (needOzon || !done) ? `<button type="button" class="f1 m-go ok" data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">${ic("check")}${done ? "Отметить доставленным в Ozon" : "Доставлено"}</button>` : "";
+  const scroll = keepScroll ? $("sheetPanel").scrollTop : 0;
   $("sheetPanel").innerHTML = `<div class="grab"></div>
-<div class="m-sh-head"><div><div class="m-eyebrow"><span class="m-chip ${st.cls}">${e(st.chip)}</span>${d && d.cb ? `<button type="button" class="m-cb" data-edit-cb="${e(p.posting_number)}" data-cur-cb="${e(d.cb)}">${e(d.cb)}${ic("edit", "s")}</button>` : ""}</div>
+<div class="m-sh-head"><div><div class="m-eyebrow">${statusPill(p, orderDay(p, d))}${d && d.cb ? `<button type="button" class="m-cb" data-edit-cb="${e(p.posting_number)}" data-cur-cb="${e(d.cb)}">${e(d.cb)}${ic("edit", "s")}</button>` : ""}</div>
 <h2>${e(area)}</h2><div class="mut">${e(rest)}</div></div>
 <button type="button" class="m-x" data-close aria-label="Закрыть">${ic("x")}</button></div>
+${d || st.cat === "done" ? `<div class="o-bigstep">${flowLine(p)}</div>` : ""}
 <div class="m-qas">${qa}</div>
-<div class="m-facts">
-  <div><span>Груз</span><b>${e(fmtLine(p))}</b><small>${kgText(orderKg(p))}</small></div>
-  <div><span>${d ? "Когда" : "Окно Ozon"}</span><b>${e(d ? whenLine(d, info, agreementOf(d)) : ozWindow(p) || "—")}</b><small>${d && ozWindow(p) ? "Ozon: " + e(ozWindow(p)) : "время московское"}</small></div>
-  <div><span>Подъём</span><b>${e(d ? d.unload || "Нет" : unloadText(p.prr_option))}</b><small>${d ? "Рашаду " + rub((Number(d.delivery) || 0) + (Number(d.lift) || 0)) : "оплата при отправке"}</small></div>
-</div>
-
 ${notes.text ? `<div class="m-quote"><span>Комментарий Рашада</span>${e(notes.text)}</div>` : ""}
-${info.note ? `<div class="m-quote soft"><span>Пометка для курьера</span>${e(info.note)}</div>` : ""}
-<div class="sgroup">Путь заказа · время московское</div>
-${flowTimeline(p)}
-${d && ozState(p) ? `<div class="m-ozs ${ozState(p)}">${OZ_LINE[ozState(p)]}</div>` : ""}
-${econ ? `<div class="sgroup">Экономика · только для вас</div><div class="m-econ">${econ}</div>` : ""}
-<div class="sgroup">Ещё</div>
-${d && ADMIN() && SCRIPT_URL ? `<details class="sitem-details"><summary class="sitem">${ic("edit")}Изменить дату, время, прораба, оплату${ic("chev", "s m-chev")}</summary>` +
-  `<form data-schedule="${e(p.posting_number)}">${deliveryFields(d, p)}<button>Сохранить изменения</button></form></details>` : ""}
-<button class="sitem" data-open="${e(p.posting_number)}">${ic("chart")}Полный расчёт ₽/м²</button>
-<details class="sitem-details"><summary class="sitem">${ic("orders")}Данные Ozon${ic("chev", "s m-chev")}</summary>${ozonInfoHtml(info.ozon)}
+${editing ? editForm(p, d) : infoBlock(p, d)}
+${editing ? "" : moneyBlock(p, d)}
+${editing ? "" : `<details class="o-box o-more"><summary>${ic("clock", "s")}Путь заказа по времени${ic("chev", "s m-chev")}</summary>${flowTimeline(p)}${d && ozState(p) ? `<div class="m-ozs ${ozState(p)}">${OZ_LINE[ozState(p)]}</div>` : ""}</details>
+<details class="o-box o-more"><summary>${ic("orders", "s")}Данные Ozon${ic("chev", "s m-chev")}</summary>${ozonInfoHtml(info.ozon)}
 <button class="sitem" data-ozon-info="${e(p.posting_number)}">${ic("refresh")}Обновить данные из Ozon</button></details>
+${dangerBlock(p, d)}`}
 <div class="m-pn-line">Отправление <b>${e(p.posting_number)}</b> · ${e(ago(p.in_process_at))}</div>
 ${primary ? `<div class="sdock">${primary}</div>` : ""}`;
   sheetShow();
+  if (keepScroll) $("sheetPanel").scrollTop = scroll;
 }
-const closeSheet = sheetHide;
+const closeSheet = () => { EDITING = ""; sheetHide(); };
+const reopen = posting => { const i = ORDERS.findIndex(x => x.posting_number === posting); if (i >= 0 && !$("sheet").hidden) openSheet(i, true); };
+
+// Пуш Рашаду: отмена, замена, новый адрес. Нет ключа уведомлений — Рашад увидит изменения при обновлении списка.
+async function notifyCourier(posting, text) {
+  try {
+    const jwk = ownerKey(store.get("dlv_vk"));
+    const jwts = {};
+    for (const aud of await sheetApi({action: "push_targets", key: ADMIN()})) jwts[aud] = await vapidJwt(aud, jwk);
+    await sheetApi({action: "remind", key: ADMIN(), posting, text, jwts});
+  } catch {}
+}
+// Координаты по адресу (OpenStreetMap), как в правке заказа у Рашада
+async function geocodeAddress(address) {
+  const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ru&q=" + encodeURIComponent(address), {headers: {"Accept-Language": "ru"}});
+  const [hit] = await r.json();
+  return hit ? {lat: (+hit.lat).toFixed(6), lon: (+hit.lon).toFixed(6)} : {lat: "", lon: ""};
+}
+async function saveEditForm(form) {
+  const posting = form.dataset.editform, old = DELIV[posting], p = ORDERS.find(x => x.posting_number === posting);
+  assertRashadPath(p, old);
+  const v = Object.fromEntries(new FormData(form)), info = deliveryDetails(old.comment);
+  let ozonInfo = info.ozon ? Object.assign({}, info.ozon) : null;
+  const name = String(v.name || "").trim();
+  if (name !== String(form.elements.name.defaultValue || "").trim()) ozonInfo = Object.assign(ozonInfo || {}, {customer: name});
+  const phoneDigits = String(v.phone || "").replace(/\D/g, "").replace(/^8(?=\d{10}$)/, "7");
+  const next = {
+    cb: normalizeCb(v.cb), address: String(v.address || "").trim(), date: v.date ? v.date.split("-").reverse().join(".") : "",
+    phone: phoneDigits ? "+" + phoneDigits : "", ext: String(v.ext || "").replace(/\D/g, ""),
+    packs: String(v.packs || "").trim(), unload: String(v.unload || "").trim() || "Нет",
+    delivery: String(num(v.delivery)), lift: String(num(v.lift)),
+    comment: deliveryComment({note: v.note, time: v.time, foreman: v.foreman, agreed: info.agreed, ozon: ozonInfo}),
+  };
+  if (!next.address) throw new Error("Укажите адрес");
+  const patch = editPatch(old, next);
+  if (!Object.keys(patch).length) return {row: old, patch};
+  if (patch.address) Object.assign(patch, await geocodeAddress(next.address).catch(() => ({lat: "", lon: ""})));
+  const row = await sheetApi({action: "update", key: ADMIN(), posting, data: patch});
+  const changed = [patch.address && "адрес", patch.date !== undefined && "дата", patch.phone !== undefined && "телефон", (patch.delivery || patch.lift) && "оплата"].filter(Boolean);
+  if (changed.length && old.status !== "Доставлен") notifyCourier(posting, `Изменено: ${changed.join(", ")}${patch.address ? " · " + next.address : ""}`.slice(0, 200));
+  return {row, patch};
+}
+async function cancelOrder(posting) {
+  const d = DELIV[posting];
+  if (!d) return;
+  if (!confirm(`Отменить заказ ${d.cb || posting}?\n\n${d.address}\n\nСтатус станет «Отменён», Рашаду придёт уведомление «Везти не нужно».`)) return false;
+  DELIV[posting] = await sheetApi({action: "update", key: ADMIN(), posting, data: {status: "Отменён"}});
+  notifyCourier(posting, `Заказ отменён${d.cb ? " · " + d.cb : ""}. Везти не нужно.`);
+  toast(`${d.cb || "Заказ"} отменён ✓`);
+  return true;
+}
+async function restoreOrder(posting) {
+  const d = DELIV[posting];
+  if (!d || !confirm(`Вернуть ${d.cb || posting} в работу?`)) return false;
+  DELIV[posting] = await sheetApi({action: "update", key: ADMIN(), posting, data: {status: "Новый"}});
+  notifyCourier(posting, `Заказ снова в работе${d.cb ? " · " + d.cb : ""}.`);
+  toast("Заказ снова в работе ✓");
+  return true;
+}
+// «Заменить на другой заказ»: выбор отправления, которого ещё нет у Рашада, затем обычная отправка с тем же ЦБ и датой
+function openReplacePicker(posting) {
+  const d = DELIV[posting];
+  const cands = ORDERS.filter(p => !isFbs(p) && !DELIV[p.posting_number] && ["ship", "way"].includes(stage(p.status)[0]));
+  $("sheetPanel").innerHTML = `<div class="grab"></div>
+<div class="m-sh-head"><div><div class="m-eyebrow">${ic("swap", "s")}Замена заказа</div><h2>Вместо ${e(d.cb || posting)}</h2><div class="mut">${e(d.address)}</div></div>
+<button type="button" class="m-x" data-close aria-label="Закрыть">${ic("x")}</button></div>
+<p class="m-hint">Выберите заказ Ozon, который поедет вместо этого. ${e(d.cb || "")} будет отменён, новый уйдёт Рашаду с тем же ЦБ, датой и временем.</p>
+<form class="o-repl" data-replform="${e(posting)}"><input name="num" placeholder="Номер отправления, например 48210000-0001-1" autocomplete="off" aria-label="Номер отправления"><button class="m-btn pri">Дальше</button></form>
+${cands.length ? `<div class="o-sh">${ic("orders", "s")}<span>Ещё не отправлены</span><em>${cands.length}</em></div><div class="o-pick">${cands.map(p => {
+    const a = (p.customer || {}).address || {};
+    return `<button type="button" class="o-pick-i" data-replpick="${e(p.posting_number)}" data-replfor="${e(posting)}"><b>${e(addrParts(a.address_tail || a.city)[0])}</b><span>${e(fmtLine(p))} · ${e(p.posting_number)}</span>${ic("chev", "s")}</button>`;
+  }).join("")}</div>` : `<p class="mut">Неотправленных заказов нет — введите номер отправления.</p>`}
+<button type="button" class="m-btn ghost o-back" data-backto="${e(posting)}">${ic("back")}Назад к заказу</button>`;
+  sheetShow();
+}
 
 let PAYS = null, PAYS_ERR = "";
 async function loadPays() {
@@ -1627,9 +1781,9 @@ $("app").addEventListener("click", ev => {
     return;
   }
   const t = ev.target.closest("[data-otab]");
-  if (t) { OTAB = t.dataset.otab; drawOrders(true); return; }
+  if (t) { OTAB = t.dataset.otab; if (FIND || !$("searchBox").hidden) { FIND = ""; $("find").value = ""; $("searchBox").hidden = true; $("searchBtn").setAttribute("aria-expanded", "false"); } drawOrders(true); scrollTo({top: 0}); return; }
   const focus = ev.target.closest("[data-focus]");
-  if (focus) { OTAB = focus.dataset.focus; drawOrders(true); document.getElementById("otabs")?.scrollIntoView({block: "start"}); return; }
+  if (focus) { OTAB = focus.dataset.focus; drawOrders(true); if (OTAB !== "today") scrollTo({top: 0, behavior: REDUCED() ? "auto" : "smooth"}); else document.querySelector(".o-sec")?.scrollIntoView({block: "start", behavior: REDUCED() ? "auto" : "smooth"}); return; }
   const mo = ev.target.closest("[data-more]");
   if (mo) { openSheet(+mo.dataset.more); return; }
   const ss = ev.target.closest("[data-sendsheet]");
@@ -1666,7 +1820,6 @@ $("reload").onclick = () => busyBtn($("reload"), () => loadOrders());
 $("app").addEventListener("click", ev => {
   const br = ev.target.closest("[data-board]");
   if (br) { openSheet(+br.dataset.board); return; }
-  if (ev.target.closest("[data-showdone]")) { SHOW_DONE = true; drawOrders(); return; }
   const fly = ev.target.closest("[data-flyto], [data-mapgo]");
   if (fly) {
     const num = fly.dataset.flyto || fly.dataset.mapgo, d = DELIV[num], p = ORDERS.find(x => x.posting_number === num), a = (p && p.customer || {}).address || {};
@@ -1678,7 +1831,7 @@ $("app").addEventListener("click", ev => {
 });
 $("reload2").onclick = () => busyBtn($("reload2"), () => loadOrders());
 function skelKpis() {
-  return `<div class="m-kpis m-sk" aria-hidden="true">${'<div class="m-kpi"><i class="skl w50 xs"></i><i class="skl ttl w40"></i><i class="skl w70 xs"></i></div>'.repeat(4)}</div>`;
+  return `<section class="o-day m-sk" aria-hidden="true"><i class="skl w40 xs"></i><i class="skl ttl w70"></i><i class="skl w100 xs"></i><div class="o-sum3">${'<div><i class="skl w70 xs"></i><i class="skl w50"></i></div>'.repeat(3)}</div></section>`;
 }
 
 $("export").onclick = () => {
@@ -1822,6 +1975,14 @@ $("app").addEventListener("submit", async ev => {
       r = await sendToCourier(f.dataset.send, f.elements.cb.value.trim(), details);
     }
     DELIV[r.posting] = r;
+    if (f.dataset.replold && DELIV[f.dataset.replold]) {  // замена: старый заказ — «Отменён» с пометкой, Рашаду уведомление
+      const oldPn = f.dataset.replold, o = DELIV[oldPn], oi = deliveryDetails(o.comment);
+      try {
+        DELIV[oldPn] = await sheetApi({action: "update", key: ADMIN(), posting: oldPn, data: {status: "Отменён",
+          comment: deliveryComment({...oi, note: [oi.note, "Заменён на " + r.posting].filter(Boolean).join("\n")})}});
+        notifyCourier(oldPn, `${o.cb || "Заказ"} отменён — вместо него новый заказ ${r.cb || r.posting}.`);
+      } catch (err) { toast("Новый заказ ушёл, но старый не отменился: " + err.message, true); }
+    }
     if (f.dataset.schedule) {
       btn.disabled = false; btn.textContent = "Сохранено ✓";
       setTimeout(() => { btn.innerHTML = label; }, 2000);
@@ -1836,6 +1997,76 @@ $("app").addEventListener("submit", async ev => {
     toast(err.message, true);
   }
 });
+
+// ---------- действия новой карточки: правка, отмена, возврат, замена, архив, поиск ----------
+$("app").addEventListener("click", async ev => {
+  const t = ev.target;
+  const ed = t.closest("[data-edit]");
+  if (ed) { EDITING = ed.dataset.edit; reopen(EDITING); setTimeout(() => $("sheetPanel").querySelector(".o-form")?.scrollIntoView({block: "start", behavior: REDUCED() ? "auto" : "smooth"}), 60); return; }
+  if (t.closest("[data-editcancel]")) { const pn = EDITING; EDITING = ""; reopen(pn); return; }
+  const back = t.closest("[data-backto]");
+  if (back) { openSheet(ORDERS.findIndex(x => x.posting_number === back.dataset.backto)); return; }
+  const arch = t.closest("[data-arch]");
+  if (arch) { ARCH.preset = arch.dataset.arch; drawOrders(true); return; }
+  const cx = t.closest("[data-cancelorder], [data-restore]");
+  if (cx) {
+    const posting = cx.dataset.cancelorder || cx.dataset.restore;
+    cx.disabled = true;
+    try {
+      const ok = cx.dataset.cancelorder ? await cancelOrder(posting) : await restoreOrder(posting);
+      if (ok) { drawOrders(); reopen(posting); }
+    } catch (err) { toast(err.message, true); }
+    cx.disabled = false;
+    return;
+  }
+  const rp = t.closest("[data-replace]");
+  if (rp) { openReplacePicker(rp.dataset.replace); return; }
+  const pick = t.closest("[data-replpick]");
+  if (pick) { openSendSheet(pick.dataset.replpick, {old: pick.dataset.replfor}); return; }
+});
+$("app").addEventListener("change", ev => {
+  if (ev.target.id === "archDay" && ev.target.value) { ARCH.preset = "day"; ARCH.from = ev.target.value; drawOrders(true); }
+});
+$("app").addEventListener("input", ev => {
+  const f = ev.target.closest && ev.target.closest("form[data-editform]");
+  if (!f) return;
+  const out = f.querySelector("[data-edittotal]");
+  if (out) out.textContent = rub(num(f.elements.delivery.value) + num(f.elements.lift.value));
+  if (ev.target.name === "date") f.querySelectorAll("[data-day]").forEach(b => b.setAttribute("aria-pressed", b.dataset.day === ev.target.value));
+});
+$("app").addEventListener("submit", async ev => {
+  const ef = ev.target.closest("form[data-editform]");
+  if (ef) {
+    ev.preventDefault();
+    const btn = ef.querySelector(".o-save"), label = btn.innerHTML;
+    btn.disabled = true; btn.textContent = "Сохраняю…";
+    try {
+      const {row, patch} = await saveEditForm(ef);
+      DELIV[row.posting || ef.dataset.editform] = row;
+      EDITING = "";
+      drawOrders();
+      reopen(ef.dataset.editform);
+      toast(Object.keys(patch).length ? (patch.address && !patch.lat ? "Сохранено. Точку на карте не нашли — Рашад откроет адрес в навигаторе" : "Изменения сохранены ✓") : "Ничего не изменилось", !!(patch.address && !patch.lat));
+    } catch (err) { btn.disabled = false; btn.innerHTML = label; toast(err.message, true); }
+    return;
+  }
+  const rf = ev.target.closest("form[data-replform]");
+  if (rf) {
+    ev.preventDefault();
+    const num0 = rf.elements.num.value.trim(), p = ORDERS.find(x => x.posting_number === num0);
+    if (!p) { toast("Такого отправления нет в заказах Ozon за 90 дней", true); return; }
+    if (isFbs(p)) { toast("FBS остаётся на складе и Рашаду не отправляется", true); return; }
+    if (DELIV[num0]) { toast("Этот заказ уже у Рашада", true); return; }
+    openSendSheet(num0, {old: rf.dataset.replform});
+  }
+});
+$("searchBtn").onclick = () => {
+  const box = $("searchBox"), open = box.hidden;
+  box.hidden = !open;
+  $("searchBtn").setAttribute("aria-expanded", open);
+  if (open) setTimeout(() => $("find").focus(), 30);
+  else { $("find").value = ""; FIND = ""; drawOrders(true); }
+};
 
 document.querySelectorAll("[data-ic]").forEach(x => { x.outerHTML = ic(x.dataset.ic); });
 show();
