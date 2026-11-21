@@ -53,6 +53,8 @@ let ORDERS = [], PRICES = {}, DELIV = {}, PAYS = [], PAYS_OK = false, RASHAD = n
 let MODE = DEMO ? "demo" : "gate", LOADING = false, LOAD_ERR = "";
 let TAB = "today", Q = "", OPEN = "", EXTRA = null, CONFIRM = null, FILTER = "all", VIEW = "lanes";
 let ARCH = "7", ARCH_DAY = "", PANEL = "", PANEL_TAB = "courier";
+let LANE = -1, LANE_USER = false;
+const LANE_COLS = [["sent", "Передан"], ["ack", "Принял"], ["agreed", "Согласован"], ["enroute", "В пути"], ["onsite", "На месте"]];
 let MAP = null, MAP_OK = null, PINS = [], RPIN = null, MAP_KEY = "", ROUTE_KEY = "", USER_MOVED = false, MAP_DIRTY = false;
 
 const canSend = p => p && !isAlmalyFbs(p) && !DELIV[p.posting_number] && (SHIP.has(p.status) || WAY.has(p.status));
@@ -478,17 +480,22 @@ function stickyHtml() {
 }
 function listHtml(list) { return list.map((p, n) => cardHtml(p, n)).join("") || `<div class="empty"><b>Здесь пусто</b><p>Под этот фильтр заказов нет.</p></div>`; }
 function lanesHtml(work) {
-  const cols = [["sent", "Передан"], ["ack", "Принял"], ["agreed", "Согласован"], ["enroute", "В пути"], ["onsite", "На месте"]];
-  return `<div class="lanes">${cols.map(([k, name]) => {
-    const list = work.filter(p => track(p).key === k);
-    return `<section class="lane"><h3><span class="badge k-${k}">${esc(name)}</span><em>${list.length}</em></h3>${list.length ? list.map((p, n) => cardHtml(p, n)).join("") : `<p class="hint">пусто</p>`}</section>`;
+  const lists = LANE_COLS.map(([k]) => work.filter(p => track(p).key === k));
+  if (!wide() && (!LANE_USER || LANE < 0)) { const first = lists.findIndex(l => l.length); LANE = first < 0 ? 0 : first; }
+  const bar = wide() ? "" : `<nav class="lanebar" aria-label="Статусы" style="--n:${LANE_COLS.length}"><i class="lanebar-ind" aria-hidden="true"></i>${LANE_COLS.map(([k, name], i) => {
+    const bad = lists[i].some(p => track(p).problems.length);
+    return `<button type="button" class="k-${k}${bad ? " bad" : ""}" data-lane="${i}" aria-current="${i === LANE}"><b>${lists[i].length}</b><span>${esc(name)}</span></button>`;
+  }).join("")}</nav>`;
+  return bar + `<div class="lanes">${LANE_COLS.map(([k, name], i) => {
+    const list = lists[i];
+    return `<section class="lane" data-lane="${i}"><h3><span class="badge k-${k}">${esc(name)}</span><em>${list.length}</em></h3>${list.length ? list.map((p, n) => cardHtml(p, n)).join("") : `<p class="hint">пусто</p>`}</section>`;
   }).join("")}</div>`;
 }
 function tableHtml(list) {
   const rows = list.map(p => {
     const t = track(p), m = moneyOf(p);
     const flag = t.problems.map(x => x.t).join(", ") || (t.next ? "дальше: " + t.next : "");
-    return `<tr class="${OPEN === p.posting_number ? "hot" : ""}" data-id="${esc(p.posting_number)}"><td><button type="button" class="link" data-act="open" data-id="${esc(p.posting_number)}"><span class="badge k-${t.key}">${ic(ICO[t.key], "s")}${esc(t.label)}</span></button></td><td>${esc(t.when || "—")}</td><td>${esc(addrParts(addrOf(p))[0])}</td><td>${esc(t.expected)}</td><td class="${t.problems.length ? "bad" : ""}">${esc(flag)}</td><td>${t.seen ? "видел" : "не видел"}</td><td>${m.profit == null ? "—" : rub(m.profit)}</td></tr>`;
+    return `<tr class="${OPEN === p.posting_number ? "hot" : ""}" data-id="${esc(p.posting_number)}"${wide() ? "" : ` data-act="open"`}><td><button type="button" class="link" data-act="open" data-id="${esc(p.posting_number)}"><span class="badge k-${t.key}">${ic(ICO[t.key], "s")}${esc(t.label)}</span></button></td><td>${esc(t.when || "—")}</td><td>${esc(addrParts(addrOf(p))[0])}</td><td>${esc(t.expected)}</td><td class="${t.problems.length ? "bad" : ""}">${esc(flag)}</td><td>${t.seen ? "видел" : "не видел"}</td><td>${m.profit == null ? "—" : rub(m.profit)}</td></tr>`;
   }).join("");
   return `<div class="tablewrap"><table class="grid"><thead><tr><th>Статус</th><th>Время</th><th>Адрес</th><th>Когда везти</th><th>Дальше</th><th>Рашад</th><th>Прибыль</th></tr></thead><tbody>${rows || `<tr><td colspan="7">Пусто</td></tr>`}</tbody></table></div>`;
 }
@@ -505,14 +512,15 @@ function renderStage() {
   if (TAB === "today") {
     const pack = todayPack();
     let body = "";
-    if (wide() && VIEW === "table") body = tableHtml(pack.work);
-    else if (wide() && VIEW === "lanes" && FILTER === "all") body = lanesHtml(pack.work);
+    if (VIEW === "table") body = tableHtml(pack.work);
+    else if (VIEW === "lanes" && FILTER === "all") body = lanesHtml(pack.work);
     else body = `<section class="sec"><h2>По срочности <em>${pack.work.length}</em></h2>${listHtml(pack.work)}</section>`;
     if (FILTER === "all") {
       body += pack.done.length ? `<section class="sec"><h2>Доставлено сегодня <em>${pack.done.length}</em></h2>${listHtml(pack.done)}</section>` : "";
       body += pack.cancel.length ? `<details class="sec"><summary>Отменено сегодня <em>${pack.cancel.length}</em></summary>${listHtml(pack.cancel)}</details>` : "";
     }
     el.innerHTML = body;
+    setupLanes();
   } else if (TAB === "fresh") {
     const b = buckets();
     el.innerHTML = `<section class="sec"><h2>Нужно отправить <em>${b.fresh.send.length}</em></h2>${listHtml(b.fresh.send.map(([p]) => p))}</section>
@@ -525,7 +533,7 @@ function renderStage() {
     const [from, to] = archBounds();
     const list = archiveRange(buckets().archive, from, to);
     const chips = [["1", "Вчера"], ["7", "7 дней"], ["30", "30 дней"], ["all", "Всё"]].map(([k, v]) => `<button type="button" data-act="arch" data-arch="${k}" aria-pressed="${ARCH === k}">${v}</button>`).join("");
-    el.innerHTML = `<div class="arch">${chips}</div>` + (wide() && VIEW === "table" ? tableHtml(list.map(([p]) => p)) : listHtml(list.map(([p]) => p)));
+    el.innerHTML = `<div class="arch">${chips}</div>` + (VIEW === "table" ? tableHtml(list.map(([p]) => p)) : listHtml(list.map(([p]) => p)));
   }
 }
 function searchHtml() {
@@ -540,7 +548,8 @@ function paintChrome() {
   const b = ORDERS.length ? buckets() : {today: {work: [], done: [], cancel: []}, fresh: {send: [], nodate: []}, upcoming: {}, archive: [], fbs: 0};
   const counts = {today: b.today.work.length + b.today.done.length + b.today.cancel.length, fresh: b.fresh.send.length + b.fresh.nodate.length, ahead: Object.values(b.upcoming).reduce((s, l) => s + l.length, 0), archive: b.archive.length};
   const tabs = [["today", "Сегодня", "M8 3v2M16 3v2M4 8h16M6 5h12a1 1 0 0 1 1 1v13H5V6a1 1 0 0 1 1-1z"], ["fresh", "Новые", "M7 4h10v16l-2-1.2L13 20l-2-1.2L9 20l-2-1.2V4z"], ["ahead", "Впереди", "M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z"], ["archive", "Архив", "M4 7h16v12H4zM4 7l2-3h12l2 3"]];
-  $("tabbar").innerHTML = tabs.map(([k, name, path]) => `<button type="button" data-tab="${k}" aria-current="${!Q && TAB === k ? "page" : "false"}"><svg viewBox="0 0 24 24"><path d="${path}"/></svg>${name}${counts[k] ? `<em>${counts[k]}</em>` : ""}</button>`).join("");
+  $("tabbar").innerHTML = tabs.map(([k, name, path]) => `<button type="button" data-tab="${k}" aria-current="${!Q && TAB === k ? "page" : "false"}"><svg viewBox="0 0 24 24"><path d="${path}"/></svg>${name}${counts[k] ? `<em>${counts[k]}</em>` : ""}</button>`).join("")
+    + `<button type="button" data-mapbtn aria-pressed="${document.body.classList.contains("map-open")}"><svg viewBox="0 0 24 24"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>Карта</button>`;
   $("sticky").innerHTML = stickyHtml();
   $("fresh").textContent = freshLabel();
   $("ribbon").textContent = MODE === "demo" ? "Демо · в таблицу и Ozon ничего не отправляется" : "Только чтение · правки остаются на экране";
@@ -883,6 +892,7 @@ function onAct(el) {
   if (act === "copy") { const done = () => toast("Номер скопирован"); if (navigator.clipboard) navigator.clipboard.writeText(id).then(done, done); else done(); return; }
   if (act === "fly") {
     const ll = llOf(ORDERS.find(x => x.posting_number === id));
+    if (!wide()) { closeOrder(); setMapOpen(true); if (ll) setTimeout(() => MAP && MAP.flyTo({center: [ll[1], ll[0]], zoom: 14, duration: reduced() ? 0 : 500}), 420); return; }
     if (ll && MAP) MAP.flyTo({center: [ll[1], ll[0]], zoom: 14, duration: reduced() ? 0 : 500});
   }
 }
@@ -890,7 +900,7 @@ function onAct(el) {
 let swipe = null, suppressClick = false;
 $("stage").addEventListener("touchstart", ev => {
   const face = ev.target.closest(".face");
-  if (!face) return;
+  if (!face || face.closest(".lanes")) return;
   swipe = {face, x: ev.touches[0].clientX, y: ev.touches[0].clientY, lock: "", dx: 0};
 }, {passive: true});
 $("stage").addEventListener("touchmove", ev => {
@@ -916,8 +926,12 @@ document.addEventListener("click", ev => {
   if (suppressClick && ev.target.closest(".face")) { suppressClick = false; return; }
   if (ev.target.closest("[data-order-close]")) { closeOrder(); return; }
   if (ev.target.closest("[data-panel-close]")) { closePanel(); return; }
+  if (ev.target.closest("#tabbar [data-mapbtn]")) { const on = !document.body.classList.contains("map-open"); if (on) USER_MOVED = false; setMapOpen(on); return; }
+  if (ev.target.closest("[data-map-close]")) { setMapOpen(false); return; }
+  const laneBtn = ev.target.closest(".lanebar [data-lane]");
+  if (laneBtn) { goLane(+laneBtn.dataset.lane, true); return; }
   const tab = ev.target.closest("#tabbar [data-tab]");
-  if (tab) { TAB = tab.dataset.tab; Q = ""; if ($("q")) $("q").value = ""; FILTER = "all"; USER_MOVED = false; MAP_KEY = ""; render(); return; }
+  if (tab) { setMapOpen(false); TAB = tab.dataset.tab; Q = ""; if ($("q")) $("q").value = ""; FILTER = "all"; USER_MOVED = false; MAP_KEY = ""; render(); return; }
   const ptab = ev.target.closest("[data-ptab]");
   if (ptab) { PANEL_TAB = ptab.dataset.ptab; renderPanel(); return; }
   const jump = ev.target.closest("[data-jump]");
@@ -934,7 +948,7 @@ document.addEventListener("click", ev => {
 });
 document.addEventListener("keydown", ev => {
   if ((ev.key === "Enter" || ev.key === " ") && ev.target.classList && ev.target.classList.contains("face")) { ev.preventDefault(); onAct(ev.target); }
-  if (ev.key === "Escape") { if (PANEL) closePanel(); else if (document.body.classList.contains("map-full")) setMapFull(false); else if (OPEN) closeOrder(); }
+  if (ev.key === "Escape") { if (PANEL) closePanel(); else if (OPEN) closeOrder(); else if (document.body.classList.contains("map-open")) setMapOpen(false); else if (document.body.classList.contains("map-full")) setMapFull(false); else if (OPEN) closeOrder(); }
 });
 $("q").addEventListener("input", () => { Q = $("q").value.trim().toLowerCase(); renderStage(); MAP_KEY = ""; paintMap(true); });
 $("searchRow").addEventListener("submit", ev => ev.preventDefault());
@@ -971,10 +985,79 @@ $("reloadBtn").addEventListener("click", async () => {
 });
 $("mapToggle").addEventListener("click", () => {
   if (wide()) return;
+  if (document.body.classList.contains("map-open")) { setMapOpen(false); return; }
   document.body.classList.toggle("map-hide");
   $("mapToggle").setAttribute("aria-expanded", String(!document.body.classList.contains("map-hide")));
   setTimeout(() => MAP && MAP.resize(), 80);
 });
+/* Телефон: колонки листаются свайпом, шапка статусов следует за пальцем. */
+function laneStep(lanes) {
+  const first = lanes.querySelector(".lane");
+  return first ? first.getBoundingClientRect().width : lanes.clientWidth;
+}
+function laneMax(lanes) { return Math.max(0, Math.round((lanes.scrollWidth - lanes.clientWidth) / Math.max(1, laneStep(lanes)))); }
+function paintLaneBar(pos) {
+  const bar = document.querySelector(".lanebar"), lanes = document.querySelector(".lanes");
+  if (!bar || !lanes) return;
+  const idx = Math.round(pos);
+  bar.style.setProperty("--pos", pos);
+  bar.querySelectorAll("[data-lane]").forEach(b => b.setAttribute("aria-current", String(+b.dataset.lane === idx)));
+}
+function fitLaneHeight() {
+  const lanes = document.querySelector(".lanes");
+  if (!lanes || wide()) return;
+  const step = laneStep(lanes), from = Math.round(lanes.scrollLeft / Math.max(1, step));
+  const visible = [...lanes.querySelectorAll(".lane")].slice(from, from + Math.max(1, Math.round(lanes.clientWidth / Math.max(1, step))));
+  const h = Math.max(120, ...visible.map(l => l.scrollHeight));
+  lanes.style.height = h + 8 + "px";
+}
+function goLane(i, smooth) {
+  const lanes = document.querySelector(".lanes");
+  if (!lanes) return;
+  LANE_USER = true;
+  LANE = Math.max(0, Math.min(LANE_COLS.length - 1, i));
+  const left = Math.min(LANE, laneMax(lanes)) * laneStep(lanes);
+  lanes.scrollTo({left, behavior: smooth && !reduced() ? "smooth" : "instant"});
+  paintLaneBar(LANE);
+  if (!smooth || reduced()) fitLaneHeight();
+}
+function setupLanes() {
+  const lanes = document.querySelector(".lanes");
+  if (!lanes || wide()) { if (lanes) lanes.style.height = ""; return; }
+  const step = laneStep(lanes);
+  lanes.scrollLeft = Math.min(LANE, laneMax(lanes)) * step;
+  paintLaneBar(LANE);
+  fitLaneHeight();
+  let settle = 0;
+  lanes.addEventListener("scroll", () => {
+    const st = laneStep(lanes), pos = lanes.scrollLeft / Math.max(1, st);
+    paintLaneBar(pos);
+    clearTimeout(settle);
+    settle = setTimeout(() => {
+      const idx = Math.round(lanes.scrollLeft / Math.max(1, laneStep(lanes)));
+      if (idx !== LANE || pos % 1 === 0) { if (idx !== LANE) LANE_USER = true; LANE = idx; }
+      paintLaneBar(LANE); fitLaneHeight();
+    }, 90);
+  }, {passive: true});
+}
+function setMapOpen(on) {
+  if (wide()) on = false;
+  const was = document.body.classList.contains("map-open");
+  document.body.classList.toggle("map-open", on);
+  $("mapClose").hidden = !on;
+  $("mapToggle").setAttribute("aria-expanded", String(on));
+  const btn = document.querySelector("#tabbar [data-mapbtn]");
+  if (btn) btn.setAttribute("aria-pressed", String(on));
+  if (on && !was) {
+    bootMap();
+    setTimeout(() => { if (MAP) { MAP.resize(); if (!USER_MOVED) { MAP_KEY = ""; paintMap(true); } } }, reduced() ? 0 : 380);
+  }
+}
+let wasWide = wide();
+matchMedia("(min-width: 1100px)").addEventListener("change", () => {
+  if (wide() !== wasWide) { wasWide = wide(); setMapOpen(false); render(); setTimeout(() => MAP && MAP.resize(), 60); }
+});
+window.addEventListener("resize", () => { if (!wide()) { const l = document.querySelector(".lanes"); if (l) { l.scrollLeft = Math.min(LANE, laneMax(l)) * laneStep(l); paintLaneBar(LANE); fitLaneHeight(); } } });
 function setMapFull(on) {
   document.body.classList.toggle("map-full", on);
   document.body.classList.remove("map-hide");
@@ -982,7 +1065,7 @@ function setMapFull(on) {
   setTimeout(() => { if (MAP) { MAP.resize(); if (on) { MAP_KEY = ""; paintMap(true); } } }, 60);
 }
 $("mapFull").addEventListener("click", () => setMapFull(true));
-$("mapClose").addEventListener("click", () => setMapFull(false));
+$("mapClose").addEventListener("click", () => { if (document.body.classList.contains("map-open")) setMapOpen(false); else setMapFull(false); });
 $("fitBtn").addEventListener("click", () => { USER_MOVED = false; MAP_KEY = ""; paintMap(true); });
 $("rashadBtn").addEventListener("click", () => {
   const ll = rashadTodayLL() || (rashadPoint() && [+rashadPoint().lat, +rashadPoint().lng]);
