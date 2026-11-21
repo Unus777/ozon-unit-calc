@@ -1,6 +1,4 @@
-/* Прототип экрана менеджера. Заказы, деньги и дни считают calc.js, days.js, fbs.js, config.js.
-   Сеть: в демо нет запросов к Ozon и к таблице. В боевом режиме только чтение
-   (список, карточка, цены, list / where / payments). Запись перехватывается и не уходит. */
+/* Трекер заказов. Деньги и дни — calc.js, days.js, fbs.js. Запись в Ozon и таблицу перехватывается. */
 (function () {
   const READ_SHEET = new Set(["list", "where", "payments"]);
   const READ_OZON = new Set(["/v4/posting/fbs/list", "/v3/posting/fbs/get", "/v5/product/info/prices"]);
@@ -25,9 +23,8 @@
   };
   const liveSheet = sheetApi;
   sheetApi = function (payload) {
-    const action = payload && payload.action;
-    if (!READ_SHEET.has(action) || new URLSearchParams(location.search).get("demo") === "1") {
-      window.__prototypeBlocked.push("sheet:" + (action || "?"));
+    if (!READ_SHEET.has(payload && payload.action) || new URLSearchParams(location.search).get("demo") === "1") {
+      window.__prototypeBlocked.push("sheet:" + ((payload && payload.action) || "?"));
       return Promise.reject(new Error("Прототип не записывает в таблицу"));
     }
     return liveSheet(payload);
@@ -40,30 +37,33 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "
 const sp = n => Math.round(Math.abs(Number(n) || 0)).toLocaleString("ru-RU").replace(/\u00a0/g, " ");
 const rub = n => (Number(n) < 0 ? "−" : "") + sp(n) + " ₽";
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+const wide = () => matchMedia("(min-width: 1100px)").matches;
 const SHIP = new Set(["awaiting_registration", "acceptance_in_progress", "awaiting_approve", "awaiting_packaging", "awaiting_deliver", "not_accepted"]);
 const WAY = new Set(["delivering", "driver_pickup", "sent_by_seller"]);
-const STEPS = [["new", "Не отправлен"], ["sent", "Передан"], ["ack", "Принял"], ["agreed", "Согласован"], ["enroute", "В пути"], ["done", "Доставлен"]];
+const TRACK = [["sent", "Передан"], ["ack", "Принял"], ["agreed", "Согласован"], ["enroute", "В пути"], ["onsite", "На месте"], ["done", "Доставлен"]];
+const ICO = {new: "orders", sent: "send", ack: "check", agreed: "calcheck", enroute: "truck", onsite: "pin", done: "checkc", cancel: "x"};
+const NEXT = {new: "отправить Рашаду", sent: "ждём «Принял»", ack: "согласовать время", agreed: "выехать к клиенту", enroute: "будет «На месте»", onsite: "отметить доставку", done: "", cancel: ""};
 const STORE = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch {} },
   del(k) { try { localStorage.removeItem(k); } catch {} },
 };
 
-let ORDERS = [], PRICES = {}, DELIV = {}, PAYS = [], PAYS_OK = false, RASHAD = null, LOGI = {};
+let ORDERS = [], PRICES = {}, DELIV = {}, PAYS = [], PAYS_OK = false, RASHAD = null, LOGI = {}, UPDATED = Date.now();
 let MODE = DEMO ? "demo" : "gate", LOADING = false, LOAD_ERR = "";
-let TAB = "today", Q = "", OPEN = "", EXTRA = null, CONFIRM = null, CANCEL_OPEN = false;
+let TAB = "today", Q = "", OPEN = "", EXTRA = null, CONFIRM = null, FILTER = "all", VIEW = "lanes";
 let ARCH = "7", ARCH_DAY = "", PANEL = "", PANEL_TAB = "courier";
-let MAP = null, MAP_OK = null, PINS = [], RPIN = null, MAP_KEY = "", ROUTE_KEY = "", USER_MOVED = false, TICK = "";
+let MAP = null, MAP_OK = null, PINS = [], RPIN = null, MAP_KEY = "", ROUTE_KEY = "", USER_MOVED = false, MAP_DIRTY = false;
 
 const canSend = p => p && !isAlmalyFbs(p) && !DELIV[p.posting_number] && (SHIP.has(p.status) || WAY.has(p.status));
 const buckets = () => dayBuckets(ORDERS.map((p, i) => [p, i]), DELIV, mskDay(Date.now()));
 const todayRu = () => isoToRu(mskDay(Date.now()));
+const moneyOf = p => orderMoney(p, DELIV[p.posting_number], PRICES, LOGI);
 
 function unloadText(prr) {
   const floor = prr && prr.floor ? ", эт. " + prr.floor : "";
   if (!prr || !prr.code || prr.code === "none") return "Нет";
-  const name = {lift: "Лифт", stairs: "Лестница"}[prr.code];
-  return (name || prr.code) + floor;
+  return ({lift: "Лифт", stairs: "Лестница"}[prr.code] || prr.code) + floor;
 }
 function goodsLine(p) {
   return (p.products || []).map(x => `${x.quantity} уп ${tileFormat(String(x.offer_id || ""), x.name || "") || x.offer_id}`).join(" + ");
@@ -71,7 +71,6 @@ function goodsLine(p) {
 function orderKg(p) {
   return Math.round((p.products || []).reduce((s, x) => s + (Number(x.quantity) || 0) * packKg(tileFormat(String(x.offer_id || ""), x.name || "")), 0));
 }
-function kgText(kg) { return kg >= 1000 ? (kg / 1000).toFixed(1).replace(".", ",") + " т" : kg + " кг"; }
 function addrParts(s) {
   const t = String(s || "").trim(), i = t.indexOf(",");
   return i > 0 ? [t.slice(0, i), t.slice(i + 1).trim()] : [t, ""];
@@ -84,71 +83,82 @@ function mskClock(v) {
   const d = new Date(v);
   return isNaN(d) ? "" : d.toLocaleTimeString("ru-RU", {timeZone: "Europe/Moscow", hour: "2-digit", minute: "2-digit"});
 }
-function ozWindow(p) {
-  const an = (p && p.analytics_data) || {};
-  if (!an.delivery_date_begin) return "";
-  const day = mskDay(new Date(an.delivery_date_begin).getTime()), t = mskDay(Date.now());
-  const label = day === t ? "сегодня" : day === addDaysIso(t, 1) ? "завтра" : isoToRu(day).slice(0, 5);
-  const end = an.delivery_date_end ? "–" + mskClock(an.delivery_date_end) : "";
-  return `${label} ${mskClock(an.delivery_date_begin)}${end}`;
-}
-function whenOf(p) {
-  const d = DELIV[p.posting_number];
-  if (!d) return ozWindow(p);
-  const info = deliveryDetails(d.comment);
-  const time = info.time || ((agreementOf(d) || {}).slot) || "";
-  if (!d.date) return time || "без даты";
-  if (d.date === todayRu()) return time || "сегодня";
-  return [d.date.slice(0, 5), time].filter(Boolean).join(" · ");
-}
 function whenShort(v) {
   const m = /(\d\d)\.(\d\d)(?:\.\d{4})?\s+(\d\d:\d\d)/.exec(String(v || ""));
   if (!m) return "";
   return `${m[1]}.${m[2]}` === agreedNow().slice(0, 5) ? m[3] : `${m[1]}.${m[2]} ${m[3]}`;
 }
-function phoneOf(p) {
-  const d = DELIV[p.posting_number];
-  if (d && d.phone) return {phone: String(d.phone).replace(/^'/, ""), ext: d.ext || ""};
-  return {phone: (p.customer || {}).phone || "", ext: ((p.addressee || {}).pin) || ""};
+function ozWindow(p) {
+  const an = (p && p.analytics_data) || {};
+  if (!an.delivery_date_begin) return "";
+  const day = mskDay(new Date(an.delivery_date_begin).getTime()), t = mskDay(Date.now());
+  const label = day === t ? "Сегодня" : day === addDaysIso(t, 1) ? "Завтра" : isoToRu(day).slice(0, 5);
+  return `${label} ${mskClock(an.delivery_date_begin)}${an.delivery_date_end ? "–" + mskClock(an.delivery_date_end) : ""}`;
 }
-function telHref(phone, ext) {
-  const digits = String(phone || "").replace(/\D/g, "").replace(/^8(?=\d{10}$)/, "7");
-  const x = ext ? String(ext).replace(/\D/g, "").padStart(4, "0") : "";
-  return digits ? `tel:+${digits}${x ? "," + x : ""}` : "";
-}
-function flow(p) {
+function expectLine(p) {
   const d = DELIV[p.posting_number];
-  const n = d ? courierNotes(d.courier_comment) : {};
-  const a = d ? agreementOf(d) : null;
-  const cancelled = p.status === "cancelled" || !!(d && d.status === "Отменён");
-  const delivered = p.status === "delivered" || !!(d && d.status === "Доставлен");
-  const has = {
-    new: true, sent: !!d, ack: !!(d && isAccepted(d)),
-    agreed: !!(a || (d && d.status === "Согласован")),
-    enroute: !!(n.enroute || n.onsite), done: delivered,
-  };
-  let cur = 0;
-  STEPS.forEach(([k], i) => { if (has[k]) cur = i; });
-  const at = {
-    new: p.in_process_at ? mskStamp(p.in_process_at) : "",
-    sent: d && d.sent, ack: n.ack && n.ack.at, agreed: a && a.at,
-    enroute: (n.onsite && n.onsite.at) || (n.enroute && n.enroute.at),
-    done: d && d.delivered_at,
-  };
-  const steps = STEPS.map(([k, label], i) => ({k, label, when: i <= cur ? whenShort(at[k]) : ""}));
-  if (cancelled) return {key: "cancel", label: "Отменён", cur, steps, onsite: false, when: ""};
-  const key = STEPS[cur][0];
-  return {key, label: STEPS[cur][1], cur, steps, onsite: !!(n.onsite && !delivered && !cancelled), when: whenShort(at[key])};
+  if (!d) return ozWindow(p) || "Окно Ozon не пришло";
+  const info = deliveryDetails(d.comment);
+  const time = info.time || ((agreementOf(d) || {}).slot) || "";
+  if (!d.date) return time ? "Дата не назначена · " + time : "Дата не назначена";
+  const day = d.date === todayRu() ? "Сегодня" : d.date.slice(0, 5);
+  return [day, time].filter(Boolean).join(" · ");
 }
 function lateOf(p) {
   const o = orderDay(p, DELIV[p.posting_number]);
   return o.kind === "work" && !!o.day && o.day < mskDay(Date.now());
 }
-function moneyOf(p) { return orderMoney(p, DELIV[p.posting_number], PRICES, LOGI); }
+function track(p) {
+  const d = DELIV[p.posting_number];
+  const n = d ? courierNotes(d.courier_comment) : {};
+  const a = d ? agreementOf(d) : null;
+  const cancelled = p.status === "cancelled" || !!(d && d.status === "Отменён");
+  const delivered = p.status === "delivered" || !!(d && d.status === "Доставлен");
+  const seen = !!(d && isAccepted(d));
+  const has = {sent: !!d, ack: seen, agreed: !!(a || (d && d.status === "Согласован")), enroute: !!(n.enroute || n.onsite), onsite: !!n.onsite, done: delivered};
+  if (delivered) { has.sent = has.ack = has.agreed = has.enroute = true; }
+  let cur = 0;
+  TRACK.forEach(([k], i) => { if (has[k]) cur = i; });
+  if (delivered) cur = TRACK.length - 1;
+  const at = {
+    sent: d && d.sent, ack: n.ack && n.ack.at, agreed: a && a.at,
+    enroute: n.enroute && n.enroute.at, onsite: n.onsite && n.onsite.at, done: d && d.delivered_at,
+  };
+  const steps = TRACK.map(([k, label], i) => ({k, label, when: i <= cur && at[k] ? whenShort(at[k]) : ""}));
+  const problems = [];
+  if (!cancelled && !delivered && d && !seen) problems.push({k: "unseen", t: "Рашад не видел заказ"});
+  if (!cancelled && !delivered && lateOf(p)) problems.push({k: "late", t: "Дата прошла"});
+  if (!cancelled && !delivered && d && !d.date) problems.push({k: "nodate", t: "Нет даты"});
+  const live = rashadPoint();
+  if (!cancelled && !delivered && (has.enroute || has.onsite) && live && !online(live)) problems.push({k: "off", t: "Рашад не в сети"});
+  if (cancelled) return {key: "cancel", label: "Отменён", cur, steps, when: "", next: "", problems, seen, seenAt: "", expected: expectLine(p)};
+  if (!d) return {key: "new", label: "Не отправлен", cur: -1, steps, when: whenShort(mskStamp(p.in_process_at)), next: NEXT.new, problems, seen: false, seenAt: "", expected: expectLine(p)};
+  const key = TRACK[cur][0];
+  return {key, label: TRACK[cur][1], cur, steps, when: whenShort(at[key]) || whenShort(at.sent), next: NEXT[key] || "", problems, seen, seenAt: n.ack ? whenShort(n.ack.at) : "", expected: expectLine(p)};
+}
+function urgency(p) {
+  const t = track(p);
+  if (t.problems.some(x => x.k === "late")) return 0;
+  if (t.problems.some(x => x.k === "unseen")) return 1;
+  if (t.key === "onsite") return 2;
+  if (t.key === "enroute") return 3;
+  if (t.problems.some(x => x.k === "nodate")) return 4;
+  if (t.key === "agreed") return 5;
+  if (t.key === "ack") return 6;
+  if (t.key === "sent") return 7;
+  if (t.key === "new") return 8;
+  return t.key === "done" ? 20 : 30;
+}
+function passFilter(p) {
+  const t = track(p);
+  if (FILTER === "all") return true;
+  if (FILTER === "problem") return t.problems.length > 0;
+  if (FILTER === "unseen" || FILTER === "late" || FILTER === "nodate" || FILTER === "off") return t.problems.some(x => x.k === FILTER) || (FILTER === "off" && (t.key === "enroute" || t.key === "onsite"));
+  return t.key === FILTER;
+}
 const WD = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
 function dayTitle(iso) {
-  const t = mskDay(Date.now());
-  const d = new Date(iso + "T12:00:00Z");
+  const t = mskDay(Date.now()), d = new Date(iso + "T12:00:00Z");
   const label = d.toLocaleDateString("ru-RU", {day: "numeric", month: "long", timeZone: "UTC"});
   if (iso === t) return "Сегодня, " + label;
   if (iso === addDaysIso(t, 1)) return "Завтра, " + label;
@@ -165,8 +175,7 @@ function archBounds() {
   return ["", ""];
 }
 function tabOf(p) {
-  const b = buckets(), id = p.posting_number;
-  const has = list => list.some(([x]) => x.posting_number === id);
+  const b = buckets(), id = p.posting_number, has = list => list.some(([x]) => x.posting_number === id);
   if (has(b.today.work) || has(b.today.done) || has(b.today.cancel)) return "today";
   if (has(b.fresh.send) || has(b.fresh.nodate)) return "fresh";
   if (Object.values(b.upcoming).some(has)) return "ahead";
@@ -184,9 +193,7 @@ function nearest(points, start) {
   let cur = start;
   while (left.length) {
     left.sort((a, b) => (a.ll[0] - cur[0]) ** 2 + (a.ll[1] - cur[1]) ** 2 - ((b.ll[0] - cur[0]) ** 2 + (b.ll[1] - cur[1]) ** 2));
-    const next = left.shift();
-    out.push(next);
-    cur = next.ll;
+    out.push(left.shift()); cur = out[out.length - 1].ll;
   }
   return out;
 }
@@ -206,6 +213,12 @@ function seenShort(point) {
   return geoSeenText(point, Date.now()).split(" · ")[0].replace("Был в сети ", "");
 }
 function online(point) { return !!(point && point.ts && Date.now() - point.ts < 3 * 60 * 1000); }
+function freshLabel() {
+  const s = Math.round((Date.now() - UPDATED) / 1000);
+  if (s < 20) return "сейчас";
+  if (s < 60) return "обновлено " + s + " с назад";
+  return "обновлено " + Math.round(s / 60) + " мин назад";
+}
 
 function tile(fmt, qty, price) {
   return fmt === "60×120"
@@ -242,185 +255,112 @@ function buildDemo() {
   ORDERS = []; DELIV = {}; LOGI = {};
   const add = (p, row) => { ORDERS.push(p); if (row) putRow(p, row); };
   const cust = (name, phone, address, lat, lon, comment) => ({name, phone, address: {address_tail: address, city: address.split(", ").pop(), comment: comment || "", latitude: lat, longitude: lon}});
-
   const way = posting("00000000-0101-1", {
-    status: "delivering", in_process_at: clockIso(t, "08:10"),
-    products: [tile("60×60", 8, 4200)], delivery_price: "1500",
+    status: "delivering", in_process_at: clockIso(t, "08:10"), products: [tile("60×60", 8, 4200)], delivery_price: "1500",
     prr_option: {code: "lift", price: "900", floor: 5},
     customer: cust("Андрей Соколов", "+79031001001", "Советская улица, 12, Балашиха", 55.7964, 37.9385, "Домофон не работает"),
   });
-  add(way, {
-    cb: "ЦБ-9101", status: "Согласован", date: isoToRu(t), delivery: "1500", lift: "900",
-    sent: isoToRu(t) + " 08:20",
+  add(way, {cb: "ЦБ-9101", status: "Согласован", date: isoToRu(t), delivery: "1500", lift: "900", sent: isoToRu(t) + " 08:20",
     comment: deliveryComment({time: "14:00–16:00", note: "Позвонить за 20 минут", foreman: "+79032001001"}),
-    courier_comment: courierComment({ack: {at: at(t, "08:40")}, agreed: {who: "прораб", at: at(t, "09:05"), slot: "14:00–16:00"}, enroute: {at: at(t, "11:10")}, onsite: {at: at(t, "11:36")}, text: "Поднялись, ждём прораба"}),
-  });
-
+    courier_comment: courierComment({ack: {at: at(t, "08:40")}, agreed: {who: "прораб", at: at(t, "09:05"), slot: "14:00–16:00"}, enroute: {at: at(t, "11:10")}, onsite: {at: at(t, "11:36")}, text: "Поднялись, ждём прораба"})});
   const go = posting("00000000-0102-1", {
-    status: "delivering", in_process_at: clockIso(t, "08:30"),
-    products: [tile("60×120", 6, 5100)], delivery_price: "1800",
+    status: "delivering", in_process_at: clockIso(t, "08:30"), products: [tile("60×120", 6, 5100)], delivery_price: "1800",
     prr_option: {code: "stairs", price: "1400", floor: 3},
     customer: cust("Марина Лебедева", "+79031001002", "Маяковского улица, 8, Железнодорожный", 55.7442, 38.0094, ""),
   });
-  add(go, {
-    cb: "ЦБ-9102", status: "Согласован", date: isoToRu(t), delivery: "1800", lift: "1400",
-    sent: isoToRu(t) + " 08:35",
+  add(go, {cb: "ЦБ-9102", status: "Согласован", date: isoToRu(t), delivery: "1800", lift: "1400", sent: isoToRu(t) + " 08:35",
     comment: deliveryComment({time: "16:00–18:00"}),
-    courier_comment: courierComment({ack: {at: at(t, "08:50")}, agreed: {who: "клиент", at: at(t, "10:15"), slot: "16:00–18:00"}, enroute: {at: at(t, "12:05")}}),
-  });
-
+    courier_comment: courierComment({ack: {at: at(t, "08:50")}, agreed: {who: "клиент", at: at(t, "10:15"), slot: "16:00–18:00"}, enroute: {at: at(t, "12:05")}})});
   const agreed = posting("00000000-0103-1", {
-    status: "delivering", in_process_at: clockIso(t, "07:40"),
-    products: [tile("60×60", 4, 3900), tile("60×120", 2, 4800)], delivery_price: "1200",
+    status: "delivering", in_process_at: clockIso(t, "07:40"), products: [tile("60×60", 4, 3900), tile("60×120", 2, 4800)], delivery_price: "1200",
     prr_option: {code: "lift", price: "700", floor: 7},
     customer: cust("Илья Петров", "+79031001003", "Юбилейный проспект, 48, Реутов", 55.7614, 37.8572, ""),
   });
-  add(agreed, {
-    cb: "ЦБ-9103", status: "Согласован", date: isoToRu(t), delivery: "1200", lift: "700", ext: "214",
-    sent: isoToRu(t) + " 09:00",
+  add(agreed, {cb: "ЦБ-9103", status: "Согласован", date: isoToRu(t), delivery: "1200", lift: "700", ext: "214", sent: isoToRu(t) + " 09:00",
     comment: deliveryComment({time: "12:00–14:00", foreman: "+79032001003"}),
-    courier_comment: courierComment({ack: {at: at(t, "09:10")}, agreed: {who: "прораб", at: at(t, "09:40"), slot: "12:00–14:00"}}),
-  });
-
+    courier_comment: courierComment({ack: {at: at(t, "09:10")}, agreed: {who: "прораб", at: at(t, "09:40"), slot: "12:00–14:00"}})});
   const ack = posting("00000000-0104-1", {
-    status: "delivering", in_process_at: clockIso(t, "09:00"),
-    products: [tile("60×60", 10, 3600)], delivery_price: "1600",
+    status: "delivering", in_process_at: clockIso(t, "09:00"), products: [tile("60×60", 10, 3600)], delivery_price: "1600",
     prr_option: {code: "none", price: "0"},
     customer: cust("Ольга Смирнова", "+79031001004", "Октябрьский проспект, 140, Люберцы", 55.6778, 37.8935, ""),
   });
-  add(ack, {
-    cb: "ЦБ-9104", status: "Новый", date: isoToRu(t), delivery: "1600", lift: "0",
-    sent: isoToRu(t) + " 09:20",
-    comment: deliveryComment({time: "18:00–20:00"}),
-    courier_comment: courierComment({ack: {at: at(t, "09:28")}}),
-  });
-
+  add(ack, {cb: "ЦБ-9104", status: "Новый", date: isoToRu(t), delivery: "1600", lift: "0", sent: isoToRu(t) + " 09:20",
+    comment: deliveryComment({time: "18:00–20:00"}), courier_comment: courierComment({ack: {at: at(t, "09:28")}})});
   const sent = posting("00000000-0105-1", {
-    status: "delivering", in_process_at: clockIso(y, "16:00"),
-    products: [tile("60×60", 5, 4000)], delivery_price: "1500",
+    status: "delivering", in_process_at: clockIso(y, "16:00"), products: [tile("60×60", 5, 4000)], delivery_price: "1500",
     prr_option: {code: "lift", price: "800", floor: 2},
     customer: cust("Павел Орлов", "+79031001005", "Мира улица, 26, Мытищи", 55.9112, 37.7304, ""),
   });
-  add(sent, {
-    cb: "ЦБ-9105", status: "Новый", date: isoToRu(y), delivery: "1500", lift: "800",
-    sent: isoToRu(y) + " 18:10", comment: deliveryComment({time: "10:00–12:00"}),
-  });
-
+  add(sent, {cb: "ЦБ-9105", status: "Новый", date: isoToRu(y), delivery: "1500", lift: "800", sent: isoToRu(y) + " 18:10", comment: deliveryComment({time: "10:00–12:00"})});
   const done = posting("00000000-0106-1", {
-    status: "delivered", in_process_at: clockIso(t, "07:10"),
-    products: [tile("60×60", 12, 4100)], delivery_price: "1500",
+    status: "delivered", in_process_at: clockIso(t, "07:10"), products: [tile("60×60", 12, 4100)], delivery_price: "1500",
     prr_option: {code: "lift", price: "900", floor: 4},
     customer: cust("Елена Кузнецова", "+79031001006", "Энтузиастов шоссе, 3, Балашиха", 55.7872, 37.9681, ""),
   });
-  add(done, {
-    cb: "ЦБ-9106", status: "Доставлен", date: isoToRu(t), delivery: "1500", lift: "900",
-    sent: isoToRu(t) + " 07:30", delivered_at: isoToRu(t) + " 13:20",
+  add(done, {cb: "ЦБ-9106", status: "Доставлен", date: isoToRu(t), delivery: "1500", lift: "900", sent: isoToRu(t) + " 07:30", delivered_at: isoToRu(t) + " 13:20",
     comment: deliveryComment({time: "12:00–14:00"}),
-    courier_comment: courierComment({ack: {at: at(t, "07:45")}, agreed: {who: "клиент", at: at(t, "08:10"), slot: "12:00–14:00"}, enroute: {at: at(t, "12:30")}, onsite: {at: at(t, "13:05")}}),
-  });
-
+    courier_comment: courierComment({ack: {at: at(t, "07:45")}, agreed: {who: "клиент", at: at(t, "08:10"), slot: "12:00–14:00"}, enroute: {at: at(t, "12:30")}, onsite: {at: at(t, "13:05")}})});
   const cancel = posting("00000000-0107-1", {
-    status: "cancelled", in_process_at: clockIso(t, "08:00"),
-    products: [tile("60×60", 3, 3900)], delivery_price: "1000",
+    status: "cancelled", in_process_at: clockIso(t, "08:00"), products: [tile("60×60", 3, 3900)], delivery_price: "1000",
     customer: cust("Сергей Волков", "+79031001007", "Комсомольская улица, 5, Люберцы", 55.6901, 37.9102, ""),
   });
   add(cancel, {cb: "ЦБ-9107", status: "Отменён", date: isoToRu(t), delivery: "1000", lift: "0", sent: isoToRu(t) + " 08:15"});
-
   add(posting("00000000-0108-1", {
-    status: "awaiting_deliver", in_process_at: clockIso(t, "10:05"),
-    products: [tile("60×60", 6, 2400)], delivery_price: "900",
+    status: "awaiting_deliver", in_process_at: clockIso(t, "10:05"), products: [tile("60×60", 6, 2400)], delivery_price: "900",
     prr_option: {code: "stairs", price: "600", floor: 4},
-    customer: cust("Никита Егоров", "+79031001008", "Победы улица, 7, Реутов", 55.7522, 37.8555, "Оплата на месте"),
+    customer: cust("Никита Егоров", "+79031001008", "Победы улица, 7, Реутов", 55.7522, 37.8555, ""),
     analytics_data: {delivery_date_begin: clockIso(t, "15:00"), delivery_date_end: clockIso(t, "17:00"), city: "Реутов"},
   }));
   add(posting("00000000-0109-1", {
-    status: "awaiting_deliver", in_process_at: clockIso(t, "11:20"),
-    products: [tile("60×120", 8, 5300)], delivery_price: "2000",
+    status: "awaiting_deliver", in_process_at: clockIso(t, "11:20"), products: [tile("60×120", 8, 5300)], delivery_price: "2000",
     prr_option: {code: "lift", price: "1100", floor: 9},
     customer: cust("Дарья Новикова", "+79031001009", "2-й Покровский проезд, 5, Котельники", 55.6604, 37.8655, ""),
     analytics_data: {delivery_date_begin: clockIso(d1, "10:00"), delivery_date_end: clockIso(d1, "12:00"), city: "Котельники"},
   }));
-
   const nodate = posting("00000000-0110-1", {
-    status: "delivering", in_process_at: clockIso(y, "12:00"),
-    products: [tile("60×60", 7, 3800)], delivery_price: "1400",
+    status: "delivering", in_process_at: clockIso(y, "12:00"), products: [tile("60×60", 7, 3800)], delivery_price: "1400",
     customer: cust("Кирилл Морозов", "+79031001010", "Новая улица, 2, Старая Купавна", 55.7455, 38.0801, ""),
   });
-  add(nodate, {
-    cb: "ЦБ-9110", status: "Новый", date: "", delivery: "1400", lift: "0",
-    sent: isoToRu(y) + " 12:30",
-    courier_comment: courierComment({ack: {at: at(y, "12:40")}, text: "Клиент просит перенести, дату не назвал"}),
-  });
-
+  add(nodate, {cb: "ЦБ-9110", status: "Новый", date: "", delivery: "1400", lift: "0", sent: isoToRu(y) + " 12:30",
+    courier_comment: courierComment({ack: {at: at(y, "12:40")}, text: "Клиент просит перенести, дату не назвал"})});
   const tomorrow = posting("00000000-0111-1", {
-    status: "delivering", in_process_at: clockIso(t, "09:50"),
-    products: [tile("60×60", 9, 4000)], delivery_price: "1700",
+    status: "delivering", in_process_at: clockIso(t, "09:50"), products: [tile("60×60", 9, 4000)], delivery_price: "1700",
     prr_option: {code: "lift", price: "900", floor: 6},
     customer: cust("Анна Белова", "+79031001011", "Центральная улица, 15, Железнодорожный", 55.7501, 38.0204, ""),
   });
-  add(tomorrow, {
-    cb: "ЦБ-9111", status: "Согласован", date: isoToRu(d1), delivery: "1700", lift: "900",
-    sent: isoToRu(t) + " 10:00",
+  add(tomorrow, {cb: "ЦБ-9111", status: "Согласован", date: isoToRu(d1), delivery: "1700", lift: "900", sent: isoToRu(t) + " 10:00",
     comment: deliveryComment({time: "10:00–12:00"}),
-    courier_comment: courierComment({ack: {at: at(t, "10:12")}, agreed: {who: "клиент", at: at(t, "10:40"), slot: "10:00–12:00"}}),
-  });
+    courier_comment: courierComment({ack: {at: at(t, "10:12")}, agreed: {who: "клиент", at: at(t, "10:40"), slot: "10:00–12:00"}})});
   const later = posting("00000000-0112-1", {
-    status: "delivering", in_process_at: clockIso(t, "11:00"),
-    products: [tile("60×120", 4, 5000)], delivery_price: "1600",
+    status: "delivering", in_process_at: clockIso(t, "11:00"), products: [tile("60×120", 4, 5000)], delivery_price: "1600",
     customer: cust("Виктор Савельев", "+79031001012", "Ленина проспект, 15, Балашиха", 55.8092, 37.9584, ""),
   });
-  add(later, {
-    cb: "ЦБ-9112", status: "Новый", date: isoToRu(d3), delivery: "1600", lift: "0",
-    sent: isoToRu(t) + " 11:15",
-    courier_comment: courierComment({ack: {at: at(t, "11:22")}}),
-  });
-
-  const yDone = posting("00000000-0113-1", {
-    status: "delivered", in_process_at: clockIso(y, "08:00"),
-    products: [tile("60×60", 6, 4000)], delivery_price: "1300",
-    customer: cust("Юлия Фролова", "+79031001013", "Советская улица, 40, Реутов", 55.758, 37.862, ""),
-  });
-  add(yDone, {cb: "ЦБ-9113", status: "Доставлен", date: isoToRu(y), delivery: "1300", lift: "0", sent: isoToRu(y) + " 08:20", delivered_at: isoToRu(y) + " 15:10"});
-  const old = posting("00000000-0114-1", {
-    status: "delivered", in_process_at: clockIso(ago(5), "08:00"),
-    products: [tile("60×60", 15, 3700)], delivery_price: "1900",
-    prr_option: {code: "lift", price: "1000", floor: 8},
-    customer: cust("Геннадий Пашин", "+79031001014", "Строителей улица, 9, Балашиха", 55.802, 37.97, ""),
-  });
-  add(old, {cb: "ЦБ-9114", status: "Доставлен", date: isoToRu(ago(5)), delivery: "1900", lift: "1000", sent: isoToRu(ago(5)) + " 09:00", delivered_at: isoToRu(ago(5)) + " 17:40"});
-  const oldX = posting("00000000-0115-1", {
-    status: "cancelled", in_process_at: clockIso(ago(4), "08:00"),
-    products: [tile("60×60", 2, 3900)],
-    customer: cust("Роман Ильин", "+79031001015", "Парковая улица, 1, Люберцы", 55.682, 37.89, ""),
-  });
-  add(oldX, {cb: "ЦБ-9115", status: "Отменён", date: isoToRu(ago(4)), delivery: "0", lift: "0", sent: isoToRu(ago(4)) + " 09:00"});
-
+  add(later, {cb: "ЦБ-9112", status: "Новый", date: isoToRu(d3), delivery: "1600", lift: "0", sent: isoToRu(t) + " 11:15",
+    courier_comment: courierComment({ack: {at: at(t, "11:22")}})});
+  add(posting("00000000-0113-1", {status: "delivered", in_process_at: clockIso(y, "08:00"), products: [tile("60×60", 6, 4000)], delivery_price: "1300",
+    customer: cust("Юлия Фролова", "+79031001013", "Советская улица, 40, Реутов", 55.758, 37.862, "")}),
+    {cb: "ЦБ-9113", status: "Доставлен", date: isoToRu(y), delivery: "1300", lift: "0", sent: isoToRu(y) + " 08:20", delivered_at: isoToRu(y) + " 15:10"});
+  add(posting("00000000-0114-1", {status: "delivered", in_process_at: clockIso(ago(5), "08:00"), products: [tile("60×60", 15, 3700)], delivery_price: "1900",
+    prr_option: {code: "lift", price: "1000", floor: 8}, customer: cust("Геннадий Пашин", "+79031001014", "Строителей улица, 9, Балашиха", 55.802, 37.97, "")}),
+    {cb: "ЦБ-9114", status: "Доставлен", date: isoToRu(ago(5)), delivery: "1900", lift: "1000", sent: isoToRu(ago(5)) + " 09:00", delivered_at: isoToRu(ago(5)) + " 17:40"});
+  add(posting("00000000-0115-1", {status: "cancelled", in_process_at: clockIso(ago(4), "08:00"), products: [tile("60×60", 2, 3900)],
+    customer: cust("Роман Ильин", "+79031001015", "Парковая улица, 1, Люберцы", 55.682, 37.89, "")}),
+    {cb: "ЦБ-9115", status: "Отменён", date: isoToRu(ago(4)), delivery: "0", lift: "0", sent: isoToRu(ago(4)) + " 09:00"});
   ORDERS.push(posting("00000000-0199-1", {
-    status: "awaiting_packaging", in_process_at: clockIso(t, "07:00"),
-    products: [tile("60×60", 20, 3500)],
+    status: "awaiting_packaging", in_process_at: clockIso(t, "07:00"), products: [tile("60×60", 20, 3500)],
     customer: cust("Склад", "", "FBS Алмалы, не адрес клиента", "", "", ""),
     delivery_method: {warehouse_id: "1020005035230080", warehouse: "FBS Алмалы (Плитка 60×60 Розница)", name: "Ozon"},
   }));
-
   PRICES = {
     "600-josephine": {commissions: {sales_percent_rfbs: 41, sales_percent_fbs: 41}, marketing_actions: {actions: []}},
     "612-calacatta": {commissions: {sales_percent_rfbs: 41, sales_percent_fbs: 41}, marketing_actions: {actions: []}},
   };
   const now = Date.now();
-  RASHAD = {
-    latest: {ts: now - 90 * 1000, lat: 55.792, lng: 37.925, acc: 18, battery: 0.64},
-    track: [
-      {ts: now - 50 * 60 * 1000, lat: 55.761, lng: 37.857},
-      {ts: now - 30 * 60 * 1000, lat: 55.775, lng: 37.89},
-      {ts: now - 12 * 60 * 1000, lat: 55.786, lng: 37.912},
-      {ts: now - 90 * 1000, lat: 55.792, lng: 37.925},
-    ],
-  };
-  PAYS = [
-    {id: "demo-1", amount: "18600", date: isoToRu(ago(12)), comment: "на карту"},
-    {id: "demo-2", amount: "12400", date: isoToRu(ago(3)), comment: "наличные"},
-  ];
-  PAYS_OK = true;
+  RASHAD = {latest: {ts: now - 90 * 1000, lat: 55.792, lng: 37.925, acc: 18, battery: 0.64}, track: [
+    {ts: now - 50 * 60 * 1000, lat: 55.761, lng: 37.857}, {ts: now - 30 * 60 * 1000, lat: 55.775, lng: 37.89},
+    {ts: now - 12 * 60 * 1000, lat: 55.786, lng: 37.912}, {ts: now - 90 * 1000, lat: 55.792, lng: 37.925}]};
+  PAYS = [{id: "demo-1", amount: "18600", date: isoToRu(ago(12)), comment: "на карту"}, {id: "demo-2", amount: "12400", date: isoToRu(ago(3)), comment: "наличные"}];
+  PAYS_OK = true; UPDATED = Date.now();
   checkDemo();
 }
 function checkDemo() {
@@ -428,28 +368,22 @@ function checkDemo() {
   const today = b.today.work.concat(b.today.done, b.today.cancel);
   if (today.some(([p]) => isAlmalyFbs(p)) || b.fresh.send.some(([p]) => isAlmalyFbs(p))) throw new Error("FBS попал к Рашаду");
   if (!b.fbs) throw new Error("Нет заказа FBS");
-  const labels = new Set(ORDERS.map(p => flow(p).label));
-  for (const s of ["Не отправлен", "Передан", "Принял", "Согласован", "В пути", "Доставлен", "Отменён"]) {
+  const labels = new Set(ORDERS.map(p => track(p).label));
+  for (const s of ["Не отправлен", "Передан", "Принял", "Согласован", "В пути", "На месте", "Доставлен", "Отменён"]) {
     if (!labels.has(s)) throw new Error("Нет статуса " + s);
   }
   const t = mskDay(Date.now());
   if (b.today.work.some(([, , o]) => o.day && o.day > t)) throw new Error("Будущий заказ попал в сегодня");
-  if (Object.keys(b.upcoming).some(d => d <= t)) throw new Error("Сегодня попало во вкладку впереди");
 }
 
 async function ozon(path, payload) {
   if (!READ_OZON.has(path)) throw new Error("Прототип не пишет в Ozon");
-  const r = await fetch("https://api-seller.ozon.ru" + path, {
-    method: "POST",
-    headers: {"Client-Id": STORE.get("ozon_cid") || "", "Api-Key": STORE.get("ozon_key") || "", "Content-Type": "application/json"},
-    body: JSON.stringify(payload),
-  });
+  const r = await fetch("https://api-seller.ozon.ru" + path, {method: "POST", headers: {"Client-Id": STORE.get("ozon_cid") || "", "Api-Key": STORE.get("ozon_key") || "", "Content-Type": "application/json"}, body: JSON.stringify(payload)});
   if (!r.ok) throw new Error("Ozon не ответил (" + r.status + ")");
   return r.json();
 }
 async function loadLive() {
-  const to = new Date();
-  const filter = {since: new Date(to - 90 * 864e5).toISOString().slice(0, 19) + "Z", to: to.toISOString().slice(0, 19) + "Z"};
+  const to = new Date(), filter = {since: new Date(to - 90 * 864e5).toISOString().slice(0, 19) + "Z", to: to.toISOString().slice(0, 19) + "Z"};
   const postings = [];
   let cursor = "", guard = 0;
   do {
@@ -465,17 +399,15 @@ async function loadLive() {
     const r = await ozon("/v5/product/info/prices", {filter: {offer_id: offers.slice(i, i + 100), visibility: "ALL"}, limit: 100});
     for (const it of r.items || []) prices[it.offer_id] = it;
   }
-  ORDERS = postings;
-  PRICES = prices;
+  ORDERS = postings; PRICES = prices;
   const admin = STORE.get("dlv_admin");
   if (admin && SCRIPT_URL) {
-    try {
-      DELIV = Object.fromEntries((await sheetApi({action: "list", key: admin})).map(r => [r.posting, r]));
-    } catch { DELIV = {}; LOAD_ERR = "Заказы Ozon прочитаны. Таблица доставок не открылась — в неё всё равно ничего не пишется."; }
+    try { DELIV = Object.fromEntries((await sheetApi({action: "list", key: admin})).map(r => [r.posting, r])); }
+    catch { DELIV = {}; LOAD_ERR = "Заказы Ozon прочитаны. Таблица не открылась — в неё всё равно ничего не пишется."; }
     try { RASHAD = await sheetApi({action: "where", key: admin}); } catch { if (!RASHAD) RASHAD = {latest: null, track: []}; }
-    try { PAYS = await sheetApi({action: "payments", key: admin}); PAYS_OK = true; }
-    catch { PAYS = []; PAYS_OK = false; }
+    try { PAYS = await sheetApi({action: "payments", key: admin}); PAYS_OK = true; } catch { PAYS = []; PAYS_OK = false; }
   } else { DELIV = {}; PAYS_OK = false; }
+  UPDATED = Date.now();
 }
 async function fillLogistics() {
   const need = ORDERS.filter(p => !isAlmalyFbs(p) && p.status !== "cancelled" && (p.delivery_price == null || String(p.delivery_price) === "")).slice(0, 25);
@@ -489,448 +421,317 @@ async function fillLogistics() {
   }
 }
 
-function statusHtml(p) {
-  const f = flow(p), late = lateOf(p);
-  const when = f.onsite ? "на адресе" + (f.when ? " · " + f.when : "") : (whenOf(p) || f.when);
-  return `<span class="status k-${f.key}"><i></i>${esc(f.label)}</span>` +
-    (when ? `<span class="when${late ? " late" : ""}">${esc(late ? "дата прошла · " + when : when)}</span>` : "");
-}
-function railHtml(p) {
-  const f = flow(p);
-  if (f.key === "cancel") return "";
-  return `<ol class="rail" aria-hidden="true">${f.steps.map((s, i) => {
-    const cls = f.key === "done" ? "done" : i < f.cur ? "done" : i === f.cur ? "now" : "";
-    return `<li class="${cls}"></li>`;
-  }).join("")}</ol>`;
-}
-function moneyRow(p) {
-  const m = moneyOf(p);
-  if (flow(p).key === "cancel") return "";
-  const profit = m.profit == null ? "—" : rub(m.profit);
-  const cls = m.profit == null ? "" : m.profit < 0 ? "neg" : "pos";
-  return `<div class="money"><div><span>Товар</span><b>${sp(m.goods)} ₽</b></div><div><span>${m.planned ? "Рашаду, план" : "Рашаду"}</span><b>${sp(m.courier)} ₽</b></div>` +
-    `<div class="${cls}"><span>Прибыль</span><b>${profit}</b></div></div>`;
-}
-function primaryAct(p) {
-  if (isAlmalyFbs(p) || (EXTRA && EXTRA.posting === p.posting_number)) return "";
-  const d = DELIV[p.posting_number], f = flow(p);
-  if (f.key === "cancel" || f.key === "done") return "";
-  if (!d && canSend(p)) return `<button type="button" class="btn grow" data-act="send" data-id="${esc(p.posting_number)}">${ic("send")}Отправить Рашаду</button>`;
-  if (!d) return "";
-  if (!isAccepted(d)) return `<button type="button" class="btn ghost grow" data-act="remind" data-id="${esc(p.posting_number)}">${ic("bell")}Напомнить</button>`;
-  return `<button type="button" class="btn grow" data-act="ask-done" data-id="${esc(p.posting_number)}">${ic("check")}Доставлено</button>`;
-}
 function cardHtml(p, n) {
-  if (isAlmalyFbs(p)) return "";
-  const d = DELIV[p.posting_number], f = flow(p), open = OPEN === p.posting_number;
+  const t = track(p), m = moneyOf(p), d = DELIV[p.posting_number];
   const [area, rest] = addrParts(addrOf(p));
-  const act = primaryAct(p);
-  return `<article class="card k-${f.key}${lateOf(p) ? " late" : ""}${open ? " open" : ""}" data-id="${esc(p.posting_number)}" style="--i:${Math.min(n, 8)}">
-    <div class="card-top"><span class="cb${d && d.cb ? "" : " need"}">${d && d.cb ? esc(d.cb) : "Без ЦБ"}</span>${statusHtml(p)}</div>
-    <div class="card-hit" data-act="toggle" data-id="${esc(p.posting_number)}" role="button" tabindex="0" aria-expanded="${open ? "true" : "false"}">
-      <b>${esc(area)}</b>${rest ? `<span>${esc(rest)}</span>` : ""}
-      <div class="meta"><span>${esc(goodsLine(p))} · ${esc(kgText(orderKg(p)))}</span>${(d ? d.unload : unloadText(p.prr_option)) !== "Нет" ? `<span>${esc(d ? d.unload : unloadText(p.prr_option))}</span>` : ""}</div>
-      ${railHtml(p)}${moneyRow(p)}
+  const profit = m.profit == null ? "—" : rub(m.profit);
+  const bad = t.problems[0];
+  const steps = t.key === "new" || t.key === "cancel" ? "" : `<ol class="steps" aria-hidden="true">${t.steps.map((s, i) => `<li class="${t.key === "done" || i < t.cur ? "on" : i === t.cur ? "now" : ""}"></li>`).join("")}</ol>`;
+  const next = bad ? `<p class="next bad"><b>${esc(bad.t)}</b>${t.next ? " · дальше " + esc(t.next) : ""}</p>` : t.next ? `<p class="next">Дальше: <b>${esc(t.next)}</b></p>` : "";
+  const seen = t.key === "new" ? `<p class="seen">Рашад ещё не получал</p>` : t.seen && t.key !== "cancel" ? `<p class="seen">Рашад видел${t.seenAt ? " · " + esc(t.seenAt) : ""}</p>` : "";
+  const when = t.when || "—";
+  const right = t.key === "new" && canSend(p) ? ["send", "Отправить"] : t.seen && t.key !== "done" && t.key !== "cancel" && t.key !== "new" ? ["ask-done", "Доставлено"] : null;
+  const left = d && t.key !== "done" && t.key !== "cancel" && p.status !== "cancelled" ? "Отменить" : "";
+  return `<article class="trk k-${t.key}${OPEN === p.posting_number ? " hot" : ""}" data-id="${esc(p.posting_number)}" style="--i:${Math.min(n, 8)}">
+    ${left ? `<button type="button" class="sw l" data-act="ask-cancel" data-id="${esc(p.posting_number)}">${left}</button>` : ""}
+    ${right ? `<button type="button" class="sw r" data-act="${right[0]}" data-id="${esc(p.posting_number)}">${right[1]}</button>` : ""}
+    <div class="face" data-act="open" data-id="${esc(p.posting_number)}" role="button" tabindex="0">
+      <div class="statline"><span class="badge k-${t.key}">${ic(ICO[t.key] || "orders", "s")}${esc(t.label)}</span><div class="clock" style="font-size:${when.length > 5 ? 15 : 22}px">${esc(when)}<small>изменение</small></div></div>
+      <h3 class="addr">${esc(area)}</h3>${rest ? `<p class="rest">${esc(rest)}</p>` : ""}
+      <p class="expect${t.problems.some(x => x.k === "late" || x.k === "nodate") ? " warn" : ""}">${ic("cal", "s")}${esc(t.expected)}</p>
+      ${steps}${next}${seen}
+      <div class="foot"><span class="cb${d && d.cb ? "" : " need"}">${d && d.cb ? esc(d.cb) : "Без ЦБ"}</span><span class="profit ${m.profit < 0 ? "neg" : "pos"}"><small>прибыль</small>${profit}</span></div>
     </div>
-    ${act ? `<div class="acts">${act}</div>` : ""}
-    <div class="more"><div class="more-in">${open ? moreHtml(p) : ""}</div></div>
   </article>`;
 }
-function receiptHtml(p) {
-  const m = moneyOf(p), t = m.t, f = flow(p);
-  const line = (k, v, cls = "", sub = "") => `<div class="rline ${cls}"><span>${k}${sub ? `<small>${esc(sub)}</small>` : ""}</span><b>${v}</b></div>`;
-  const goods = (p.products || []).map(x => {
-    const price = parseFloat(x.price && x.price.amount != null ? x.price.amount : x.price) || 0;
-    const qty = Number(x.quantity) || 0;
-    return line(`${qty} уп · ${esc(shortName(x.name).replace(/^Керамогранит\s+/i, ""))}`, rub(price * qty));
-  }).join("");
-  const map = {red: ["ниже порога", "bad"], yellow: ["на грани", "mid"], green: ["выше порога", "ok"]};
-  const lv = m.level && map[m.level] ? `<span class="lv lv-${map[m.level][1]}">${sp(m.perM2)} ₽/м² · ${map[m.level][0]}</span>` : "";
-  const oz = (on, text) => text + (on ? " · из Ozon" : "");
-  return `<section class="receipt"><h3>Расчёт ${lv}</h3>${goods}
-    ${m.clientDelivery ? line("Доставка от клиента", rub(m.clientDelivery), "", "по данным Ozon") : ""}
-    ${m.clientLift ? line("Подъём от клиента", rub(m.clientLift), "", "по данным Ozon") : ""}
-    ${!m.clientDelivery && !m.clientLift ? line("Доставка и подъём от клиента", "в Ozon нет суммы") : ""}
-    ${line("Клиент платит", rub(m.client), "tot")}
-    ${t ? line("Комиссия Ozon, эквайринг, сбор", "−" + sp(t.commission + t.acquiring + t.fee) + " ₽") + line("НДС к уплате", "−" + sp(t.vat) + " ₽") + line("Себестоимость плитки", "−" + sp(t.cost) + " ₽") : ""}
-    ${line(m.planned ? "Рашаду (план)" : "Рашаду", "−" + sp(m.courier) + " ₽", "", oz(m.deliveryAuto, "доставка " + sp(m.courierDelivery)) + " + " + oz(m.liftAuto, "подъём " + sp(m.courierLift)))}
-    ${m.profit == null ? line("Прибыль", "не считается — не плитка 60×60 или 60×120") : line("Прибыль по заказу", rub(m.profit), "profit" + (m.profit < 0 ? " neg" : ""))}
-    ${f.key === "done" && p.status !== "delivered" ? `<p class="hint">В Ozon это не отмечалось — прототип туда не пишет.</p>` : ""}
-  </section>`;
-}
-function timelineHtml(p) {
-  const f = flow(p);
-  return `<ol class="time">${f.steps.map((s, i) => {
-    const cls = f.key === "cancel" ? "" : f.key === "done" || i < f.cur ? "done" : i === f.cur ? "now" : "";
-    return `<li class="${cls}"><i></i><b>${esc(s.label)}</b><time>${esc(s.when || "")}</time></li>`;
-  }).join("")}${f.key === "cancel" ? `<li class="now cancel"><i></i><b>Отменён</b><time></time></li>` : ""}</ol>`;
-}
-function confirmHtml(p) {
-  if (!CONFIRM || CONFIRM.posting !== p.posting_number) return "";
-  const cancel = CONFIRM.kind === "cancel";
-  return `<div class="confirm"><p>${cancel ? "Статус станет «Отменён» только на этом экране. Рашаду пуш не уйдёт, таблица и Ozon не изменятся." : "Статус станет «Доставлен» только на этом экране. В Ozon и в таблицу это не отправится."}</p>
-    <div class="acts"><button type="button" class="btn${cancel ? " danger" : ""}" data-act="confirm-yes" data-id="${esc(p.posting_number)}">Да, только здесь</button>
-    <button type="button" class="btn soft" data-act="confirm-no">Не надо</button></div></div>`;
-}
-function sendForm(p) {
-  const old = EXTRA && EXTRA.old && DELIV[EXTRA.old];
-  const oz = ozonLogistics(p, LOGI);
-  const dlv = old && num(old.delivery) > 0 ? num(old.delivery) : oz.delivery;
-  const lift = old && num(old.lift) > 0 ? num(old.lift) : oz.lift;
-  const cb = old ? String(old.cb || "").replace(/^ЦБ-?/i, "") : "";
-  const date = old && dayIso(old.date) || "";
-  const time = old ? deliveryDetails(old.comment).time : "";
-  const t = mskDay(Date.now()), tm = addDaysIso(t, 1);
-  const info = old ? deliveryDetails(old.comment) : {};
-  return `<form class="form send" data-id="${esc(p.posting_number)}" data-old="${esc(EXTRA && EXTRA.old || "")}">
-    ${old ? `<p class="hint">Замена вместо ${esc(old.cb || EXTRA.old)}. Прежний заказ станет «Отменён» только на этом экране.</p>` : ""}
-    <label>Номер ЦБ из 1С<input name="cb" inputmode="numeric" autocomplete="off" required placeholder="9108" value="${esc(cb)}"></label>
-    <div class="grid2"><label>Доставка Рашаду, ₽<input name="delivery_pay" inputmode="numeric" value="${dlv || ""}" placeholder="${oz.delivery}" data-oz="${oz.delivery}"></label>
-    <label>Подъём, ₽<input name="lift_pay" inputmode="numeric" value="${lift || ""}" placeholder="${oz.lift}" data-oz="${oz.lift}"></label></div>
-    <p class="hint">Пустое поле — сумма из Ozon. Рашаду выйдет <b data-sum>${rub(dlv + lift)}</b>. Финансы магазина ему не показываем.</p>
-    <label>Когда везти<div class="days"><button type="button" data-day="${t}" aria-pressed="${date === t}">Сегодня</button><button type="button" data-day="${tm}" aria-pressed="${date === tm}">Завтра</button><input name="date" type="date" value="${esc(date)}" aria-label="Дата"></div></label>
-    <label>Время<input name="time" value="${esc(time)}" placeholder="или своё, например с 9 до 11" maxlength="100">
-      <span class="slots">${DELIVERY_SLOTS.map(x => `<button type="button" data-slot="${esc(x)}" aria-pressed="${x === time}">${esc(slotLabel(x))}</button>`).join("")}</span></label>
-    <label>Телефон прораба<input name="foreman" type="tel" value="${esc(info.foreman || "")}" placeholder="+7 900 000-00-00"></label>
-    <label>Пометка для Рашада<textarea name="note" rows="2" maxlength="2000">${esc(info.note || (old ? "Замена заказа " + (old.cb || "") : ""))}</textarea></label>
-    <p class="hint">В таблицу это не запишется и пуш Рашаду не уйдёт.</p>
-    <div class="acts"><button type="button" class="btn soft" data-act="close-extra">Назад</button><button class="btn grow">${old ? "Заменить" : "Отправить"} · <span data-sum>${rub(dlv + lift)}</span></button></div>
-  </form>`;
-}
-function editForm(p) {
-  const d = DELIV[p.posting_number], info = deliveryDetails(d.comment);
-  const name = (info.ozon && info.ozon.customer) || (p.customer || {}).name || "";
-  const date = dayIso(d.date), t = mskDay(Date.now());
-  const oz = ozonLogistics(p, LOGI), pay = courierPay(d, oz);
-  const f = (n, label, v, attrs = "") => `<label>${label}<input name="${n}" value="${esc(v ?? "")}" ${attrs}></label>`;
-  return `<form class="form edit" data-id="${esc(p.posting_number)}">
-    <label>Адрес<textarea name="address" rows="2" required>${esc(d.address || "")}</textarea></label>
-    <div class="grid2">${f("cb", "Номер ЦБ", String(d.cb || "").replace(/^ЦБ-?/i, ""), 'inputmode="numeric" autocomplete="off"')}${f("name", "Получатель", name, 'autocomplete="off"')}</div>
-    <div class="grid2">${f("phone", "Телефон", String(d.phone || "").replace(/^'/, ""), 'type="tel"')}${f("ext", "Добавочный", d.ext || "", 'inputmode="numeric"')}</div>
-    <label>Дата<div class="days"><button type="button" data-day="${t}" aria-pressed="${date === t}">Сегодня</button><button type="button" data-day="${addDaysIso(t, 1)}" aria-pressed="${date === addDaysIso(t, 1)}">Завтра</button><input name="date" type="date" value="${esc(date)}" aria-label="Дата доставки"></div></label>
-    <label>Время<input name="time" value="${esc(info.time || "")}" maxlength="100"><span class="slots">${DELIVERY_SLOTS.map(x => `<button type="button" data-slot="${esc(x)}" aria-pressed="${x === info.time}">${esc(slotLabel(x))}</button>`).join("")}</span></label>
-    <div class="grid2">${f("packs", "Упаковки", d.packs || "")}${f("unload", "Разгрузка", d.unload || "", 'placeholder="Лифт, эт. 5"')}</div>
-    <div class="grid2">${f("delivery", "Доставка, ₽" + (pay.deliveryAuto ? " · из Ozon" : ""), num(d.delivery) > 0 ? d.delivery : "", `inputmode="numeric" placeholder="${oz.delivery}" data-oz="${oz.delivery}"`)}
-      ${f("lift", "Подъём, ₽" + (pay.liftAuto ? " · из Ozon" : ""), num(d.lift) > 0 ? d.lift : "", `inputmode="numeric" placeholder="${oz.lift}" data-oz="${oz.lift}"`)}</div>
-    <p class="hint">Пустое поле берёт сумму из Ozon. Рашаду: <b data-sum>${rub(pay.delivery + pay.lift)}</b></p>
-    ${f("foreman", "Телефон прораба", info.foreman || "", 'type="tel" placeholder="+7 900 000-00-00"')}
-    <label>Пометка<textarea name="note" rows="2" maxlength="2000">${esc(info.note || "")}</textarea></label>
-    <div class="acts"><button type="button" class="btn soft" data-act="close-extra">Назад</button><button class="btn grow">${ic("check")}Сохранить здесь</button></div>
-  </form>`;
-}
-function replaceHtml(p) {
-  const cands = ORDERS.filter(x => canSend(x));
-  return `<div class="picker"><p class="hint">Выберите заказ Ozon вместо ${esc((DELIV[p.posting_number] || {}).cb || p.posting_number)}. Склад FBS в список не входит.</p>
-    ${cands.length ? cands.map(x => `<button type="button" class="picker-i" data-act="pick" data-id="${esc(x.posting_number)}" data-old="${esc(p.posting_number)}"><span><b>${esc(addrParts(addrOf(x))[0])}</b><span>${esc(goodsLine(x))}</span></span>${ic("chev")}</button>`).join("") : `<p class="hint">Неотправленных заказов нет.</p>`}
-    <form class="form" data-repl="${esc(p.posting_number)}"><label>Или номер отправления<input name="num" placeholder="00000000-0108-1" autocomplete="off"></label><button class="btn">Дальше</button></form>
-    <button type="button" class="btn soft" data-act="close-extra">Назад</button></div>`;
-}
-function moreHtml(p) {
-  const d = DELIV[p.posting_number];
-  const editing = EXTRA && EXTRA.type === "edit" && EXTRA.posting === p.posting_number;
-  const sending = EXTRA && EXTRA.type === "send" && EXTRA.posting === p.posting_number;
-  const replacing = EXTRA && EXTRA.type === "replace" && EXTRA.posting === p.posting_number;
-  const notes = d ? courierNotes(d.courier_comment) : {text: ""};
-  const ph = phoneOf(p), tel = telHref(ph.phone, ph.ext);
-  let foreman = "";
-  try { foreman = d ? foremanPhone(deliveryDetails(d.comment).foreman) : ""; } catch { foreman = ""; }
-  const win = ozWindow(p);
-  if (sending) return sendForm(p) + confirmHtml(p);
-  if (editing) return editForm(p);
-  if (replacing) return replaceHtml(p);
-  const links = [
-    tel ? `<a href="${esc(tel)}">${ic("phone")}Клиенту</a>` : "",
-    foreman ? `<a href="tel:${esc(foreman)}">${ic("user")}Прорабу</a>` : "",
-    llOf(p) ? `<button type="button" data-act="fly" data-id="${esc(p.posting_number)}">${ic("map")}На карте</button>` : "",
-    `<a href="https://seller.ozon.ru/app/postings/fbs?search=${encodeURIComponent(p.posting_number)}" target="_blank" rel="noopener">${ic("nav")}В Ozon</a>`,
-    `<button type="button" data-act="copy" data-id="${esc(p.posting_number)}">${ic("copy")}Номер</button>`,
-    d ? `<button type="button" data-act="edit" data-id="${esc(p.posting_number)}">${ic("edit")}Изменить</button>` : "",
-  ].filter(Boolean).join("");
-  return `${receiptHtml(p)}${timelineHtml(p)}
-    ${win ? `<p class="hint">Окно Ozon: ${esc(win)}</p>` : ""}
-    ${notes.text ? `<div class="quote"><span>Рашад</span>${esc(notes.text)}</div>` : ""}
-    <div class="links">${links}</div>
-    ${confirmHtml(p)}
-    ${dangerHtml(p)}
-    <button type="button" class="btn soft" data-act="toggle" data-id="${esc(p.posting_number)}">Свернуть</button>`;
-}
-function dangerHtml(p) {
-  const d = DELIV[p.posting_number];
-  if (!d || isAlmalyFbs(p) || p.status === "cancelled") return p.status === "cancelled" ? `<p class="hint">В Ozon заказ уже отменён.</p>` : "";
-  if (d.status === "Отменён") return `<button type="button" class="btn ghost" data-act="restore" data-id="${esc(p.posting_number)}">${ic("undo")}Вернуть в работу</button>`;
-  if (d.status === "Доставлен" || p.status === "delivered") return "";
-  return `<div class="acts"><button type="button" class="btn ghost" data-act="replace" data-id="${esc(p.posting_number)}">${ic("swap")}Заменить</button>
-    <button type="button" class="btn danger" data-act="ask-cancel" data-id="${esc(p.posting_number)}">${ic("ban")}Отменить</button></div>`;
-}
-function section(title, list, cls) {
-  if (!list.length) return "";
-  return `<section class="sec ${cls || ""}"><h2>${esc(title)} <em>${list.length}</em></h2>${list.map((p, n) => cardHtml(p, n)).join("")}</section>`;
-}
-function dateBadge() {
-  const parts = new Intl.DateTimeFormat("ru-RU", {timeZone: "Europe/Moscow", day: "numeric", month: "short", weekday: "short"}).formatToParts(new Date());
-  const get = type => (parts.find(p => p.type === type) || {}).value || "";
-  return `<div class="daten"><b>${esc(get("day"))}</b><span>${esc(get("month"))}<br>${esc(get("weekday"))}</span></div>`;
-}
-function todayHtml() {
+function todayPack() {
   const b = buckets();
-  const work = b.today.work.slice().sort((a, c) => flow(c[0]).cur - flow(a[0]).cur);
-  const done = b.today.done.slice().sort((a, c) => String((DELIV[c[0].posting_number] || {}).delivered_at || "").localeCompare(String((DELIV[a[0].posting_number] || {}).delivered_at || "")));
-  const all = work.concat(done);
-  const s = sumMoney(all.map(([p]) => [p]), DELIV, PRICES, LOGI);
-  const total = all.length, pct = total ? done.length / total : 0;
-  const late = work.filter(x => x[2].late).length;
-  const wait = work.filter(([p]) => DELIV[p.posting_number] && !isAccepted(DELIV[p.posting_number])).length;
+  let work = b.today.work.map(([p]) => p).filter(passFilter);
+  work.sort((a, c) => urgency(a) - urgency(c));
+  return {b, work, done: b.today.done.map(([p]) => p), cancel: b.today.cancel.map(([p]) => p)};
+}
+function stickyHtml() {
+  if (MODE !== "demo" && MODE !== "live") return "";
+  if (TAB !== "today" || Q) return `<div class="hero"><div><div class="big">${esc(({fresh: "Новые", ahead: "Впереди", archive: "Архив"})[TAB] || "Поиск")}</div><span class="lbl">${Q ? "результаты не смешивают дни" : "отдельный список, не сегодня"}</span></div></div>`;
+  const b = buckets();
+  const work = b.today.work.map(([p]) => p);
+  const moving = work.filter(p => ["enroute", "onsite"].includes(track(p).key));
+  const s = sumMoney(b.today.work.concat(b.today.done), DELIV, PRICES, LOGI);
+  const unseen = work.filter(p => track(p).problems.some(x => x.k === "unseen")).length;
+  const late = work.filter(p => track(p).problems.some(x => x.k === "late")).length;
+  const off = rashadPoint() && !online(rashadPoint()) && moving.length;
   const chips = [
-    b.fresh.send.length ? `<button type="button" data-act="go" data-tab="fresh">${esc(plural(b.fresh.send.length, "новый ждёт отправки", "новых ждут отправки", "новых ждут отправки"))}</button>` : "",
+    unseen ? `<button type="button" data-act="filter" data-filter="unseen">${unseen} не видел</button>` : "",
+    late ? `<button type="button" data-act="filter" data-filter="late">${late} просрочен</button>` : "",
     b.fresh.nodate.length ? `<button type="button" data-act="go" data-tab="fresh">${b.fresh.nodate.length} без даты</button>` : "",
-    late ? `<button type="button" data-act="go" data-tab="today" data-focus="late">${late} с прошедшей датой</button>` : "",
-    wait ? `<button type="button" data-act="go" data-tab="today">${wait} не принял</button>` : "",
-    b.fbs ? `<button type="button" class="quiet" data-act="go" data-tab="fresh">FBS на складе · ${b.fbs}</button>` : "",
+    off ? `<button type="button" class="quiet" data-act="filter" data-filter="off">Рашад не в сети</button>` : "",
+    b.fresh.send.length ? `<button type="button" data-act="go" data-tab="fresh">${b.fresh.send.length} не отправлен</button>` : "",
+    b.fbs ? `<button type="button" class="quiet" data-act="go" data-tab="fresh">FBS · ${b.fbs}</button>` : "",
   ].filter(Boolean).join("");
-  const profitCls = !s.profitKnown ? "" : s.profit < 0 ? "neg" : "pos";
-  let body = work.length ? `<section class="sec"><h2>В работе <em>${work.length}</em></h2>${work.map(([p], n) => cardHtml(p, n)).join("")}</section>` : "";
-  body += done.length ? `<section class="sec done"><h2>Доставлено сегодня <em>${done.length}</em></h2>${done.map(([p], n) => cardHtml(p, n)).join("")}</section>` : "";
-  body += b.today.cancel.length ? `<details class="sec cancel" id="cancelBox"${CANCEL_OPEN ? " open" : ""}><summary>Отменено сегодня <em>${b.today.cancel.length}</em></summary>${b.today.cancel.map(([p], n) => cardHtml(p, n)).join("")}</details>` : "";
-  if (!body) body = `<div class="empty"><b>На сегодня заказов нет</b><p>${b.fresh.send.length ? "Новые ждут во вкладке «Новые»." : "Когда у заказа появится дата «сегодня», он будет здесь и только здесь."}</p></div>`;
-  return `${LOAD_ERR ? `<p class="banner">${esc(LOAD_ERR)}</p>` : ""}${adminNote()}
-    <div class="dayhead">${dateBadge()}<div class="daystat"><strong>${total ? `Доставлено ${done.length} из ${total}` : "На сегодня пусто"}</strong><div class="bar"><i style="--p:${pct}"></i></div></div></div>
-    <div class="sums"><div><span>Товар</span><b><span data-count="${Math.round(s.goods)}">${sp(s.goods)}</span> ₽</b></div>
-      <div><span>Рашаду</span><b><span data-count="${Math.round(s.courier)}">${sp(s.courier)}</span> ₽</b></div>
-      <div class="${profitCls}"><span>Прибыль</span><b>${s.profitKnown ? (s.profit < 0 ? "−" : "") + `<span data-count="${Math.round(Math.abs(s.profit))}">${sp(s.profit)}</span> ₽` : "—"}</b></div></div>
-    ${chips ? `<div class="attn">${chips}</div>` : ""}${body}`;
+  const filters = [["all", "Все"], ["problem", "Проблемы"], ["sent", "Передан"], ["ack", "Принял"], ["agreed", "Согласован"], ["enroute", "В пути"], ["onsite", "На месте"]].map(([k, v]) =>
+    `<button type="button" data-act="filter" data-filter="${k}" aria-pressed="${FILTER === k}">${v}</button>`).join("");
+  const n = moving.length || work.length;
+  const word = moving.length ? (moving.some(p => track(p).key === "onsite") && moving.every(p => track(p).key === "onsite") ? "на месте" : "в движении") : "в работе";
+  return `<div class="hero"><div><div class="big">${n}</div><span class="lbl">${word} · доставлено ${b.today.done.length}</span></div><div class="hero-side"><span>прибыль сегодня</span><b>${s.profitKnown ? rub(s.profit) : "—"}</b></div></div>
+    ${chips ? `<div class="attn">${chips}</div>` : ""}<div class="filters">${filters}</div>
+    <div class="viewtog"><button type="button" data-act="view" data-view="lanes" aria-pressed="${VIEW === "lanes"}">Дорожки</button><button type="button" data-act="view" data-view="table" aria-pressed="${VIEW === "table"}">Таблица</button></div>`;
 }
-function adminNote() {
-  if (MODE !== "live" || STORE.get("dlv_admin")) return "";
-  return `<p class="banner">Таблица не подключена. Заказы Ozon только читаются. Ссылку доступа можно вставить у Рашада, в настройках.</p>`;
+function listHtml(list) { return list.map((p, n) => cardHtml(p, n)).join("") || `<div class="empty"><b>Здесь пусто</b><p>Под этот фильтр заказов нет.</p></div>`; }
+function lanesHtml(work) {
+  const cols = [["sent", "Передан"], ["ack", "Принял"], ["agreed", "Согласован"], ["enroute", "В пути"], ["onsite", "На месте"]];
+  return `<div class="lanes">${cols.map(([k, name]) => {
+    const list = work.filter(p => track(p).key === k);
+    return `<section class="lane"><h3><span class="badge k-${k}">${esc(name)}</span><em>${list.length}</em></h3>${list.length ? list.map((p, n) => cardHtml(p, n)).join("") : `<p class="hint">пусто</p>`}</section>`;
+  }).join("")}</div>`;
 }
-function freshHtml() {
-  const b = buckets();
-  const send = b.fresh.send.slice().sort((a, c) => new Date(c[0].in_process_at) - new Date(a[0].in_process_at));
-  let html = section("Нужно отправить Рашаду", send.map(([p]) => p), "") + section("У Рашада без даты", b.fresh.nodate.map(([p]) => p), "");
-  if (!html) html = `<div class="empty"><b>Всё разобрано</b><p>Новых заказов и заказов без даты нет.</p></div>`;
-  html += fbsBlock(ORDERS.filter(isAlmalyFbs));
-  return html;
+function tableHtml(list) {
+  const rows = list.map(p => {
+    const t = track(p), m = moneyOf(p);
+    const flag = t.problems.map(x => x.t).join(", ") || (t.next ? "дальше: " + t.next : "");
+    return `<tr class="${OPEN === p.posting_number ? "hot" : ""}" data-id="${esc(p.posting_number)}"><td><button type="button" class="link" data-act="open" data-id="${esc(p.posting_number)}"><span class="badge k-${t.key}">${ic(ICO[t.key], "s")}${esc(t.label)}</span></button></td><td>${esc(t.when || "—")}</td><td>${esc(addrParts(addrOf(p))[0])}</td><td>${esc(t.expected)}</td><td class="${t.problems.length ? "bad" : ""}">${esc(flag)}</td><td>${t.seen ? "видел" : "не видел"}</td><td>${m.profit == null ? "—" : rub(m.profit)}</td></tr>`;
+  }).join("");
+  return `<div class="tablewrap"><table class="grid"><thead><tr><th>Статус</th><th>Время</th><th>Адрес</th><th>Когда везти</th><th>Дальше</th><th>Рашад</th><th>Прибыль</th></tr></thead><tbody>${rows || `<tr><td colspan="7">Пусто</td></tr>`}</tbody></table></div>`;
 }
 function fbsBlock(list) {
   if (!list.length) return "";
-  return `<aside class="fbs"><b>Склад FBS · ${list.length}</b><p>Грузовик Ozon забирает плитку со склада ${esc(FBS_WAREHOUSE_NAME)}. Эти отправления нельзя отправить Рашаду — кнопки отправки нет.</p><ul>${list.map(p => `<li><span>${esc(p.posting_number)}</span><small>${esc(OZON_FBS_STATUS[p.status] || p.status)}</small></li>`).join("")}</ul></aside>`;
+  return `<aside class="fbs"><b>Склад FBS · ${list.length}</b><p>Грузовик Ozon забирает со склада. Рашаду эти заказы не отправляются.</p><ul>${list.map(p => `<li><span>${esc(p.posting_number)}</span><small>${esc((typeof OZON_FBS_STATUS !== "undefined" && OZON_FBS_STATUS[p.status]) || p.status)}</small></li>`).join("")}</ul></aside>`;
 }
-function aheadHtml() {
-  const b = buckets();
-  const html = Object.keys(b.upcoming).sort().map(day => section(dayTitle(day), b.upcoming[day].map(([p]) => p))).join("");
-  return html || `<div class="empty"><b>Впереди пусто</b><p>Здесь заказы с датой на завтра и позже. Сегодняшние сюда не попадают.</p></div>`;
-}
-function archiveHtml() {
-  const b = buckets();
-  const [from, to] = archBounds();
-  const list = archiveRange(b.archive, from, to);
-  const done = list.filter(x => x[2].kind === "done"), cancel = list.filter(x => x[2].kind !== "done");
-  const s = sumMoney(done, DELIV, PRICES, LOGI);
-  const chips = [["1", "Вчера"], ["7", "7 дней"], ["30", "30 дней"], ["all", "Всё"]].map(([k, v]) => `<button type="button" data-act="arch" data-arch="${k}" aria-pressed="${ARCH === k}">${v}</button>`).join("");
-  const by = {};
-  done.forEach(x => { (by[x[2].day] = by[x[2].day] || []).push(x[0]); });
-  let html = `<div class="arch">${chips}<input type="date" id="archDay" value="${ARCH === "day" ? esc(ARCH_DAY) : ""}" max="${addDaysIso(mskDay(Date.now()), -1)}" aria-label="День архива"></div>
-    <div class="sums"><div><span>Доставлено</span><b>${s.n}</b></div><div><span>Товар</span><b>${sp(s.goods)} ₽</b></div><div><span>Рашаду</span><b>${sp(s.courier)} ₽</b></div><div class="${s.profit < 0 ? "neg" : "pos"}"><span>Прибыль</span><b>${s.profitKnown ? rub(s.profit) : "—"}</b></div></div>`;
-  html += Object.keys(by).sort().reverse().map(day => section(dayTitle(day), by[day], "done")).join("");
-  if (cancel.length) html += `<details class="sec cancel"><summary>Отменено за период <em>${cancel.length}</em></summary>${cancel.map(([p], n) => cardHtml(p, n)).join("")}</details>`;
-  if (!list.length) html += `<div class="empty"><b>За этот период пусто</b><p>Сегодня в архив не входит.</p></div>`;
-  return html;
+function renderStage() {
+  const el = $("stage");
+  if (MODE === "gate") { el.innerHTML = `<form class="gate form" id="keysForm"><h2>Ключи Ozon</h2><p class="hint">Только чтение. Демо без ключей: <a href="?demo=1">открыть</a>.</p><label>Client-Id<input name="cid" required autocomplete="off"></label><label>Api-Key<input name="key" type="password" required></label><button class="btn grow">Читать заказы</button></form>`; return; }
+  if (LOADING) { el.innerHTML = `<div class="sk"></div><div class="sk"></div><div class="sk"></div>`; return; }
+  if (LOAD_ERR && !ORDERS.length) { el.innerHTML = `<div class="empty"><b>Не прочиталось</b><p>${esc(LOAD_ERR)}</p><button class="btn" id="retryBtn">Повторить</button></div>`; return; }
+  if (Q) { el.innerHTML = searchHtml(); return; }
+  if (TAB === "today") {
+    const pack = todayPack();
+    let body = "";
+    if (wide() && VIEW === "table") body = tableHtml(pack.work);
+    else if (wide() && VIEW === "lanes" && FILTER === "all") body = lanesHtml(pack.work);
+    else body = `<section class="sec"><h2>По срочности <em>${pack.work.length}</em></h2>${listHtml(pack.work)}</section>`;
+    if (FILTER === "all") {
+      body += pack.done.length ? `<section class="sec"><h2>Доставлено сегодня <em>${pack.done.length}</em></h2>${listHtml(pack.done)}</section>` : "";
+      body += pack.cancel.length ? `<details class="sec"><summary>Отменено сегодня <em>${pack.cancel.length}</em></summary>${listHtml(pack.cancel)}</details>` : "";
+    }
+    el.innerHTML = body;
+  } else if (TAB === "fresh") {
+    const b = buckets();
+    el.innerHTML = `<section class="sec"><h2>Нужно отправить <em>${b.fresh.send.length}</em></h2>${listHtml(b.fresh.send.map(([p]) => p))}</section>
+      <section class="sec"><h2>Без даты <em>${b.fresh.nodate.length}</em></h2>${listHtml(b.fresh.nodate.map(([p]) => p))}</section>` + fbsBlock(ORDERS.filter(isAlmalyFbs));
+  } else if (TAB === "ahead") {
+    const b = buckets();
+    const days = Object.keys(b.upcoming).sort();
+    el.innerHTML = days.length ? days.map(day => `<section class="sec"><h2>${esc(dayTitle(day))} <em>${b.upcoming[day].length}</em></h2>${listHtml(b.upcoming[day].map(([p]) => p))}</section>`).join("") : `<div class="empty"><b>Впереди пусто</b><p>Сегодня сюда не попадает.</p></div>`;
+  } else {
+    const [from, to] = archBounds();
+    const list = archiveRange(buckets().archive, from, to);
+    const chips = [["1", "Вчера"], ["7", "7 дней"], ["30", "30 дней"], ["all", "Всё"]].map(([k, v]) => `<button type="button" data-act="arch" data-arch="${k}" aria-pressed="${ARCH === k}">${v}</button>`).join("");
+    el.innerHTML = `<div class="arch">${chips}</div>` + (wide() && VIEW === "table" ? tableHtml(list.map(([p]) => p)) : listHtml(list.map(([p]) => p)));
+  }
 }
 function searchHtml() {
   const hits = ORDERS.filter(p => !isAlmalyFbs(p) && matches(p));
-  const groups = new Map();
-  hits.forEach(p => {
-    const [key, title] = placeOf(p);
-    if (!groups.has(key)) groups.set(key, {title, list: []});
-    groups.get(key).list.push(p);
-  });
-  const html = [...groups.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1).map(([, g]) => section(g.title, g.list)).join("");
-  const fbs = ORDERS.filter(p => isAlmalyFbs(p) && matches(p));
-  if (!html && !fbs.length) return `<div class="empty"><b>Ничего не нашли</b><p>Проверьте номер ЦБ, адрес или отправление.</p></div>`;
-  return html + fbsBlock(fbs);
+  return hits.length ? listHtml(hits) : `<div class="empty"><b>Ничего не нашли</b></div>`;
 }
 function matches(p) {
   const d = DELIV[p.posting_number] || {}, a = ((p.customer || {}).address) || {};
-  return [p.posting_number, d.cb, d.address, d.phone, (p.customer || {}).name, a.address_tail, a.city, goodsLine(p)].join(" ").toLowerCase().includes(Q);
+  return [p.posting_number, d.cb, d.address, d.phone, (p.customer || {}).name, a.address_tail, goodsLine(p)].join(" ").toLowerCase().includes(Q);
 }
-function placeOf(p) {
-  const o = orderDay(p, DELIV[p.posting_number]), t = mskDay(Date.now());
-  if (o.kind === "new") return ["1", "Новые"];
-  if (o.kind === "work" && !o.day) return ["2", "Без даты"];
-  if (o.kind === "work" && o.day <= t) return ["0", "Сегодня"];
-  if ((o.kind === "done" || o.kind === "cancel") && o.day === t) return ["0", "Сегодня"];
-  if (o.kind === "work") return ["3-" + o.day, dayTitle(o.day)];
-  return ["4", "Архив"];
-}
-function gateHtml() {
-  return `<form class="gate" id="keysForm"><h2>Ключи Ozon</h2><p>Нужны, чтобы прочитать заказы. Они остаются в этом браузере. Прототип не отмечает доставку и не пишет в таблицу.</p>
-    <label>Client-Id<input name="cid" inputmode="numeric" autocomplete="off" required></label>
-    <label>Api-Key<input name="key" type="password" autocomplete="new-password" required></label>
-    <button class="btn grow">Читать заказы</button>
-    <a class="demo-link" href="?demo=1">Открыть демо без ключей</a></form>`;
-}
-function errorHtml() {
-  return `<div class="empty"><b>Не удалось прочитать заказы</b><p>${esc(LOAD_ERR)}</p><button type="button" class="btn" id="retryBtn">Повторить</button><a class="demo-link" href="?demo=1">Открыть демо</a></div>`;
-}
-
-function renderStage() {
-  document.body.dataset.mode = MODE;
-  document.body.dataset.tab = Q ? "search" : TAB;
-  const el = $("stage");
-  if (MODE === "gate") { el.innerHTML = gateHtml(); return; }
-  if (LOADING) { el.innerHTML = `<div class="skeleton" role="status">Читаем заказы…</div>`; return; }
-  if (LOAD_ERR && !ORDERS.length) { el.innerHTML = errorHtml(); return; }
-  el.innerHTML = Q ? searchHtml() : TAB === "today" ? todayHtml() : TAB === "fresh" ? freshHtml() : TAB === "ahead" ? aheadHtml() : archiveHtml();
-  const key = [TAB, Q, ORDERS.length, Object.keys(DELIV).length, doneCount()].join(":");
-  if (TICK !== key && !reduced()) { TICK = key; tickCount(el); }
-}
-function doneCount() { return buckets().today.done.length; }
 function paintChrome() {
   const b = ORDERS.length ? buckets() : {today: {work: [], done: [], cancel: []}, fresh: {send: [], nodate: []}, upcoming: {}, archive: [], fbs: 0};
-  const [from, to] = archBounds();
-  const counts = {
-    today: b.today.work.length + b.today.done.length + b.today.cancel.length,
-    fresh: b.fresh.send.length + b.fresh.nodate.length,
-    ahead: Object.values(b.upcoming).reduce((s, l) => s + l.length, 0),
-    archive: archiveRange(b.archive, from, to).length,
-  };
-  const names = {today: "Сегодня", fresh: "Новые", ahead: "Впереди", archive: "Архив"};
-  $("tabs").innerHTML = Object.entries(names).map(([k, v]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${!Q && TAB === k}" class="${k === "fresh" && b.fresh.send.length ? "hot" : ""}">${v}${counts[k] ? `<em>${counts[k]}</em>` : ""}</button>`).join("");
-  const day = new Date().toLocaleDateString("ru-RU", {weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Moscow"});
-  $("dayLine").textContent = day.charAt(0).toUpperCase() + day.slice(1) + (MODE === "demo" ? " · демо" : "");
-  $("ribbon").textContent = MODE === "demo"
-    ? "Демо · в таблицу и Ozon ничего не отправляется"
-    : "Только чтение · правки остаются на экране и не пишутся в таблицу или Ozon";
-  paintWho();
-}
-function paintWho() {
+  const counts = {today: b.today.work.length + b.today.done.length + b.today.cancel.length, fresh: b.fresh.send.length + b.fresh.nodate.length, ahead: Object.values(b.upcoming).reduce((s, l) => s + l.length, 0), archive: b.archive.length};
+  const tabs = [["today", "Сегодня", "M8 3v2M16 3v2M4 8h16M6 5h12a1 1 0 0 1 1 1v13H5V6a1 1 0 0 1 1-1z"], ["fresh", "Новые", "M7 4h10v16l-2-1.2L13 20l-2-1.2L9 20l-2-1.2V4z"], ["ahead", "Впереди", "M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z"], ["archive", "Архив", "M4 7h16v12H4zM4 7l2-3h12l2 3"]];
+  $("tabbar").innerHTML = tabs.map(([k, name, path]) => `<button type="button" data-tab="${k}" aria-current="${!Q && TAB === k ? "page" : "false"}"><svg viewBox="0 0 24 24"><path d="${path}"/></svg>${name}${counts[k] ? `<em>${counts[k]}</em>` : ""}</button>`).join("");
+  $("sticky").innerHTML = stickyHtml();
+  $("fresh").textContent = freshLabel();
+  $("ribbon").textContent = MODE === "demo" ? "Демо · в таблицу и Ozon ничего не отправляется" : "Только чтение · правки остаются на экране";
   const point = rashadPoint();
   $("whoSeen").textContent = seenShort(point);
   $("whoAva").classList.toggle("on", online(point));
-  const full = document.querySelector("[data-seen-full]");
-  if (full) full.textContent = geoSeenText(point, Date.now());
+  $("whoBtn").classList.toggle("off", !!(point && !online(point)));
+  const handle = $("mapHandleText");
+  if (handle) handle.textContent = "Карта · Рашад " + seenShort(point);
 }
-function render() { paintChrome(); renderStage(); if (PANEL) renderPanel(); paintMap(false); }
+function render() { paintChrome(); renderStage(); if (OPEN) renderOrder(); if (PANEL) renderPanel(); paintMap(false); }
 
+function timelineHtml(t) {
+  return `<ol class="vtime">${t.steps.map((s, i) => {
+    const cls = t.key === "done" || i < t.cur ? "on" : i === t.cur ? "now" : "";
+    return `<li class="${cls}"><i></i><b>${esc(s.label)}</b><time>${esc(s.when || "")}</time></li>`;
+  }).join("")}${t.key === "cancel" ? `<li class="now"><i></i><b>Отменён</b><time></time></li>` : ""}</ol>`;
+}
+function receiptHtml(p) {
+  const m = moneyOf(p), t = m.t;
+  const line = (k, v, cls = "", sub = "") => `<div class="rline ${cls}"><span>${k}${sub ? `<small>${esc(sub)}</small>` : ""}</span><b>${v}</b></div>`;
+  const goods = (p.products || []).map(x => {
+    const price = parseFloat(x.price && x.price.amount != null ? x.price.amount : x.price) || 0, qty = Number(x.quantity) || 0;
+    return line(`${qty} × ${esc(shortName(x.name).replace(/^Керамогранит\s+/i, ""))}`, rub(price * qty));
+  }).join("");
+  const oz = (on, text) => text + (on ? " · из Ozon" : "");
+  return `<section class="receipt"><h3>Расчёт</h3>${goods}
+    ${m.clientDelivery ? line("Доставка от клиента", rub(m.clientDelivery)) : ""}${m.clientLift ? line("Подъём от клиента", rub(m.clientLift)) : ""}
+    ${line("Клиент платит", rub(m.client), "tot")}
+    ${t ? line("Комиссия, эквайринг, сбор", "−" + sp(t.commission + t.acquiring + t.fee) + " ₽") + line("НДС", "−" + sp(t.vat) + " ₽") + line("Себестоимость", "−" + sp(t.cost) + " ₽") : ""}
+    ${line(m.planned ? "Рашаду, план" : "Рашаду", "−" + sp(m.courier) + " ₽", "", oz(m.deliveryAuto, "доставка " + sp(m.courierDelivery)) + " + " + oz(m.liftAuto, "подъём " + sp(m.courierLift)))}
+    ${m.profit == null ? line("Прибыль", "не считается") : line("Прибыль", rub(m.profit), "profit" + (m.profit < 0 ? " neg" : ""))}
+  </section>`;
+}
+function renderOrder() {
+  const p = ORDERS.find(x => x.posting_number === OPEN);
+  if (!p) { closeOrder(); return; }
+  const t = track(p), d = DELIV[p.posting_number];
+  const [area, rest] = addrParts(addrOf(p));
+  let body = "";
+  if (EXTRA && EXTRA.type === "edit") body = editForm(p);
+  else if (EXTRA && EXTRA.type === "send") body = sendForm(p);
+  else if (EXTRA && EXTRA.type === "replace") body = replaceHtml(p);
+  else {
+    const ph = d && d.phone ? String(d.phone).replace(/^'/, "") : ((p.customer || {}).phone || "");
+    const links = [
+      ph ? `<a href="tel:${esc(ph)}">${ic("phone", "s")}Клиенту</a>` : "",
+      llOf(p) ? `<button type="button" data-act="fly" data-id="${esc(p.posting_number)}">${ic("map", "s")}На карте</button>` : "",
+      d ? `<button type="button" data-act="edit" data-id="${esc(p.posting_number)}">${ic("edit", "s")}Изменить</button>` : "",
+      `<button type="button" data-act="copy" data-id="${esc(p.posting_number)}">${ic("copy", "s")}Номер</button>`,
+    ].filter(Boolean).join("");
+    const confirm = CONFIRM && CONFIRM.posting === p.posting_number ? `<div class="note"><p>${CONFIRM.kind === "cancel" ? "Отменить только на этом экране? Таблица и Ozon не изменятся." : "Отметить доставленным только на этом экране?"}</p><div class="acts"><button class="btn ${CONFIRM.kind === "cancel" ? "danger" : ""}" data-act="confirm-yes" data-id="${esc(p.posting_number)}">Да, здесь</button><button class="btn soft" data-act="confirm-no">Нет</button></div></div>` : "";
+    const danger = !d || t.key === "done" ? "" : t.key === "cancel" && p.status !== "cancelled" ? `<button class="btn ghost" data-act="restore" data-id="${esc(p.posting_number)}">${ic("undo", "s")}Вернуть в работу</button>` : t.key !== "cancel" ? `<div class="acts"><button class="btn ghost" data-act="replace" data-id="${esc(p.posting_number)}">${ic("swap", "s")}Заменить</button><button class="btn danger" data-act="ask-cancel" data-id="${esc(p.posting_number)}">${ic("ban", "s")}Отменить</button></div>` : "";
+    const primary = t.key === "new" && canSend(p) ? `<button class="btn grow" data-act="send" data-id="${esc(p.posting_number)}">${ic("send", "s")}Отправить Рашаду</button>` : t.seen && t.key !== "done" && t.key !== "cancel" ? `<button class="btn grow" data-act="ask-done" data-id="${esc(p.posting_number)}">${ic("check", "s")}Доставлено</button>` : "";
+    body = `<div class="sheet-h"><div><span class="badge k-${t.key}">${ic(ICO[t.key], "s")}${esc(t.label)}</span><h2 id="orderTitle">${esc(area)}</h2><p class="hint">${esc(rest)} · ${esc(t.expected)}</p></div><button type="button" class="icon" data-order-close aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+      ${timelineHtml(t)}${t.problems.map(x => `<p class="next bad"><b>${esc(x.t)}</b></p>`).join("")}
+      ${t.seen ? `<p class="seen">Рашад видел${t.seenAt ? " · " + esc(t.seenAt) : ""}</p>` : t.key === "new" ? `<p class="seen">Рашад ещё не получал</p>` : ""}
+      ${receiptHtml(p)}<div class="links">${links}</div>${confirm}${danger}${primary ? `<div class="acts">${primary}</div>` : ""}`;
+  }
+  $("orderBody").innerHTML = body;
+}
+function showOrder() {
+  const s = $("order");
+  s.hidden = false;
+  requestAnimationFrame(() => s.classList.add("show"));
+  document.querySelectorAll(".trk, .grid tr").forEach(el => el.classList.toggle("hot", el.dataset.id === OPEN));
+}
+function closeOrder() {
+  const s = $("order");
+  s.classList.remove("show");
+  OPEN = ""; EXTRA = null; CONFIRM = null;
+  document.querySelectorAll(".trk, .grid tr").forEach(el => el.classList.remove("hot"));
+  setTimeout(() => { if (!s.classList.contains("show")) s.hidden = true; }, reduced() ? 0 : 300);
+  paintMap(false);
+}
+function editForm(p) {
+  const d = DELIV[p.posting_number], info = deliveryDetails(d.comment);
+  const date = dayIso(d.date), t = mskDay(Date.now()), oz = ozonLogistics(p, LOGI), pay = courierPay(d, oz);
+  const f = (n, label, v, attrs = "") => `<label>${label}<input name="${n}" value="${esc(v ?? "")}" ${attrs}></label>`;
+  return `<form class="form edit" data-id="${esc(p.posting_number)}"><h3>Изменить</h3>
+    <label>Адрес<textarea name="address" rows="2" required>${esc(d.address || "")}</textarea></label>
+    <div class="grid2">${f("cb", "ЦБ", String(d.cb || "").replace(/^ЦБ-?/i, ""))}${f("phone", "Телефон", String(d.phone || "").replace(/^'/, ""), 'type="tel"')}</div>
+    <label>Дата<div class="days"><button type="button" data-day="${t}">Сегодня</button><button type="button" data-day="${addDaysIso(t, 1)}">Завтра</button><input name="date" type="date" value="${esc(date)}"></div></label>
+    <label>Время<input name="time" value="${esc(info.time || "")}"><span class="slots">${DELIVERY_SLOTS.map(x => `<button type="button" data-slot="${esc(x)}">${esc(slotLabel(x))}</button>`).join("")}</span></label>
+    <div class="grid2">${f("delivery", "Доставка, ₽", num(d.delivery) > 0 ? d.delivery : "", `placeholder="${oz.delivery}" data-oz="${oz.delivery}"`)}${f("lift", "Подъём, ₽", num(d.lift) > 0 ? d.lift : "", `placeholder="${oz.lift}" data-oz="${oz.lift}"`)}</div>
+    <p class="hint">Пустое поле — сумма из Ozon. Сейчас Рашаду ${rub(pay.delivery + pay.lift)}.</p>
+    <label>Пометка<textarea name="note" rows="2">${esc(info.note || "")}</textarea></label>
+    <div class="acts"><button type="button" class="btn soft" data-act="close-extra">Назад</button><button class="btn grow">Сохранить здесь</button></div></form>`;
+}
+function sendForm(p) {
+  const oz = ozonLogistics(p, LOGI), t = mskDay(Date.now());
+  const old = EXTRA && EXTRA.old && DELIV[EXTRA.old];
+  return `<form class="form send" data-id="${esc(p.posting_number)}" data-old="${esc((EXTRA && EXTRA.old) || "")}"><h3>${old ? "Замена" : "Отправить Рашаду"}</h3>
+    ${old ? `<p class="hint">Вместо ${esc(old.cb || EXTRA.old)}. Старый станет «Отменён» только на экране.</p>` : ""}
+    <label>Номер ЦБ<input name="cb" required inputmode="numeric" value="${esc(old ? String(old.cb || "").replace(/^ЦБ-?/i, "") : "")}"></label>
+    <div class="grid2"><label>Доставка<input name="delivery_pay" inputmode="numeric" value="${oz.delivery || ""}" data-oz="${oz.delivery}"></label><label>Подъём<input name="lift_pay" inputmode="numeric" value="${oz.lift || ""}" data-oz="${oz.lift}"></label></div>
+    <label>Дата<div class="days"><button type="button" data-day="${t}">Сегодня</button><button type="button" data-day="${addDaysIso(t, 1)}">Завтра</button><input name="date" type="date" value="${t}"></div></label>
+    <label>Время<input name="time" value="${esc(old ? deliveryDetails(old.comment).time : "")}"><span class="slots">${DELIVERY_SLOTS.map(x => `<button type="button" data-slot="${esc(x)}">${esc(slotLabel(x))}</button>`).join("")}</span></label>
+    <p class="hint">В таблицу не запишется.</p>
+    <div class="acts"><button type="button" class="btn soft" data-act="close-extra">Назад</button><button class="btn grow">${old ? "Заменить" : "Отправить"}</button></div></form>`;
+}
+function replaceHtml(p) {
+  const cands = ORDERS.filter(canSend);
+  return `<div><p class="hint">Новый заказ вместо ${esc((DELIV[p.posting_number] || {}).cb || "")}. FBS нельзя.</p>
+    ${cands.map(x => `<button type="button" class="jump" data-act="pick" data-id="${esc(x.posting_number)}" data-old="${esc(p.posting_number)}"><b>${esc(addrParts(addrOf(x))[0])}</b><small>${esc(x.posting_number)}</small></button>`).join("") || `<p class="hint">Неотправленных нет.</p>`}
+    <button type="button" class="btn soft" data-act="close-extra">Назад</button></div>`;
+}
+
+function mapStyleName() {
+  const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  return dark ? "dark" : "liberty";
+}
 function mapModel() {
-  const showRashad = TAB !== "archive" || !!Q;
-  if (!Q && TAB === "archive") return {title: "Архив", active: [], done: [], showRashad: false, empty: "Архив без карты: прошлые дни не смешиваются с сегодня."};
-  const b = buckets();
-  let active = [], done = [];
+  if (!Q && TAB === "archive") return {title: "Архив", active: [], done: [], show: false, empty: "Архив без карты."};
+  const b = ORDERS.length ? buckets() : null;
+  const active = [], done = [];
   const push = (p, into) => { const ll = llOf(p); if (ll && !isAlmalyFbs(p)) into.push({p, ll}); };
-  const src = Q ? ORDERS.filter(p => !isAlmalyFbs(p) && matches(p)) : null;
-  if (src) src.forEach(p => push(p, orderDay(p, DELIV[p.posting_number]).kind === "done" ? done : active));
+  if (!b) return {title: "", active, done, show: false, empty: ""};
+  if (Q) ORDERS.filter(p => !isAlmalyFbs(p) && matches(p)).forEach(p => push(p, track(p).key === "done" ? done : active));
   else if (TAB === "today") { b.today.work.forEach(([p]) => push(p, active)); b.today.done.forEach(([p]) => push(p, done)); }
   else if (TAB === "fresh") b.fresh.send.concat(b.fresh.nodate).forEach(([p]) => push(p, active));
   else Object.keys(b.upcoming).sort().forEach(day => b.upcoming[day].forEach(([p]) => push(p, active)));
   const start = rashadTodayLL() || (active[0] && active[0].ll) || [55.76, 37.86];
-  active = nearest(active, start);
-  const title = Q ? "Найденное" : TAB === "today" ? "Сегодня" : TAB === "fresh" ? "Новые" : "Впереди";
-  const empty = active.length || done.length || (showRashad && rashadPoint()) ? "" : "В этом разделе нет точек с координатами.";
-  return {title, active, done, showRashad, empty};
+  return {title: Q ? "Поиск" : {today: "Сегодня", fresh: "Новые", ahead: "Впереди"}[TAB] || "", active: nearest(active, start), done, show: true, empty: ""};
 }
-let MAP_DIRTY = false;
 function paintMap(fitNow) {
   if (!MAP || !MAP.isStyleLoaded || !MAP.isStyleLoaded() || !MAP.getSource("route")) { MAP_DIRTY = true; return; }
   MAP_DIRTY = false;
   const model = mapModel();
   const rp = rashadPoint();
-  const key = (Q ? "q:" + Q : TAB) + "|" + model.active.map(x => x.p.posting_number).join(",") + "|" + model.done.map(x => x.p.posting_number).join(",") + (rp ? "@" + rp.lat.toFixed(3) + "," + rp.lng.toFixed(3) : "");
-  $("mapCap").textContent = model.empty ? model.title : `${model.title} · ${model.active.length + model.done.length}`;
+  const key = TAB + "|" + (Q || "") + "|" + model.active.map(x => x.p.posting_number).join(",") + "|" + OPEN;
+  $("mapCap").textContent = model.empty ? model.title : model.title + " · " + (model.active.length + model.done.length);
   $("mapShade").hidden = !model.empty;
   if (model.empty) $("mapShade").innerHTML = `<div><b>${esc(model.title)}</b><p>${esc(model.empty)}</p></div>`;
-  const link = $("routeLink");
-  if (!Q && TAB === "today" && model.active.length) {
-    const lls = (rashadTodayLL() ? [rashadTodayLL()] : []).concat(model.active.map(x => x.ll));
-    link.hidden = false;
-    link.href = "https://yandex.ru/maps/?rtext=" + lls.map(p => p.join(",")).join("~") + "&rtt=auto";
-  } else link.hidden = true;
-  if (key === MAP_KEY && !fitNow) {
-    const lab = document.querySelector(".rpin span");
-    if (lab && rp) lab.textContent = seenShort(rp);
-    return;
-  }
+  if (key === MAP_KEY && !fitNow) return;
   MAP_KEY = key;
   PINS.forEach(m => m.remove()); PINS = [];
   if (RPIN) { RPIN.remove(); RPIN = null; }
   const add = (el, ll, id) => {
-    el.addEventListener("click", ev => { ev.stopPropagation(); jumpTo(id, {fromMap: true}); });
+    el.addEventListener("click", ev => { ev.stopPropagation(); openOrder(id); });
     PINS.push(new maplibregl.Marker({element: el, anchor: "center"}).setLngLat([ll[1], ll[0]]).addTo(MAP));
   };
   model.active.forEach((x, i) => {
-    const el = document.createElement("button");
-    el.type = "button"; el.className = "pin" + (i === 0 ? " next" : "") + (TAB === "fresh" ? " send" : "");
+    const t = track(x.p), el = document.createElement("button");
+    el.type = "button"; el.className = "pin " + (t.key === "sent" ? "sent" : t.key === "onsite" ? "onsite" : "") + (OPEN === x.p.posting_number ? " hot" : "");
     el.textContent = String(i + 1); el.style.opacity = "1";
-    el.setAttribute("aria-label", (i + 1) + ". " + addrOf(x.p));
+    el.setAttribute("aria-label", t.label + " " + addrOf(x.p));
     add(el, x.ll, x.p.posting_number);
   });
   model.done.forEach((x, i) => {
     const el = document.createElement("button");
-    el.type = "button"; el.className = "pin done"; el.textContent = String(i + 1); el.style.opacity = "1";
-    el.setAttribute("aria-label", "Доставлен. " + addrOf(x.p));
+    el.type = "button"; el.className = "pin done" + (OPEN === x.p.posting_number ? " hot" : "");
+    el.textContent = String(i + 1); el.style.opacity = "1";
     add(el, x.ll, x.p.posting_number);
   });
-  if (model.showRashad && rp) {
+  if (model.show && rp) {
     const el = document.createElement("div");
-    el.className = "rpin" + (online(rp) ? " on" : "");
-    el.innerHTML = `<b>Р</b><span>${esc(seenShort(rp))}</span>`;
+    el.className = "rpin"; el.innerHTML = `<b>Р</b><span>${esc(seenShort(rp))}</span>`;
     RPIN = new maplibregl.Marker({element: el, anchor: "center"}).setLngLat([+rp.lng, +rp.lat]).addTo(MAP);
   }
-  const chips = model.active.length ? model.active : model.done;
-  $("mapStops").innerHTML = chips.map((x, i) => `<button type="button" data-fly="${esc(x.p.posting_number)}"><b>${i + 1}</b><span>${esc(addrParts(addrOf(x.p))[0])}</span></button>`).join("");
-  const trackOn = !Q && TAB === "today";
-  const track = trackOn ? todayTrack((RASHAD && RASHAD.track) || [], Date.now()).map(p => [p.lng, p.lat]) : [];
-  const tsrc = MAP.getSource("track");
-  if (tsrc) tsrc.setData(track.length > 1 ? {type: "Feature", geometry: {type: "LineString", coordinates: track}} : {type: "FeatureCollection", features: []});
   const line = [];
-  if (trackOn && rashadTodayLL()) line.push(rashadTodayLL());
+  if (!Q && TAB === "today" && rashadTodayLL()) line.push(rashadTodayLL());
   model.active.forEach(x => line.push(x.ll));
   const rkey = line.map(p => p.map(n => n.toFixed(3)).join(",")).join(";");
   if (rkey !== ROUTE_KEY) {
     ROUTE_KEY = rkey;
     if (line.length < 2) paintRoute(MAP, "route", []);
-    else drawRoute(line);
+    else {
+      const path = line.map(p => `${(+p[1]).toFixed(6)},${(+p[0]).toFixed(6)}`).join(";");
+      const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 6000);
+      fetch("https://router.project-osrm.org/route/v1/driving/" + path + "?overview=full&geometries=geojson", {signal: ctl.signal})
+        .then(r => r.json()).then(j => paintRoute(MAP, "route", (j.routes && j.routes[0] && j.routes[0].geometry.coordinates) || line.map(p => [p[1], p[0]])))
+        .catch(() => paintRoute(MAP, "route", line.map(p => [p[1], p[0]]))).finally(() => clearTimeout(timer));
+    }
   }
   if (fitNow || !USER_MOVED) fitTo(model, rp);
 }
-function drawRoute(line) {
-  const path = line.map(p => `${(+p[1]).toFixed(6)},${(+p[0]).toFixed(6)}`).join(";");
-  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 6000);
-  fetch(`https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson`, {signal: ctl.signal})
-    .then(r => r.json()).then(j => {
-      const g = j && j.routes && j.routes[0] && j.routes[0].geometry;
-      paintRoute(MAP, "route", g ? g.coordinates : line.map(p => [p[1], p[0]]));
-    }).catch(() => paintRoute(MAP, "route", line.map(p => [p[1], p[0]]))).finally(() => clearTimeout(timer));
-}
 function fitTo(model, rp) {
   if (!MAP) return;
-  const pts = model.active.map(x => x.ll).concat(model.done.map(x => x.ll));
-  if (model.showRashad && rp) pts.push([+rp.lat, +rp.lng]);
-  const duration = reduced() ? 0 : 700;
-  if (!pts.length) return;
-  if (pts.length === 1) MAP.flyTo({center: [pts[0][1], pts[0][0]], zoom: 12, duration});
-  else {
-    const b = new maplibregl.LngLatBounds();
-    pts.forEach(p => b.extend([p[1], p[0]]));
-    MAP.fitBounds(b, {padding: {top: 80, bottom: 128, left: 40, right: 48}, maxZoom: 13, duration});
-  }
-}
-function mapStyleName() {
-  const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
-  return dark ? "dark" : "positron";
+  const pts = model.active.concat(model.done).map(x => x.ll);
+  if (model.show && rp) pts.push([+rp.lat, +rp.lng]);
+  if (pts.length < 2) { if (pts[0]) MAP.flyTo({center: [pts[0][1], pts[0][0]], zoom: 12, duration: reduced() ? 0 : 600}); return; }
+  const b = new maplibregl.LngLatBounds();
+  pts.forEach(p => b.extend([p[1], p[0]]));
+  MAP.fitBounds(b, {padding: 48, maxZoom: 13, duration: reduced() ? 0 : 650});
 }
 function ensureLayers() {
-  if (!MAP.getSource("track")) {
-    MAP.addSource("track", {type: "geojson", data: {type: "FeatureCollection", features: []}});
-    MAP.addLayer({id: "track", type: "line", source: "track", layout: {"line-cap": "round", "line-join": "round"},
-      paint: {"line-color": "#93b4ff", "line-width": 3, "line-dasharray": [1.4, 1.6], "line-opacity": .9}});
-  }
   if (!MAP.getSource("route")) {
     MAP.addSource("route", {type: "geojson", data: {type: "FeatureCollection", features: []}});
-    MAP.addLayer({id: "route-case", type: "line", source: "route", layout: {"line-cap": "round", "line-join": "round"},
-      paint: {"line-color": "#ffffff", "line-width": 8, "line-opacity": .95}});
-    MAP.addLayer({id: "route", type: "line", source: "route", layout: {"line-cap": "round", "line-join": "round"},
-      paint: {"line-color": "#1d4ed8", "line-width": 4.5}});
+    MAP.addLayer({id: "route-case", type: "line", source: "route", layout: {"line-cap": "round", "line-join": "round"}, paint: {"line-color": "#ffffff", "line-width": 8, "line-opacity": .9}});
+    MAP.addLayer({id: "route", type: "line", source: "route", layout: {"line-cap": "round", "line-join": "round"}, paint: {"line-color": "#1d4ed8", "line-width": 4.5}});
   }
 }
 function bootMap() {
@@ -942,172 +743,97 @@ function bootMap() {
       js.onload = ok; js.onerror = () => fail(new Error("Карта не загрузилась"));
       document.head.append(css, js);
     });
-    MAP = new maplibregl.Map({container: "map", style: "https://tiles.openfreemap.org/styles/" + mapStyleName(),
-      center: [37.9, 55.78], zoom: 10, attributionControl: true, dragRotate: false, pitchWithRotate: false});
+    MAP = new maplibregl.Map({container: "map", style: "https://tiles.openfreemap.org/styles/" + mapStyleName(), center: [37.9, 55.78], zoom: 10, attributionControl: true, dragRotate: false, pitchWithRotate: false});
     MAP.addControl(new maplibregl.NavigationControl({showCompass: false}), "bottom-right");
     MAP.on("dragstart", () => { USER_MOVED = true; });
     MAP.on("style.load", () => { ensureLayers(); MAP_KEY = ""; ROUTE_KEY = ""; paintMap(!USER_MOVED); });
     MAP.on("idle", () => { if (MAP_DIRTY) paintMap(false); });
     await new Promise(ok => MAP.once("load", ok));
-    ensureLayers();
-    paintMap(true);
+    ensureLayers(); paintMap(true);
     document.body.dataset.map = "1";
-  })().catch(err => {
-    MAP_OK = null;
-    $("mapShade").hidden = false;
-    $("mapShade").innerHTML = `<div><b>Карта не загрузилась</b><p>${esc(err.message || "")}</p></div>`;
-  });
+  })().catch(err => { MAP_OK = null; $("mapShade").hidden = false; $("mapShade").textContent = err.message || "Карта не загрузилась"; });
   return MAP_OK;
-}
-function setMapOpen(on) {
-  document.body.classList.toggle("map-open", on);
-  $("mapClose").hidden = !on;
-  setTimeout(() => {
-    if (!MAP) return;
-    MAP.resize();
-    if (on) { MAP_KEY = ""; USER_MOVED = false; paintMap(true); }
-  }, 80);
 }
 
 function renderPanel() {
-  $("panelTitle").textContent = {courier: "Рашад", pay: "Выплаты", settings: "Настройки"}[PANEL_TAB] || "Рашад";
-  $("panelSeg").innerHTML = [["courier", "Рашад"], ["pay", "Выплаты"], ["settings", "Настройки"]].map(([k, v]) =>
-    `<button type="button" data-ptab="${k}" aria-pressed="${PANEL_TAB === k}">${v}</button>`).join("");
-  $("panelBody").innerHTML = PANEL_TAB === "pay" ? payHtml() : PANEL_TAB === "settings" ? settingsHtml() : courierHtml();
-  if (PANEL_TAB === "settings" && $("themeSw")) mountThemeSwitch($("themeSw"));
-  paintWho();
-}
-function courierHtml() {
-  const point = rashadPoint(), batt = point && point.battery != null ? Math.round(point.battery * 100) : null;
-  const items = ORDERS.filter(p => !isAlmalyFbs(p) && orderTab(p, DELIV[p.posting_number]) === "courier")
-    .map(p => ({p, f: flow(p)})).sort((a, b) => b.f.cur - a.f.cur);
-  const b = ORDERS.length ? buckets() : null;
-  const done = b ? b.today.done.length : 0, work = b ? b.today.work.length : 0;
-  return `<div class="who-card"><span class="ava${online(point) ? " on" : ""}">Р</span><div><b>Рашад</b><div data-seen-full>${esc(geoSeenText(point, Date.now()))}</div>${batt != null ? `<small>заряд ${batt}%</small>` : ""}</div></div>
-    <div class="stats"><div><b>${work}</b><span>в работе</span></div><div><b>${done}</b><span>доставлено</span></div><div><b>${items.length}</b><span>у него сейчас</span></div></div>
-    ${items.map(({p, f}) => `<button type="button" class="jump" data-jump="${esc(p.posting_number)}"><span><b>${esc((DELIV[p.posting_number] || {}).cb || "Без ЦБ")} · ${esc(addrParts(addrOf(p))[0])}</b><small>${esc(f.label)}${f.when ? " · " + esc(f.when) : ""}</small></span></button>`).join("") || `<p class="hint">Сейчас у Рашада нет заказов в работе.</p>`}
-    <p class="hint">Точка приходит, пока у него открыто приложение. Склад на карту не ставится.</p>`;
-}
-function payHtml() {
-  if (!PAYS_OK) return `<p class="note">Выплаты не показываем: таблица не ответила или не подключена. Так остаток не перепутать с начисленным.</p>`;
-  const rep = deliveryReport(rashadDeliveries(Object.values(DELIV)), PAYS);
-  const left = rep.hasPayments ? rep.left : rep.done.pay;
-  const today = new Date().toISOString().slice(0, 10);
-  const rows = [...rep.payments].reverse().map(p => `<li><div><b>${rub(num(p.amount))}</b><small>${esc(p.date)}${p.comment ? " · " + esc(p.comment) : ""}</small></div><button type="button" class="x" data-unpay="${esc(p.id)}" aria-label="Удалить выплату">✕</button></li>`).join("");
-  return `<p class="hint">Запись выплаты останется только на этом экране.</p>
-    <div class="sums"><div><span>Начислено</span><b>${sp(rep.done.pay)} ₽</b></div><div><span>Выплачено</span><b>${sp(rep.paid)} ₽</b></div><div class="${left < 0 ? "neg" : "pos"}"><span>${left < 0 ? "Переплата" : "Осталось"}</span><b>${sp(left)} ₽</b></div></div>
-    ${rep.active.n ? `<p class="hint">В работе ещё ${esc(plural(rep.active.n, "заказ", "заказа", "заказов"))} на ${rub(rep.active.pay)}.</p>` : ""}
-    <form class="form pay" id="payForm"><div class="grid2"><label>Сумма, ₽<input name="amount" inputmode="numeric" required></label><label>Дата<input name="date" type="date" value="${today}"></label></div>
-      <label>Комментарий<input name="comment" placeholder="на карту"></label><button class="btn grow">Записать на экране</button></form>
-    ${rows ? `<ul class="rows">${rows}</ul>` : `<p class="hint">Выплат пока нет.</p>`}
-    ${rep.months.length ? `<details><summary>По месяцам</summary><ul class="rows">${rep.months.map(m => `<li><div><b>${esc(m.label)}</b><small>${esc(plural(m.n, "доставка", "доставки", "доставок"))}</small></div><b>${rub(m.pay)}</b></li>`).join("")}</ul></details>` : ""}`;
-}
-function settingsHtml() {
-  const cid = STORE.get("ozon_cid");
-  return `<p class="hint">${MODE === "demo" ? "Сейчас демо: ключи и таблица не используются." : "Ключи лежат только в этом браузере."} Запись в Ozon и в таблицу выключена.</p>
-    <div class="seg" id="themeSw"></div>
-    ${MODE === "demo" ? `<p><a href="${location.pathname}">Открыть с ключами этого браузера</a></p>` : `<form class="form" id="linkForm"><label>Ссылка доступа к таблице<input name="link" placeholder="Вставьте ссылку с #admin" autocomplete="off"></label><button class="btn">Подключить чтение</button></form>
-      <p class="hint">Client-Id: ${cid ? "••••" + esc(String(cid).slice(-4)) : "не сохранён"}</p>
-      <button type="button" class="btn ghost" data-forget>Забыть ключи Ozon</button>`}
-    <p><button type="button" class="btn ghost" data-csv>${ic("copy")}Скачать CSV</button></p>
-    <p class="hint"><a href="index.html">Текущее приложение</a> этот прототип не заменяет.</p>`;
+  $("panelTitle").textContent = {courier: "Рашад", pay: "Выплаты", settings: "Настройки"}[PANEL_TAB];
+  $("panelSeg").innerHTML = [["courier", "Рашад"], ["pay", "Выплаты"], ["settings", "Настройки"]].map(([k, v]) => `<button type="button" data-ptab="${k}" aria-pressed="${PANEL_TAB === k}">${v}</button>`).join("");
+  const point = rashadPoint();
+  if (PANEL_TAB === "courier") {
+    const items = ORDERS.filter(p => !isAlmalyFbs(p) && orderTab(p, DELIV[p.posting_number]) === "courier");
+    $("panelBody").innerHTML = `<p>${esc(geoSeenText(point, Date.now()))}</p><div class="stats"><div><b>${items.length}</b><span>у него</span></div><div><b>${point && point.battery != null ? Math.round(point.battery * 100) + "%" : "—"}</b><span>заряд</span></div><div><b>${online(point) ? "да" : "нет"}</b><span>в сети</span></div></div>` +
+      items.map(p => { const t = track(p); return `<button type="button" class="jump" data-jump="${esc(p.posting_number)}"><b>${esc(t.label)} · ${esc(addrParts(addrOf(p))[0])}</b><small>${esc(t.when || "")} · ${esc(t.expected)}</small></button>`; }).join("");
+  } else if (PANEL_TAB === "pay") {
+    if (!PAYS_OK) { $("panelBody").innerHTML = `<p class="note">Выплаты не показываем, пока таблица не ответила.</p>`; return; }
+    const rep = deliveryReport(rashadDeliveries(Object.values(DELIV)), PAYS);
+    const left = rep.hasPayments ? rep.left : rep.done.pay;
+    $("panelBody").innerHTML = `<p class="hint">Запись только на этом экране.</p><div class="stats"><div><b>${sp(rep.done.pay)}</b><span>начислено</span></div><div><b>${sp(rep.paid)}</b><span>выплачено</span></div><div><b>${sp(left)}</b><span>${left < 0 ? "переплата" : "осталось"}</span></div></div>
+      <form class="form" id="payForm"><label>Сумма<input name="amount" inputmode="numeric" required></label><label>Дата<input name="date" type="date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Комментарий<input name="comment"></label><button class="btn grow">Записать здесь</button></form>
+      <ul class="rows">${[...rep.payments].reverse().map(p => `<li><div><b>${rub(num(p.amount))}</b><small>${esc(p.date)} ${esc(p.comment || "")}</small></div><button type="button" data-unpay="${esc(p.id)}">✕</button></li>`).join("")}</ul>`;
+  } else {
+    $("panelBody").innerHTML = `<div class="seg" id="themeSw"></div><p class="hint">${MODE === "demo" ? "Демо не ходит в сеть." : "Ключи только в этом браузере."}</p>${MODE === "demo" ? "" : `<form class="form" id="linkForm"><label>Ссылка доступа<input name="link" placeholder="#admin=…"></label><button class="btn">Подключить чтение</button></form>`}<p><a href="index.html">Текущее приложение</a></p>`;
+    if ($("themeSw")) mountThemeSwitch($("themeSw"));
+  }
 }
 function openPanel(tab) {
-  PANEL = "open"; PANEL_TAB = tab || PANEL_TAB || "courier";
-  $("panel").hidden = false;
-  document.body.classList.add("panel-open");
-  renderPanel();
+  PANEL = "open"; PANEL_TAB = tab || "courier";
+  $("panel").hidden = false; renderPanel();
   requestAnimationFrame(() => $("panel").classList.add("show"));
 }
 function closePanel() {
   $("panel").classList.remove("show");
-  document.body.classList.remove("panel-open");
-  setTimeout(() => { if (!$("panel").classList.contains("show")) { $("panel").hidden = true; PANEL = ""; } }, reduced() ? 0 : 280);
+  setTimeout(() => { if (!$("panel").classList.contains("show")) { $("panel").hidden = true; PANEL = ""; } }, 280);
 }
-function jumpTo(id, opts) {
+function openOrder(id) {
   const p = ORDERS.find(x => x.posting_number === id);
-  if (!p || isAlmalyFbs(p)) { toast("Заказ склада FBS Рашаду не открывается"); return; }
-  closePanel();
-  if (opts && opts.fromMap && matchMedia("(max-width: 1039px)").matches) setMapOpen(false);
-  Q = ""; $("q").value = "";
-  TAB = tabOf(p); OPEN = id; EXTRA = null; CONFIRM = null;
-  render();
-  requestAnimationFrame(() => document.querySelector(`[data-id="${CSS.escape(id)}"]`)?.scrollIntoView({block: "center", behavior: reduced() ? "auto" : "smooth"}));
+  if (!p || isAlmalyFbs(p)) { toast("Склад FBS Рашаду не показывается"); return; }
+  OPEN = id; EXTRA = null; CONFIRM = null;
+  renderOrder(); showOrder();
+  const ll = llOf(p);
+  if (ll && MAP) { USER_MOVED = true; MAP.flyTo({center: [ll[1], ll[0]], zoom: 14, duration: reduced() ? 0 : 550}); }
+  MAP_KEY = ""; paintMap(false);
 }
-function localNotice(text) { toast(text); }
+function jumpTo(id) { closePanel(); TAB = tabOf(ORDERS.find(x => x.posting_number === id) || {}); Q = ""; openOrder(id); render(); }
 
 async function saveSend(form) {
-  const id = form.dataset.id, old = form.dataset.old;
-  const p = ORDERS.find(x => x.posting_number === id);
+  const id = form.dataset.id, old = form.dataset.old, p = ORDERS.find(x => x.posting_number === id);
   try {
     assertRashadPath(p, null);
-    const f = form.elements;
-    let foreman = "";
-    if (f.foreman.value.trim()) foreman = foremanPhone(f.foreman.value);
-    const fields = {
-      cb: f.cb.value, date: f.date.value ? f.date.value.split("-").reverse().join(".") : "",
-      time: f.time.value.trim(), note: f.note.value.trim(), foreman,
-      delivery_pay: f.delivery_pay.value, lift_pay: f.lift_pay.value,
-    };
-    const oz = ozonLogistics(p, LOGI);
-    const dPay = payField(fields.delivery_pay, oz.delivery), lPay = payField(fields.lift_pay, oz.lift);
+    const f = form.elements, oz = ozonLogistics(p, LOGI);
+    const dPay = payField(f.delivery_pay.value, oz.delivery), lPay = payField(f.lift_pay.value, oz.lift);
     const a = ((p.customer || {}).address) || {};
     const phoneDigits = String((p.customer || {}).phone || "").replace(/\D/g, "").replace(/^8(?=\d{10}$)/, "7");
-    const row = {
-      posting: id, cb: normalizeCb(fields.cb), address: a.address_tail || "",
-      lat: a.latitude ? String(a.latitude) : "", lon: a.longitude ? String(a.longitude) : "",
-      phone: phoneDigits ? "+" + phoneDigits : "", ext: String(((p.addressee || {}).pin) || "").replace(/\D/g, ""),
-      packs: goodsLine(p), unload: unloadText(p.prr_option),
+    if (old) { assertRashadPath(ORDERS.find(x => x.posting_number === old), DELIV[old]); if (DELIV[old]) DELIV[old] = Object.assign({}, DELIV[old], {status: "Отменён"}); }
+    DELIV[id] = {posting: id, cb: normalizeCb(f.cb.value), address: a.address_tail || "", lat: a.latitude ? String(a.latitude) : "", lon: a.longitude ? String(a.longitude) : "",
+      phone: phoneDigits ? "+" + phoneDigits : "", ext: "", packs: goodsLine(p), unload: unloadText(p.prr_option),
       delivery: String(dPay.value), lift: String(lPay.value), pay: String(dPay.value + lPay.value),
-      date: fields.date, status: "Новый",
-      comment: deliveryComment({note: fields.note, time: fields.time, foreman: fields.foreman}),
-      courier_comment: "", sent: todayRu() + " " + agreedNow().slice(6), delivered_at: "",
-    };
-    if (!row.cb) throw new Error("Введите номер ЦБ");
-    if (!row.address) throw new Error("В заказе нет адреса");
-    if (old) {
-      const oldP = ORDERS.find(x => x.posting_number === old);
-      assertRashadPath(oldP, DELIV[old]);
-      if (DELIV[old]) DELIV[old] = Object.assign({}, DELIV[old], {status: "Отменён"});
-    }
-    DELIV[id] = row;
-    EXTRA = null; OPEN = id; TAB = tabOf(p);
-    localNotice(old ? "Замена только на экране. Таблица и Рашад не получили пуш." : "Заказ собран для Рашада только на экране. В таблицу не записан.");
+      date: f.date.value ? f.date.value.split("-").reverse().join(".") : "", status: "Новый",
+      comment: deliveryComment({time: f.time.value.trim()}), courier_comment: "", sent: todayRu() + " " + agreedNow().slice(6), delivered_at: ""};
+    if (!DELIV[id].cb) throw new Error("Введите номер ЦБ");
+    EXTRA = null; TAB = tabOf(p);
+    toast(old ? "Замена только на экране" : "Отправлено только на экране");
     render();
-  } catch (err) { toast(err.message || "Не отправилось", true); }
+  } catch (err) { toast(err.message, true); }
 }
 async function saveEdit(form) {
   const id = form.dataset.id, old = DELIV[id], p = ORDERS.find(x => x.posting_number === id);
   try {
     assertRashadPath(p, old);
     const v = Object.fromEntries(new FormData(form)), info = deliveryDetails(old.comment);
-    let ozonInfo = info.ozon ? Object.assign({}, info.ozon) : null;
-    const name = String(v.name || "").trim();
-    if (name && name !== String((p.customer || {}).name || "")) ozonInfo = Object.assign({}, ozonInfo, {customer: name});
     const dPay = payField(v.delivery, form.elements.delivery.dataset.oz), lPay = payField(v.lift, form.elements.lift.dataset.oz);
     const phoneDigits = String(v.phone || "").replace(/\D/g, "").replace(/^8(?=\d{10}$)/, "7");
-    const next = {
-      cb: normalizeCb(v.cb), address: String(v.address || "").trim(),
-      date: v.date ? v.date.split("-").reverse().join(".") : "",
-      phone: phoneDigits ? "+" + phoneDigits : "", ext: String(v.ext || "").replace(/\D/g, ""),
-      packs: String(v.packs || "").trim(), unload: String(v.unload || "").trim() || "Нет",
-      delivery: String(dPay.value), lift: String(lPay.value),
-      comment: deliveryComment({note: v.note, time: v.time, foreman: v.foreman, agreed: info.agreed, ozon: ozonInfo}),
-    };
+    const next = {cb: normalizeCb(v.cb), address: String(v.address || "").trim(), date: v.date ? v.date.split("-").reverse().join(".") : "",
+      phone: phoneDigits ? "+" + phoneDigits : "", delivery: String(dPay.value), lift: String(lPay.value),
+      comment: deliveryComment({note: v.note, time: v.time, agreed: info.agreed, ozon: info.ozon})};
     if (!next.address) throw new Error("Укажите адрес");
     const patch = editPatch(old, next);
-    if (patch.address) {
-      const g = await geocode(next.address).catch(() => null);
-      if (g && g.lat) { patch.lat = g.lat; patch.lon = g.lon; }
-      else toast("Адрес изменён на экране, точку на карте найти не удалось", true);
-    }
+    if (patch.address) { const g = await geocode(next.address).catch(() => null); if (g) Object.assign(patch, g); }
     const row = Object.assign({}, old, patch);
     if (patch.delivery !== undefined || patch.lift !== undefined) row.pay = String(num(row.delivery) + num(row.lift));
-    DELIV[id] = row;
-    EXTRA = null;
-    localNotice(Object.keys(patch).length ? "Изменения только на этом экране. Таблица не менялась." : "Менять нечего");
+    DELIV[id] = row; EXTRA = null;
+    toast("Изменения только на экране");
     render();
-  } catch (err) { toast(err.message || "Не сохранилось", true); }
+  } catch (err) { toast(err.message, true); }
 }
 async function geocode(address) {
   const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ru&q=" + encodeURIComponent(address), {headers: {"Accept-Language": "ru"}});
@@ -1115,303 +841,180 @@ async function geocode(address) {
   return hit ? {lat: (+hit.lat).toFixed(6), lon: (+hit.lon).toFixed(6)} : null;
 }
 function localDelivered(id) {
-  const p = ORDERS.find(x => x.posting_number === id), d = DELIV[id];
-  assertRashadPath(p, d);
-  DELIV[id] = Object.assign({}, d, {status: "Доставлен", delivered_at: todayRu() + " " + agreedNow().slice(6)});
+  assertRashadPath(ORDERS.find(x => x.posting_number === id), DELIV[id]);
+  DELIV[id] = Object.assign({}, DELIV[id], {status: "Доставлен", delivered_at: todayRu() + " " + agreedNow().slice(6)});
 }
 function localCancel(id) {
-  const d = DELIV[id], p = ORDERS.find(x => x.posting_number === id);
-  assertRashadPath(p, d);
-  DELIV[id] = Object.assign({}, d, {status: "Отменён"});
+  assertRashadPath(ORDERS.find(x => x.posting_number === id), DELIV[id]);
+  DELIV[id] = Object.assign({}, DELIV[id], {status: "Отменён"});
 }
 function localRestore(id) {
-  const d = DELIV[id], p = ORDERS.find(x => x.posting_number === id);
-  assertRashadPath(p, d);
-  DELIV[id] = Object.assign({}, d, {status: "Новый"});
+  assertRashadPath(ORDERS.find(x => x.posting_number === id), DELIV[id]);
+  DELIV[id] = Object.assign({}, DELIV[id], {status: "Новый"});
 }
-function exportCsv() {
-  const rows = [["отправление", "цб", "статус", "дата", "адрес", "телефон", "груз", "кг"]];
-  ORDERS.forEach(p => {
-    if (isAlmalyFbs(p)) return;
-    const d = DELIV[p.posting_number] || {};
-    rows.push([p.posting_number, d.cb || "", flow(p).label, d.date || "", addrOf(p), phoneOf(p).phone, goodsLine(p), orderKg(p)]);
-  });
-  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\n");
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob(["\uFEFF" + csv], {type: "text/csv;charset=utf-8"}));
-  a.download = "almaly-prototype.csv";
-  a.click();
-}
-function takeHash() {
-  const q = location.hash.replace(/^#/, "");
-  if (!q) return;
-  const h = new URLSearchParams(q.replace(/\+/g, "%2B"));
-  if (h.get("admin")) {
-    STORE.set("dlv_admin", h.get("admin"));
-    history.replaceState(null, "", location.pathname + location.search);
-  }
-}
-function busyUi() {
-  return !!(EXTRA || CONFIRM || PANEL || (document.activeElement && document.activeElement.matches && document.activeElement.matches("input, textarea, select")));
-}
+
 function onAct(el) {
   const act = el.dataset.act, id = el.dataset.id;
-  if (act === "toggle") {
-    OPEN = OPEN === id ? "" : id;
-    if (OPEN !== id) { EXTRA = null; CONFIRM = null; }
-    renderStage();
-    if (OPEN) document.querySelector(`[data-id="${CSS.escape(id)}"]`)?.scrollIntoView({block: "nearest", behavior: reduced() ? "auto" : "smooth"});
-    return;
-  }
-  if (act === "go") {
-    TAB = el.dataset.tab; Q = ""; $("q").value = ""; OPEN = ""; EXTRA = null; CONFIRM = null; USER_MOVED = false; MAP_KEY = "";
-    render();
-    if (el.dataset.focus === "late") document.querySelector(".card.late")?.scrollIntoView({block: "center"});
-    return;
-  }
-  if (act === "arch") { ARCH = el.dataset.arch; renderStage(); paintChrome(); return; }
+  if (act === "open") { openOrder(id); return; }
+  if (act === "go") { TAB = el.dataset.tab; Q = ""; $("q").value = ""; FILTER = "all"; render(); return; }
+  if (act === "filter") { FILTER = el.dataset.filter; if (el.dataset.tab) TAB = el.dataset.tab; render(); return; }
+  if (act === "view") { VIEW = el.dataset.view; renderStage(); paintChrome(); return; }
+  if (act === "arch") { ARCH = el.dataset.arch; renderStage(); return; }
   if (act === "send") {
     const p = ORDERS.find(x => x.posting_number === id);
     if (!canSend(p)) { toast("Этот заказ нельзя отправить Рашаду", true); return; }
-    OPEN = id; EXTRA = {type: "send", posting: id, old: ""}; CONFIRM = null; TAB = tabOf(p);
-    render();
-    document.querySelector("form.send [name=cb]")?.focus();
-    return;
+    OPEN = id; EXTRA = {type: "send", posting: id, old: ""}; renderOrder(); showOrder(); return;
   }
   if (act === "pick") {
-    const p = ORDERS.find(x => x.posting_number === id);
-    if (!canSend(p)) { toast("FBS и уже отправленные заказы Рашаду не уходят", true); return; }
-    TAB = tabOf(p); OPEN = id; EXTRA = {type: "send", posting: id, old: el.dataset.old}; CONFIRM = null;
-    render();
-    return;
+    if (!canSend(ORDERS.find(x => x.posting_number === id))) { toast("Рашаду не уходит", true); return; }
+    OPEN = id; EXTRA = {type: "send", posting: id, old: el.dataset.old}; renderOrder(); showOrder(); return;
   }
-  if (act === "replace") { OPEN = id; EXTRA = {type: "replace", posting: id}; CONFIRM = null; renderStage(); return; }
-  if (act === "edit") { OPEN = id; EXTRA = {type: "edit", posting: id}; CONFIRM = null; renderStage(); return; }
-  if (act === "close-extra") { EXTRA = null; renderStage(); return; }
-  if (act === "remind") { localNotice("Напоминание Рашаду не ушло: прототип не шлёт пуши и не пишет в таблицу."); return; }
-  if (act === "ask-done") { CONFIRM = {posting: id, kind: "done"}; OPEN = id; renderStage(); return; }
-  if (act === "ask-cancel") { CONFIRM = {posting: id, kind: "cancel"}; OPEN = id; renderStage(); return; }
-  if (act === "confirm-no") { CONFIRM = null; renderStage(); return; }
+  if (act === "replace") { EXTRA = {type: "replace", posting: id}; OPEN = id; renderOrder(); showOrder(); return; }
+  if (act === "edit") { EXTRA = {type: "edit", posting: id}; renderOrder(); return; }
+  if (act === "close-extra") { EXTRA = null; renderOrder(); return; }
+  if (act === "ask-done" || act === "ask-cancel") { CONFIRM = {posting: id, kind: act === "ask-cancel" ? "cancel" : "done"}; OPEN = id; renderOrder(); showOrder(); return; }
+  if (act === "confirm-no") { CONFIRM = null; renderOrder(); return; }
   if (act === "confirm-yes") {
-    try {
-      if (CONFIRM && CONFIRM.kind === "cancel") localCancel(id);
-      else localDelivered(id);
-      CONFIRM = null; EXTRA = null;
-      localNotice("Статус изменён только на этом экране.");
-      render();
-    } catch (err) { toast(err.message, true); }
-    return;
-  }
-  if (act === "restore") {
-    try { localRestore(id); localNotice("Заказ снова в работе только на этом экране."); render(); }
+    try { if (CONFIRM && CONFIRM.kind === "cancel") localCancel(id); else localDelivered(id); CONFIRM = null; EXTRA = null; toast("Только на этом экране"); render(); }
     catch (err) { toast(err.message, true); }
     return;
   }
-  if (act === "copy") {
-    const text = id;
-    const done = () => toast("Номер скопирован");
-    if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, done);
-    else done();
-    return;
-  }
+  if (act === "restore") { try { localRestore(id); toast("Снова в работе на экране"); render(); } catch (err) { toast(err.message, true); } return; }
+  if (act === "copy") { const done = () => toast("Номер скопирован"); if (navigator.clipboard) navigator.clipboard.writeText(id).then(done, done); else done(); return; }
   if (act === "fly") {
-    const p = ORDERS.find(x => x.posting_number === id), ll = p && llOf(p);
-    setMapOpen(true);
-    bootMap().then(() => { if (ll && MAP) MAP.flyTo({center: [ll[1], ll[0]], zoom: 14, duration: reduced() ? 0 : 600}); });
+    const ll = llOf(ORDERS.find(x => x.posting_number === id));
+    if (ll && MAP) MAP.flyTo({center: [ll[1], ll[0]], zoom: 14, duration: reduced() ? 0 : 500});
   }
 }
 
-$("tabs").addEventListener("click", ev => {
-  const b = ev.target.closest("[data-tab]");
-  if (!b) return;
-  TAB = b.dataset.tab; Q = ""; $("q").value = ""; OPEN = ""; EXTRA = null; CONFIRM = null; USER_MOVED = false; MAP_KEY = "";
-  render();
+let swipe = null, suppressClick = false;
+$("stage").addEventListener("touchstart", ev => {
+  const face = ev.target.closest(".face");
+  if (!face) return;
+  swipe = {face, x: ev.touches[0].clientX, y: ev.touches[0].clientY, lock: "", dx: 0};
+}, {passive: true});
+$("stage").addEventListener("touchmove", ev => {
+  if (!swipe) return;
+  const dx = ev.touches[0].clientX - swipe.x, dy = ev.touches[0].clientY - swipe.y;
+  if (!swipe.lock) { if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return; swipe.lock = Math.abs(dx) > Math.abs(dy) ? "x" : "y"; }
+  if (swipe.lock !== "x") return;
+  swipe.dx = Math.max(-110, Math.min(110, dx));
+  swipe.face.style.transition = "none";
+  swipe.face.style.transform = `translateX(${swipe.dx}px)`;
+}, {passive: true});
+$("stage").addEventListener("touchend", () => {
+  if (!swipe) return;
+  const face = swipe.face, dx = swipe.dx;
+  face.style.transition = "";
+  if (Math.abs(dx) > 72) {
+    face.style.transform = `translateX(${dx > 0 ? 96 : -96}px)`;
+    suppressClick = true;
+  } else face.style.transform = "";
+  swipe = null;
 });
-$("q").addEventListener("input", () => { Q = $("q").value.trim().toLowerCase(); OPEN = ""; renderStage(); paintMap(true); });
-$("searchForm").addEventListener("submit", ev => ev.preventDefault());
-$("stage").addEventListener("click", ev => {
+document.addEventListener("click", ev => {
+  if (suppressClick && ev.target.closest(".face")) { suppressClick = false; return; }
+  if (ev.target.closest("[data-order-close]")) { closeOrder(); return; }
+  if (ev.target.closest("[data-panel-close]")) { closePanel(); return; }
+  const tab = ev.target.closest("#tabbar [data-tab]");
+  if (tab) { TAB = tab.dataset.tab; Q = ""; if ($("q")) $("q").value = ""; FILTER = "all"; USER_MOVED = false; MAP_KEY = ""; render(); return; }
+  const ptab = ev.target.closest("[data-ptab]");
+  if (ptab) { PANEL_TAB = ptab.dataset.ptab; renderPanel(); return; }
+  const jump = ev.target.closest("[data-jump]");
+  if (jump) { jumpTo(jump.dataset.jump); return; }
+  const unpay = ev.target.closest("[data-unpay]");
+  if (unpay) { PAYS = PAYS.filter(p => p.id !== unpay.dataset.unpay); toast("Убрано только на экране"); renderPanel(); return; }
   const slot = ev.target.closest("[data-slot]");
-  if (slot) {
-    const form = slot.closest("form");
-    form.elements.time.value = slot.dataset.slot;
-    form.querySelectorAll("[data-slot]").forEach(b => b.setAttribute("aria-pressed", b === slot ? "true" : "false"));
-    return;
-  }
+  if (slot) { const f = slot.closest("form"); f.elements.time.value = slot.dataset.slot; f.querySelectorAll("[data-slot]").forEach(b => b.setAttribute("aria-pressed", b === slot ? "true" : "false")); return; }
   const day = ev.target.closest("[data-day]");
-  if (day) {
-    const form = day.closest("form");
-    const on = day.getAttribute("aria-pressed") !== "true";
-    form.elements.date.value = on ? day.dataset.day : "";
-    form.querySelectorAll("[data-day]").forEach(b => b.setAttribute("aria-pressed", on && b === day ? "true" : "false"));
-    return;
-  }
+  if (day && day.closest("form")) { day.closest("form").elements.date.value = day.dataset.day; return; }
   if (ev.target.id === "retryBtn") { bootLive(); return; }
   const act = ev.target.closest("[data-act]");
   if (act) onAct(act);
 });
-$("stage").addEventListener("keydown", ev => {
-  if (ev.key !== "Enter" && ev.key !== " ") return;
-  if (ev.target.classList && ev.target.classList.contains("card-hit")) { ev.preventDefault(); onAct(ev.target); }
+document.addEventListener("keydown", ev => {
+  if ((ev.key === "Enter" || ev.key === " ") && ev.target.classList && ev.target.classList.contains("face")) { ev.preventDefault(); onAct(ev.target); }
+  if (ev.key === "Escape") { if (PANEL) closePanel(); else if (document.body.classList.contains("map-full")) setMapFull(false); else if (OPEN) closeOrder(); }
 });
-$("stage").addEventListener("toggle", ev => { if (ev.target.id === "cancelBox") CANCEL_OPEN = ev.target.open; }, true);
-$("stage").addEventListener("change", ev => {
-  if (ev.target.id === "archDay" && ev.target.value) { ARCH = "day"; ARCH_DAY = ev.target.value; renderStage(); paintChrome(); }
-});
-$("stage").addEventListener("input", ev => {
-  const form = ev.target.closest && ev.target.closest("form");
-  if (!form || !form.querySelector("[data-sum]")) return;
-  const d = form.elements.delivery || form.elements.delivery_pay;
-  const l = form.elements.lift || form.elements.lift_pay;
-  if (!d || !l) return;
-  const ozD = Number(d.dataset.oz) || 0, ozL = Number(l.dataset.oz) || 0;
-  const sum = payField(d.value, ozD).value + payField(l.value, ozL).value;
-  form.querySelectorAll("[data-sum]").forEach(n => { n.textContent = rub(sum); });
-});
+$("q").addEventListener("input", () => { Q = $("q").value.trim().toLowerCase(); renderStage(); MAP_KEY = ""; paintMap(true); });
+$("searchRow").addEventListener("submit", ev => ev.preventDefault());
 document.addEventListener("submit", ev => {
   const form = ev.target;
   if (!(form instanceof HTMLFormElement)) return;
   if (form.classList.contains("send")) { ev.preventDefault(); saveSend(form); }
   else if (form.classList.contains("edit")) { ev.preventDefault(); saveEdit(form); }
-  else if (form.dataset.repl) {
+  else if (form.id === "keysForm") { ev.preventDefault(); STORE.set("ozon_cid", form.elements.cid.value.trim()); STORE.set("ozon_key", form.elements.key.value.trim()); form.elements.key.value = ""; bootLive(); }
+  else if (form.id === "linkForm") {
     ev.preventDefault();
-    const num = form.elements.num.value.trim();
-    const p = ORDERS.find(x => x.posting_number === num);
-    if (!p) { toast("Такого отправления нет в списке", true); return; }
-    if (!canSend(p)) { toast("Этот заказ нельзя отправить Рашаду", true); return; }
-    onAct({dataset: {act: "pick", id: p.posting_number, old: form.dataset.repl}});
-  } else if (form.id === "keysForm" || form.id === "keysForm2") {
-    ev.preventDefault();
-    STORE.set("ozon_cid", form.elements.cid.value.trim());
-    STORE.set("ozon_key", form.elements.key.value.trim());
-    form.elements.key.value = "";
-    bootLive();
-  } else if (form.id === "linkForm") {
-    ev.preventDefault();
-    const raw = form.elements.link.value;
-    const h = new URLSearchParams(String(raw).replace(/^.*?#/, "").replace(/\+/g, "%2B"));
-    if (!h.get("admin")) { toast("Нужна ссылка доступа целиком", true); return; }
-    STORE.set("dlv_admin", h.get("admin"));
-    form.elements.link.value = "";
-    toast("Таблица подключена для чтения");
-    if (MODE === "live") bootLive();
+    const h = new URLSearchParams(String(form.elements.link.value).replace(/^.*?#/, "").replace(/\+/g, "%2B"));
+    if (!h.get("admin")) { toast("Нужна ссылка целиком", true); return; }
+    STORE.set("dlv_admin", h.get("admin")); toast("Чтение таблицы подключено"); if (MODE === "live") bootLive();
   } else if (form.id === "payForm") {
     ev.preventDefault();
-    if (!PAYS_OK) return;
     const amount = form.elements.amount.value.trim();
-    if (!num(amount)) { toast("Введите сумму", true); return; }
-    const date = form.elements.date.value ? form.elements.date.value.split("-").reverse().join(".") : todayRu();
-    PAYS = (PAYS || []).concat([{id: "local-" + Date.now(), amount, date, comment: form.elements.comment.value.trim()}]);
-    localNotice("Выплата записана только на этом экране.");
-    renderPanel();
+    if (!num(amount)) return;
+    PAYS = (PAYS || []).concat([{id: "local-" + Date.now(), amount, date: form.elements.date.value ? form.elements.date.value.split("-").reverse().join(".") : todayRu(), comment: form.elements.comment.value.trim()}]);
+    toast("Выплата только на экране"); renderPanel();
   }
 });
 $("whoBtn").addEventListener("click", () => openPanel("courier"));
-$("panel").addEventListener("click", ev => {
-  if (ev.target.closest("[data-panel-close]")) { closePanel(); return; }
-  const tab = ev.target.closest("[data-ptab]");
-  if (tab) { PANEL_TAB = tab.dataset.ptab; renderPanel(); return; }
-  const jump = ev.target.closest("[data-jump]");
-  if (jump) { jumpTo(jump.dataset.jump); return; }
-  const unpay = ev.target.closest("[data-unpay]");
-  if (unpay) {
-    if (unpay.dataset.sure !== "1") { unpay.dataset.sure = "1"; unpay.textContent = "да"; return; }
-    PAYS = PAYS.filter(p => p.id !== unpay.dataset.unpay);
-    localNotice("Выплата убрана только на этом экране.");
-    renderPanel();
-    return;
-  }
-  if (ev.target.closest("[data-forget]")) {
-    STORE.del("ozon_cid"); STORE.del("ozon_key");
-    closePanel(); MODE = "gate"; ORDERS = []; DELIV = {};
-    render();
-    return;
-  }
-  if (ev.target.closest("[data-csv]")) exportCsv();
+$("searchBtn").addEventListener("click", () => { const row = $("searchRow"); row.hidden = !row.hidden; $("searchBtn").setAttribute("aria-expanded", String(!row.hidden)); if (!row.hidden) $("q").focus(); else { Q = ""; $("q").value = ""; render(); } });
+$("themeBtn").addEventListener("click", () => {
+  const dark = document.documentElement.dataset.theme === "dark" || (!document.documentElement.dataset.theme && matchMedia("(prefers-color-scheme: dark)").matches);
+  setTheme(dark ? "light" : "dark");
 });
 $("reloadBtn").addEventListener("click", async () => {
-  const b = $("reloadBtn");
-  b.classList.add("spin");
-  try {
-    if (MODE === "demo") { buildDemo(); OPEN = ""; EXTRA = null; localNotice("Демо собрано заново, сеть не вызывалась"); render(); }
-    else await reloadLive();
-  } catch (err) { toast(err.message || "Не прочиталось", true); }
-  finally { b.classList.remove("spin"); }
+  $("reloadBtn").classList.add("spin");
+  try { if (MODE === "demo") { buildDemo(); toast("Демо обновлено, сеть не вызывалась"); render(); } else await reloadLive(); }
+  catch (err) { toast(err.message, true); }
+  finally { $("reloadBtn").classList.remove("spin"); }
 });
-$("mapBtn").addEventListener("click", () => { setMapOpen(true); bootMap().then(() => MAP && MAP.resize()); });
-$("mapClose").addEventListener("click", () => setMapOpen(false));
+$("mapToggle").addEventListener("click", () => {
+  if (wide()) return;
+  document.body.classList.toggle("map-hide");
+  $("mapToggle").setAttribute("aria-expanded", String(!document.body.classList.contains("map-hide")));
+  setTimeout(() => MAP && MAP.resize(), 80);
+});
+function setMapFull(on) {
+  document.body.classList.toggle("map-full", on);
+  document.body.classList.remove("map-hide");
+  $("mapClose").hidden = !on;
+  setTimeout(() => { if (MAP) { MAP.resize(); if (on) { MAP_KEY = ""; paintMap(true); } } }, 60);
+}
+$("mapFull").addEventListener("click", () => setMapFull(true));
+$("mapClose").addEventListener("click", () => setMapFull(false));
 $("fitBtn").addEventListener("click", () => { USER_MOVED = false; MAP_KEY = ""; paintMap(true); });
 $("rashadBtn").addEventListener("click", () => {
   const ll = rashadTodayLL() || (rashadPoint() && [+rashadPoint().lat, +rashadPoint().lng]);
-  if (ll && MAP) { USER_MOVED = true; MAP.flyTo({center: [ll[1], ll[0]], zoom: 13, duration: reduced() ? 0 : 600}); }
-  else toast("Рашад ещё не передавал точку");
-});
-$("mapStops").addEventListener("click", ev => {
-  const b = ev.target.closest("[data-fly]");
-  if (!b) return;
-  const p = ORDERS.find(x => x.posting_number === b.dataset.fly);
-  const ll = p && llOf(p);
-  if (ll && MAP) { USER_MOVED = true; MAP.flyTo({center: [ll[1], ll[0]], zoom: 14, duration: reduced() ? 0 : 500}); }
-});
-addEventListener("keydown", ev => {
-  if (ev.key !== "Escape") return;
-  if (PANEL) closePanel();
-  else if (document.body.classList.contains("map-open")) setMapOpen(false);
-  else if (OPEN) { OPEN = ""; EXTRA = null; CONFIRM = null; renderStage(); }
+  if (ll && MAP) MAP.flyTo({center: [ll[1], ll[0]], zoom: 13, duration: reduced() ? 0 : 500});
+  else toast("Точки Рашада ещё нет");
 });
 let styleNow = mapStyleName();
 new MutationObserver(() => {
   const next = mapStyleName();
-  if (next !== styleNow && MAP) { styleNow = next; USER_MOVED = true; MAP.setStyle("https://tiles.openfreemap.org/styles/" + next); }
+  if (next !== styleNow && MAP) { styleNow = next; MAP.setStyle("https://tiles.openfreemap.org/styles/" + next); }
 }).observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]});
-matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-  if (!document.documentElement.dataset.theme) {
-    const next = mapStyleName();
-    if (next !== styleNow && MAP) { styleNow = next; MAP.setStyle("https://tiles.openfreemap.org/styles/" + next); }
-  }
-});
 
 async function bootLive() {
-  MODE = "live"; LOADING = true; LOAD_ERR = ""; OPEN = ""; EXTRA = null;
+  MODE = "live"; LOADING = true; LOAD_ERR = "";
   render();
-  try {
-    await loadLive();
-    LOADING = false;
-    render();
-    bootMap();
-    fillLogistics().then(() => { if (!busyUi()) render(); });
-  } catch (err) {
-    LOADING = false; LOAD_ERR = err.message || "Не удалось прочитать заказы"; ORDERS = [];
-    render();
-  }
+  try { await loadLive(); LOADING = false; render(); bootMap(); fillLogistics().then(() => render()); }
+  catch (err) { LOADING = false; LOAD_ERR = err.message || "Не удалось прочитать"; ORDERS = []; render(); }
 }
-async function reloadLive() {
-  await loadLive();
-  await fillLogistics();
-  localNotice("Прочитано заново. Правки, которые были только на экране, сброшены.");
-  render();
-}
-function startTimers() {
-  setInterval(paintWho, 30000);
-  if (DEMO) return;
-  setInterval(() => { if (!document.hidden && !busyUi() && MODE === "live" && ORDERS.length) reloadLive().catch(() => {}); }, 120000);
-  setInterval(() => {
-    if (document.hidden || MODE !== "live" || !STORE.get("dlv_admin")) return;
-    sheetApi({action: "where", key: STORE.get("dlv_admin")}).then(r => { RASHAD = r; paintWho(); paintMap(false); }).catch(() => {});
-  }, 45000);
+async function reloadLive() { await loadLive(); await fillLogistics(); toast("Прочитано заново"); render(); }
+function takeHash() {
+  const h = new URLSearchParams(location.hash.replace(/^#/, "").replace(/\+/g, "%2B"));
+  if (h.get("admin")) { STORE.set("dlv_admin", h.get("admin")); history.replaceState(null, "", location.pathname + location.search); }
 }
 function boot() {
   if (DEMO) {
-    try { buildDemo(); }
-    catch (err) { LOAD_ERR = err.message; $("stage").innerHTML = errorHtml(); return; }
-    MODE = "demo";
-    render();
-    bootMap();
-    document.body.dataset.ready = "demo";
-    startTimers();
-    return;
+    try { buildDemo(); } catch (err) { $("stage").innerHTML = `<div class="empty"><b>${esc(err.message)}</b></div>`; return; }
+    MODE = "demo"; render(); bootMap(); document.body.dataset.ready = "demo";
+  } else {
+    takeHash();
+    if (!STORE.get("ozon_cid") || !STORE.get("ozon_key")) { MODE = "gate"; render(); document.body.dataset.ready = "gate"; return; }
+    bootLive().then(() => { document.body.dataset.ready = "live"; });
   }
-  takeHash();
-  if (!STORE.get("ozon_cid") || !STORE.get("ozon_key")) { MODE = "gate"; render(); document.body.dataset.ready = "gate"; return; }
-  bootLive().then(() => { document.body.dataset.ready = "live"; startTimers(); });
+  setInterval(() => { if ($("fresh")) $("fresh").textContent = freshLabel(); }, 15000);
 }
 boot();
