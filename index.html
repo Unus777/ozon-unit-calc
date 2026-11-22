@@ -45,7 +45,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 .sp-logo::before,.sp-logo::after{display:none}.sp-truck{transform:translateX(69px)}#splash,.sp-in{transition:none}}
 </style>
 <link rel="stylesheet" href="style.css?v=44">
-<link rel="stylesheet" href="manager.css?v=4">
+<link rel="stylesheet" href="manager.css?v=5">
 <link rel="icon" href="icons/owner.svg?v=39" type="image/svg+xml">
 <link rel="icon" href="icons/owner-32.png?v=39" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/owner-180.png?v=39" sizes="180x180">
@@ -470,6 +470,10 @@ function ozState(p) {  // "ok" — Ozon провёл; "wait" — ждём; "late
   const t = pendingGet()[p.posting_number];
   return !t ? "" : Date.now() - t < PENDING_TTL ? "wait" : "late";
 }
+// Отметка в Ozon только после того, как курьер отметил плитку доставленной в листе «Доставки»
+const OZ_LOCK_HINT = "Сначала курьер должен отметить доставку";
+const courierDelivered = d => !!(d && d.status === "Доставлен");
+const ozLockBtn = (cls, posting) => `<button type="button" class="${cls} oz-lock" disabled aria-disabled="true" title="${OZ_LOCK_HINT}" data-ozlock="${e(posting)}">${ic("wait")}<span><b>Отметить в Ozon</b><small>${OZ_LOCK_HINT}</small></span></button>`;
 const OZ_LINE = {ok: ic("check") + "Отмечено в Ozon",wait: ic("wait") + "Отправлено в Ozon — ждём подтверждения", late: ic("alert") + "Ozon не подтвердил доставку за 2 часа — проверьте в кабинете"};
 
 // Отметили «Доставлено» прямо в кабинете Ozon — переносим в таблицу, чтобы курьер и расчёт выплат это видели
@@ -1000,6 +1004,7 @@ function primaryActions(p, i) {
   const oz = ozState(p), needOzon = !["delivered", "cancelled"].includes(p.status) && oz !== "wait", needSheet = d.status !== "Доставлен";
   if (!needOzon && !needSheet) return oz ? `<span class="m-ozs ${oz}">${oz === "wait" ? ic("wait") + "Ждём Ozon" : OZ_LINE[oz]}</span>` : "";
   if (needSheet && !isAccepted(d)) return `<button type="button" class="m-btn tint" data-remind="${e(p.posting_number)}">${ic("bell")}Напомнить</button>`;
+  if (needOzon && !courierDelivered(d)) return ozLockBtn("m-btn", p.posting_number);
   return `<button type="button" class="m-btn ${needSheet ? "okt" : "warn"}" data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">${ic("check")}${needSheet ? "Доставлено" : oz === "late" ? "Повторить в Ozon" : "Отметить в Ozon"}</button>`;
 }
 
@@ -1180,6 +1185,7 @@ function openSheet(i, keepScroll) {
     `<button type="button" class="m-qa" data-copy="${i}">${ic("copy")}<span>Копировать</span></button>`,
   ].filter(Boolean).join("");
   const primary = !ADMIN() || !SCRIPT_URL || editing ? "" : !d && live ? `<button type="button" class="f1 m-go" data-sendsheet="${e(p.posting_number)}">${ic("send")}Отправить курьеру</button>`
+    : d && d.status !== "Отменён" && p.status !== "cancelled" && needOzon && !courierDelivered(d) ? ozLockBtn("f1 m-go", p.posting_number)
     : d && d.status !== "Отменён" && p.status !== "cancelled" && (needOzon || !done) ? `<button type="button" class="f1 m-go ok" data-delivered="${e(p.posting_number)}" data-ozon="${needOzon ? 1 : 0}">${ic("check")}${done ? "Отметить доставленным в Ozon" : "Доставлено"}</button>` : "";
   const scroll = keepScroll ? $("sheetPanel").scrollTop : 0;
   $("sheetPanel").innerHTML = `<div class="grab"></div>
@@ -1415,10 +1421,15 @@ function telHref(phone, ext) {
 async function markDelivered(posting, needOzon) {
   const order = ORDERS.find(x => x.posting_number === posting);
   assertRashadPath(order, DELIV[posting]);
-  const d = DELIV[posting];
+  let d = DELIV[posting];
+  if (needOzon && !courierDelivered(d)) throw new Error(OZ_LOCK_HINT);
   const where = [needOzon && "в Ozon", d.status !== "Доставлен" && "в таблице"].filter(Boolean).join(" и ");
   if (!confirm(`Отметить ${d.cb} доставленным ${where}?`)) return false;
   if (needOzon) {
+    // перед записью в Ozon перечитываем строку из таблицы: доставку должен отметить курьер
+    const fresh = (await sheetApi({action: "list", key: ADMIN()})).find(r => r.posting === posting);
+    if (fresh) DELIV[posting] = d = fresh;
+    if (!courierDelivered(fresh)) throw new Error(OZ_LOCK_HINT);
     const r = await ozon("/v2/fbs/posting/delivered", {posting_number: [posting]});
     const res = (r.result || []).find(x => x.posting_number === posting) || {};
     if (!res.result) throw new Error("Ozon не принял: " + (res.error || JSON.stringify(r).slice(0, 200)));
