@@ -15,12 +15,13 @@ async function sheetApi(payload) {
 // Подробности хранятся читаемыми строками в существующем комментарии таблицы.
 // «Согласовано: прораб · 05.11 14:05 · интервал 12–14» — отметка курьера «Согласовал доставку».
 function deliveryDetails(comment) {
-  const out = {note: [], time: "", foreman: "", agreed: null, ozon: null};
+  const out = {note: [], time: "", foreman: "", agreed: null, ozon: null, ret: null};
   for (const line of String(comment || "").split("\n")) {
     if (line.startsWith("Время доставки: ")) out.time = line.slice("Время доставки: ".length).trim();
     else if (line.startsWith("Телефон прораба: ")) out.foreman = line.slice("Телефон прораба: ".length).trim();
     else if (parseAgreement(line)) out.agreed = parseAgreement(line);
     else if (line.startsWith("Ozon: ")) { try { out.ozon = JSON.parse(line.slice(6)); } catch {} }
+    else if (line.startsWith(RETURN_LINE)) { try { out.ret = JSON.parse(line.slice(RETURN_LINE.length)); } catch { out.ret = {}; } }
     else out.note.push(line);
   }
   out.note = out.note.join("\n").trim();
@@ -54,20 +55,55 @@ function parseTrip(line) {
 }
 function courierNotes(value) {  // «Комментарий курьера» → его текст + отметки, без служебных строк
   const text = [];
-  let agreed = null, ack = null, enroute = null, onsite = null;
+  let agreed = null, ack = null, enroute = null, onsite = null, price = "", warned = null;
   for (const line of String(value || "").split("\n")) {
     const a = parseAgreement(line), k = parseAck(line), t = parseTrip(line);
-    if (a) agreed = a;
+    const pm = /^Цена возврата: (\d+)$/.exec(line.trim()), wm = /^Клиент предупреждён: (\d\d\.\d\d \d\d:\d\d)$/.exec(line.trim());
+    if (pm) price = pm[1];
+    else if (wm) warned = {at: wm[1]};
+    else if (a) agreed = a;
     else if (k) ack = k;
     else if (t && t.kind === "onsite") onsite = t;
     else if (t) enroute = t;
     else text.push(line);
   }
-  return {text: text.join("\n").trim(), agreed, ack, enroute, onsite};
+  return {text: text.join("\n").trim(), agreed, ack, enroute, onsite, price, warned};
 }
-function courierComment({text, agreed, ack, enroute, onsite}) {
+function courierComment({text, agreed, ack, enroute, onsite, price, warned}) {
   return [String(text || "").trim(), agreementLine(agreed), tripLine("enroute", enroute && enroute.at),
-    tripLine("onsite", onsite && onsite.at), ackLine(ack)].filter(Boolean).join("\n");
+    tripLine("onsite", onsite && onsite.at), ackLine(ack),
+    /^\d+$/.test(String(price || "")) ? "Цена возврата: " + price : "",
+    warned && /^\d\d\.\d\d \d\d:\d\d$/.test(warned.at || "") ? "Клиент предупреждён: " + warned.at : ""].filter(Boolean).join("\n");
+}
+
+// ---------- Возврат: забрать плитку у клиента ----------
+// Отдельная строка листа «Доставки»: номер отправления + «-R» (строка доставки и её выплата не меняются),
+// в «Комментарии» строка «Возврат: {...}». Цена курьеру — по договорённости: курьер пишет свою цену
+// в «Комментарий курьера» («Цена возврата: N»), менеджер принимает её в «Доставка, ₽» — тогда она идёт в выплаты.
+// В Ozon возврат ничего не отмечает. Подходит к текущему скрипту таблицы без новых столбцов.
+const RETURN_LINE = "Возврат: ";
+const RETURN_SUFFIX = "-R";
+const RETURN_NOTE = "Перед забором свяжитесь с клиентом и предупредите, что заберёте плитку";
+const isReturnPosting = posting => /-R\d*$/.test(String(posting || ""));
+function isReturnRow(r) { return !!r && (isReturnPosting(r.posting) || !!deliveryDetails(r.comment).ret); }
+function returnOf(r) {  // всё о возврате для экрана; деньги магазина сюда не попадают
+  if (!isReturnRow(r)) return null;
+  const info = deliveryDetails(r.comment), n = courierNotes(r.courier_comment), ret = info.ret || {};
+  const agreed = Number(r.delivery) > 0 ? String(Math.round(Number(r.delivery))) : "";
+  const state = r.status === "Отменён" ? "cancel" : r.status === "Доставлен" ? "picked" : n.warned || r.status === "Согласован" ? "warned" : "todo";
+  return {of: ret.of || String(r.posting || "").replace(/-R\d*$/, ""), note: ret.note || info.note || "", asked: n.price, agreed,
+    warned: n.warned, state, label: {todo: "Нужно забрать", warned: "Клиент предупреждён", picked: "Возврат забран", cancel: "Возврат отменён"}[state]};
+}
+// Строка возврата из строки доставки: адрес, телефон, груз и точка на карте те же, цена — по договорённости
+function returnRowFrom(d, note) {
+  if (!d || !d.posting) throw new Error("Нет строки доставки");
+  if (isReturnRow(d)) throw new Error("Это уже возврат");
+  if (typeof isFbsSheetRow === "function" && isFbsSheetRow(d)) throw new Error("FBS не отправляется Рашаду");
+  const info = deliveryDetails(d.comment);
+  return {posting: d.posting + RETURN_SUFFIX, cb: d.cb, courier: d.courier || "Рашад", date: "", address: d.address,
+    phone: String(d.phone || "").replace(/^'/, ""), ext: d.ext || "", packs: d.packs || "", unload: d.unload || "", delivery: "", lift: "",
+    lat: String(d.lat || "").replace(/^'/, ""), lon: String(d.lon || "").replace(/^'/, ""),
+    comment: deliveryComment({note: "", ozon: info.ozon, ret: {of: d.posting, note: String(note || RETURN_NOTE).trim(), price: "договорная"}})};
 }
 // «Принял: 05.11 14:05» — курьер нажал «Принял» на экране тревоги нового заказа
 function ackLine(a) {
@@ -122,10 +158,10 @@ function foremanPhone(value) {
   return "+" + phone;
 }
 
-function deliveryComment({note, time, foreman, agreed, ozon}) {
+function deliveryComment({note, time, foreman, agreed, ozon, ret}) {
   return [String(note || "").trim(), time && "Время доставки: " + String(time).trim(),
     foreman && "Телефон прораба: " + foremanPhone(foreman), agreementLine(agreed),
-    ozon && "Ozon: " + JSON.stringify(ozon)].filter(Boolean).join("\n");
+    ozon && "Ozon: " + JSON.stringify(ozon), ret && RETURN_LINE + JSON.stringify(ret)].filter(Boolean).join("\n");
 }
 
 // Свой склад отгрузки. Координаты — опубликованная точка квартала Щитниково, вл. 3 (Балашиха).
@@ -441,6 +477,7 @@ const ICONS = {
   locate: "M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
   fit: "M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15",
   back: "M14.5 18l-6-6 6-6",
+  ret: "M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11",
   chev: "M9.5 6l6 6-6 6",
   spark: "M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6",
   wait: "M6 3h12M6 21h12M7 3v3.5a5 5 0 0 0 10 0V3M7 21v-3.5a5 5 0 0 1 10 0V21",

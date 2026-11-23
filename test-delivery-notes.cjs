@@ -145,7 +145,7 @@ const cc = context.courierComment({text: 'Клиент просил позвон
 assert.equal(cc, 'Клиент просил позвонить\nЗаезд с торца\n' + line);
 assert.equal(context.courierNotes(cc).text, 'Клиент просил позвонить\nЗаезд с торца');
 assert.equal(context.courierNotes(cc).agreed.at, '05.11 14:05');
-assert.deepEqual({...context.courierNotes('Старый комментарий курьера')}, {text: 'Старый комментарий курьера', agreed: null, ack: null, enroute: null, onsite: null});
+assert.deepEqual({...context.courierNotes('Старый комментарий курьера')}, {text: 'Старый комментарий курьера', agreed: null, ack: null, enroute: null, onsite: null, price: '', warned: null});
 assert.equal(context.courierNotes('').agreed, null);
 assert.equal(context.courierComment({text: '', agreed: null}), '');
 // повторное согласование заменяет прежнюю отметку, а не добавляет вторую
@@ -236,8 +236,8 @@ const alW = context.alarmItem({posting: '1-1-1', cb: 'ЦБ-7', status: 'Новы
 assert.equal(alW.chips[1].v, '~12.5 кг');
 // alarm.js и страницы подключают одинаковую версию
 for (const f of ['index.html', 'courier.html', 'alarm-test.html']) assert.match(read(f), /alarm\.js\?v=39/);
-assert.match(read('sw.js'), /SW_VERSION = "v42-blue"/);
-assert.match(read('sw.js'), /config\.js\?v=42/);
+assert.match(read('sw.js'), /SW_VERSION = "v43-return"/);
+assert.match(read('sw.js'), /config\.js\?v=43/);
 assert.match(read('style.css'), /@media \(min-width: 1100px\)/);
 assert.match(read('index.html'), /desk-split/);
 assert.match(read('courier.html'), /min-width: 1100px/);
@@ -476,3 +476,21 @@ async function swRun(notice, {list = [ROW], hour = '2026-11-05T11:05:00Z', badge
   }
   console.log('Пуш нового заказа, «✅ Принял» и ночной режим: проверки пройдены');
 })().catch(err => { console.error(err); process.exit(1); });
+
+// Возврат: отдельная строка «-R», цена по договорённости, отметки курьера не теряются
+{
+  const d = {posting: '71187501-0092-1', cb: 'ЦБ-1', status: 'Доставлен', address: 'Москва, Тест 1', phone: "'+79990000000", lat: '55.5', lon: '37.5', comment: 'Ozon: {"customer":"Тест"}'};
+  const r = context.returnRowFrom(d, '');
+  assert.equal(r.posting, '71187501-0092-1-R');
+  assert.equal(r.delivery, '');
+  assert.equal(r.phone, '+79990000000');
+  assert.ok(context.isReturnRow(r) && !context.isReturnRow(d));
+  const cc = context.courierComment({...context.courierNotes('Принял: 23.11 09:00'), price: '3000', warned: {at: '23.11 09:40'}});
+  const n = context.courierNotes(cc);
+  assert.equal(n.price, '3000'); assert.equal(n.warned.at, '23.11 09:40'); assert.equal(n.ack.at, '23.11 09:00');
+  const ret = context.returnOf(Object.assign({}, r, {status: 'Новый', courier_comment: cc}));
+  assert.equal(ret.state, 'warned'); assert.equal(ret.asked, '3000'); assert.equal(ret.agreed, '');
+  assert.equal(context.returnOf(Object.assign({}, r, {status: 'Доставлен', delivery: '3000'})).agreed, '3000');
+  assert.throws(() => context.returnRowFrom(r, ''));
+}
+console.log('returns ok');

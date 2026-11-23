@@ -758,3 +758,26 @@ body:not([data-view="orders"]) #searchBtn{display:none}
 .oz-lock b{font-size:14px;font-weight:700}
 .oz-lock small{font-size:12px;font-weight:600;opacity:.85}
 .oz-lock:active{transform:none}
+
+/* Возвраты: забрать плитку у клиента */
+:root{--ret:#C2410C;--ret-bg:#FFF0E6}
+:root[data-theme="dark"]{--ret:#FB923C;--ret-bg:rgba(251,146,60,.14)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--ret:#FB923C;--ret-bg:rgba(251,146,60,.14)}}
+.rt-card{box-shadow:var(--sh1),inset 4px 0 0 var(--ret)}
+.rt-card.rt-picked{opacity:.85;box-shadow:var(--sh1),inset 4px 0 0 var(--green)}
+.rt-pill{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border-radius:999px;background:var(--ret);color:#fff;font-size:12.5px;font-weight:700}
+.rt-pill .ic{width:14px;height:14px}
+.rt-st{font-size:13px;font-weight:650;color:var(--ret);margin-left:auto}
+.rt-picked .rt-st{color:var(--green)}
+.rt-note{display:flex;gap:8px;align-items:flex-start;margin:10px 0 0;padding:10px 12px;border-radius:12px;background:var(--ret-bg);color:var(--ret);font-size:13.5px;font-weight:600;line-height:1.35}
+.rt-note .ic{flex:0 0 auto;margin-top:1px}
+.rt-money{margin-top:10px}
+.rt-pr{font-size:14px;font-weight:650;color:var(--mut)}.rt-pr.ask{color:var(--ret)}.rt-pr.ok{color:var(--green)}
+.rt-act{flex-wrap:wrap;gap:8px}
+.rt-hl{animation:rt-hl 1.6s ease}
+@keyframes rt-hl{0%,60%{box-shadow:var(--sh1),inset 4px 0 0 var(--ret),0 0 0 3px var(--ret)}}
+.o-dbtn.ret>.ic{color:var(--ret)}
+.mp-ret{background:var(--ret);border-radius:10px}
+.mp-ret .ic{width:16px;height:16px;color:#fff}
+.m-stop-n.ret{background:var(--ret);color:#fff}
+.lg-ret{background:var(--ret)}

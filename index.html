@@ -45,7 +45,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 .sp-logo::before,.sp-logo::after{display:none}.sp-truck{transform:translateX(69px)}#splash,.sp-in{transition:none}}
 </style>
 <link rel="stylesheet" href="style.css?v=44">
-<link rel="stylesheet" href="manager.css?v=5">
+<link rel="stylesheet" href="manager.css?v=6">
 <link rel="icon" href="icons/owner.svg?v=39" type="image/svg+xml">
 <link rel="icon" href="icons/owner-32.png?v=39" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/owner-180.png?v=39" sizes="180x180">
@@ -193,7 +193,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 </div></nav>
 
 <script src="calc.js?v=39"></script>
-<script src="config.js?v=42"></script>
+<script src="config.js?v=43"></script>
 <script src="fbs.js?v=40"></script>
 <script src="push.js?v=39"></script>
 <script src="alarm.js?v=39"></script>
@@ -654,6 +654,7 @@ function pinEl(kind, label, title, big) {
   return el;
 }
 function openByPosting(posting) {
+  if (isReturnPosting(posting)) { showReturn(posting); return; }
   const idx = ORDERS.findIndex(p => p.posting_number === posting);
   if (idx >= 0) openSheet(idx);
 }
@@ -663,13 +664,13 @@ function drawOwnerMap() {
   const lls = (start ? [start] : []).concat(stops.map(p => p.ll));
   const all = lls.concat(toSend.map(x => x.ll), done.map(x => x.ll));
   $("omapMeta").innerHTML = stops.length ? `<b>${plural(stops.length, "остановка", "остановки", "остановок")}</b> сегодня` : "Сегодня у Рашада нет точек с координатами";
-  $("legend").innerHTML = [["ok", "Едет / согласован"], ["wait", "Не согласован"], ["send", "Ждёт отправки", toSend.length], ["done", "Доставлен", done.length]]
+  $("legend").innerHTML = [["ok", "Едет / согласован"], ["wait", "Не согласован"], ["ret", "Возврат", stops.filter(x => isReturnRow(x.r)).length], ["send", "Ждёт отправки", toSend.length], ["done", "Доставлен", done.length]]
     .filter(x => x[2] !== 0).map(([k, t]) => `<span><i class="lg lg-${k}"></i>${t}</span>`).join("");
   const go = $("omapGo");
   go.hidden = !stops.length;
   go.href = `https://yandex.ru/maps/?rtext=${lls.map(p => p.join(",")).join("~")}&rtt=auto`;
-  $("mstops").innerHTML = stops.map(({r}, i) => `<button type="button" class="m-stop" data-flyto="${e(r.posting)}"><span class="m-stop-n ${agreementOf(r) || r.status === "Согласован" ? "ok" : "wait"}">${i + 1}</span>` +
-    `<span class="m-stop-t"><b>${e(r.cb || "—")} · ${e(addrParts(r.address)[0])}</b><small>${e(whenLine(r, deliveryDetails(r.comment), agreementOf(r)))}</small></span></button>`).join("")
+  $("mstops").innerHTML = stops.map(({r}, i) => `<button type="button" class="m-stop" data-flyto="${e(r.posting)}"><span class="m-stop-n ${isReturnRow(r) ? "ret" : agreementOf(r) || r.status === "Согласован" ? "ok" : "wait"}">${isReturnRow(r) ? ic("ret", "s") : i + 1}</span>` +
+    `<span class="m-stop-t"><b>${isReturnRow(r) ? "Возврат · " : ""}${e(r.cb || "—")} · ${e(addrParts(r.address)[0])}</b><small>${e(whenLine(r, deliveryDetails(r.comment), agreementOf(r)))}</small></span></button>`).join("")
     + toSend.map(({p}) => `<button type="button" class="m-stop" data-flyto="${e(p.posting_number)}"><span class="m-stop-n send">${ic("send", "s")}</span>` +
     `<span class="m-stop-t"><b>Ждёт отправки · ${e(addrParts((p.customer || {}).address?.address_tail)[0])}</b><small>${e(fmtLine(p))}</small></span></button>`).join("");
   const key = stops.map(p => p.r.posting).join("|") + "/" + toSend.length + "/" + done.length + (OME ? ":me" : "");
@@ -682,7 +683,8 @@ function drawOwnerMap() {
     };
     done.forEach(({r, ll}) => add(pinEl("done", ic("check", "s"), `${r.cb} · доставлен · ${r.address}`), ll, r.posting));
     toSend.forEach(({p, ll}) => add(pinEl("send", "!", `Ждёт отправки · ${(p.customer || {}).address?.address_tail || ""}`), ll, p.posting_number));
-    stops.forEach(({r, ll}, i) => add(pinEl(agreementOf(r) || r.status === "Согласован" ? "ok" : "wait", i + 1, `${i + 1}. ${r.cb} · ${r.address}`, i === 0), ll, r.posting));
+    stops.forEach(({r, ll}, i) => add(isReturnRow(r) ? pinEl("ret", ic("ret", "s"), `${i + 1}. ВОЗВРАТ ${r.cb} · ${r.address}`, i === 0)
+      : pinEl(agreementOf(r) || r.status === "Согласован" ? "ok" : "wait", i + 1, `${i + 1}. ${r.cb} · ${r.address}`, i === 0), ll, r.posting));
     if (OME) {
       const me = document.createElement("div");
       me.className = "me-w"; me.innerHTML = '<div class="me"><i></i></div>';
@@ -809,7 +811,7 @@ function BUCKETS() { return dayBuckets(ORDERS.map((p, i) => [p, i]), DELIV, toda
 function drawOrders(anim) {
   const b = BUCKETS();
   const nAhead = Object.values(b.upcoming).reduce((s, l) => s + l.length, 0);
-  const counts = {today: b.today.work.length + b.today.done.length, fresh: b.fresh.send.length + b.fresh.nodate.length, ahead: nAhead, archive: 0, fbs: b.fbs};
+  const counts = {today: b.today.work.length + b.today.done.length + retLists().active.length, fresh: b.fresh.send.length + b.fresh.nodate.length, ahead: nAhead, archive: 0, fbs: b.fbs};
   if (OTAB === "fbs" && !b.fbs) OTAB = "today";
   if (!OTABS[OTAB] && OTAB !== "fbs") OTAB = "today";
   document.body.dataset.tab = FIND ? "search" : OTAB;
@@ -833,10 +835,10 @@ function drawOrders(anim) {
   let html = "";
   if (OTAB === "today") {
     const work = b.today.work.slice().sort(([a], [c]) => flowOf(c).cur - flowOf(a).cur);
-    html = sec("s-work", "truck", "В работе", work)
+    html = retSection() + sec("s-work", "truck", "В работе", work)
       + sec("s-done", "checkc", "Доставлено сегодня", b.today.done.sort(([, , a], [, , c]) => String(c.day).localeCompare(String(a.day))))
       + (b.today.cancel.length ? `<details class="o-sec s-cancel"${SHOW_CANCEL ? " open" : ""}><summary class="o-sh">${ic("x", "s")}<span>Отменено сегодня</span><em>${b.today.cancel.length}</em>${ic("chev", "s m-chev")}</summary>${cards(b.today.cancel)}</details>` : "");
-    if (!work.length && !b.today.done.length && !b.today.cancel.length)
+    if (!work.length && !b.today.done.length && !b.today.cancel.length && !retLists().all.length)
       html = empty("cal", "На сегодня заказов нет", b.fresh.send.length ? "Новые заказы ждут отправки во вкладке «Новые»." : "Когда поставите дату «сегодня», заказ появится здесь.");
   } else if (OTAB === "fresh") {
     html = sec("s-send", "send", "Нужно отправить Рашаду", b.fresh.send.sort(([a], [c]) => new Date(c.in_process_at) - new Date(a.in_process_at)), "", "нужен ЦБ")
@@ -1151,13 +1153,108 @@ function editForm(p, d) {
     <button class="m-btn pri o-save">${ic("check")}Сохранить изменения</button>
   </form>`;
 }
+// ---------- Возвраты: забрать плитку у клиента ----------
+// Отдельная строка листа (номер + «-R»): доставка и её выплата не меняются. В Ozon возврат ничего не пишет.
+function retLists() {
+  const today = todayStr().slice(0, 5);
+  const all = Object.values(DELIV).filter(r => r && isReturnRow(r) && !isFbsSheetRow(r));
+  const active = all.filter(r => r.status === "Новый" || r.status === "Согласован");
+  const doneToday = all.filter(r => r.status === "Доставлен" && String(r.delivered_at || "").includes(today));
+  return {all: active.concat(doneToday), active};
+}
+function retMakeBtn(d) {
+  if (!d || isReturnRow(d) || isFbsSheetRow(d)) return "";
+  const ex = DELIV[d.posting + RETURN_SUFFIX];
+  if (ex && ex.status !== "Отменён") return `<button type="button" class="o-dbtn" data-retshow="${e(ex.posting)}">${ic("ret")}<span><b>Возврат оформлен · ${e(returnOf(ex).label)}</b><small>Открыть карточку возврата</small></span></button>`;
+  return `<button type="button" class="o-dbtn ret" data-retmake="${e(d.posting)}">${ic("ret")}<span><b>Оформить возврат</b><small>Рашад заберёт плитку у клиента · цена по договорённости</small></span></button>`;
+}
+function retCardM(r) {
+  const ret = returnOf(r), [area, rest] = addrParts(r.address || "Адрес уточняется"), active = ret.state === "todo" || ret.state === "warned";
+  const price = ret.agreed ? `<span class="rt-pr ok">Рашаду ${money(+ret.agreed)} ₽</span>`
+    : ret.asked ? `<span class="rt-pr ask">Рашад просит ${money(+ret.asked)} ₽</span>` : `<span class="rt-pr">Цена по договорённости · Рашад впишет сам</span>`;
+  const acts = [
+    ret.asked && !ret.agreed && ret.state !== "cancel" ? `<button type="button" class="m-btn okt" data-retaccept="${e(r.posting)}">${ic("check")}Принять ${money(+ret.asked)} ₽</button>` : "",
+    active ? `<button type="button" class="m-btn tint" data-retremind="${e(r.posting)}">${ic("bell")}Напомнить</button>` : "",
+    active && r.lat && r.lon ? `<button type="button" class="m-btn ghost" data-retmap="${e(r.posting)}">${ic("map")}На карте</button>` : "",
+    active ? `<button type="button" class="m-btn ghost danger" data-retcancel="${e(r.posting)}">${ic("x")}Отменить возврат</button>` : "",
+  ].filter(Boolean).join("");
+  return `<article class="o-card rt-card rt-${ret.state}" id="ret-${e(r.posting)}">
+    <header class="o-card-h">${r.cb ? `<span class="o-cb">${e(r.cb)}</span>` : ""}<span class="rt-pill">${ic("ret", "s")}Возврат</span><span class="rt-st">${e(ret.label)}${ret.warned ? " · " + e(ret.warned.at.slice(6)) : ret.state === "picked" && r.delivered_at ? " · " + e(String(r.delivered_at).slice(11)) : ""}</span></header>
+    <div class="o-addr"><b>${e(area)}</b>${rest ? `<span>${e(rest)}</span>` : ""}</div>
+    <div class="o-meta"><span>${ic("box", "s")}${e(r.packs || "—")}</span>${r.unload && r.unload !== "Нет" ? `<span>${ic("lift", "s")}${e(r.unload)}</span>` : ""}</div>
+    ${ret.note ? `<p class="rt-note">${ic("phone", "s")}${e(ret.note)}</p>` : ""}
+    <div class="rt-money">${price}</div>
+    ${acts ? `<div class="o-act rt-act">${acts}</div>` : ""}
+  </article>`;
+}
+function retSection() {
+  const {all, active} = retLists();
+  if (!all.length) return "";
+  return `<section class="o-sec s-ret"><h2 class="o-sh">${ic("ret", "s")}<span>Возвраты · забрать у клиента</span><em>${active.length || all.length}</em></h2><div class="o-cards">${all.map(retCardM).join("")}</div></section>`;
+}
+function showReturn(posting) {
+  closeSheet(); FIND = ""; OTAB = "today";
+  if (document.body.dataset.view !== "orders" && typeof setView === "function") setView("orders");
+  drawOrders();
+  setTimeout(() => { const el = document.getElementById("ret-" + posting); if (el) { el.scrollIntoView({block: "center", behavior: REDUCED() ? "auto" : "smooth"}); el.classList.add("rt-hl"); setTimeout(() => el.classList.remove("rt-hl"), 1800); } }, 80);
+}
+async function signedJwts() {
+  const jwk = ownerKey(store.get("dlv_vk")), jwts = {};
+  for (const aud of await sheetApi({action: "push_targets", key: ADMIN()})) jwts[aud] = await vapidJwt(aud, jwk);
+  return jwts;
+}
+// Оформить возврат: новая строка (без пуша «Новый заказ»), затем отдельный пуш Рашаду с текстом возврата
+async function makeReturn(posting) {
+  const d = DELIV[posting];
+  assertRashadPath(ORDERS.find(x => x.posting_number === posting), d);
+  const note = prompt(`Возврат ${d.cb}: что передать Рашаду?`, RETURN_NOTE);
+  if (note === null) return false;
+  const data = returnRowFrom(d, note);
+  if (DELIV[data.posting]) throw new Error("Возврат по этому заказу уже есть в таблице");
+  const row = await sheetApi({action: "create", key: ADMIN(), data, jwts: {}});
+  DELIV[row.posting] = row;
+  let pushed = 0;
+  try { pushed = (await sheetApi({action: "remind", key: ADMIN(), posting: row.posting, text: `Забрать возврат ${d.cb}. ${String(note).trim() || RETURN_NOTE}. Цена — по договорённости, впишите свою в приложении.`, jwts: await signedJwts()})).pushed || 0; } catch {}
+  toast(pushed ? "Возврат оформлен ✓ Рашаду ушло уведомление" : "Возврат оформлен ✓ Рашад увидит его в приложении");
+  return true;
+}
+document.addEventListener("click", async ev => {
+  const t = ev.target.closest("[data-retmake],[data-retshow],[data-retaccept],[data-retremind],[data-retcancel],[data-retmap]");
+  if (!t) return;
+  ev.preventDefault(); ev.stopPropagation();
+  const ds = t.dataset, posting = ds.retmake || ds.retshow || ds.retaccept || ds.retremind || ds.retcancel || ds.retmap;
+  if (ds.retshow) { showReturn(posting); return; }
+  if (ds.retmap) { setView?.("map"); setTimeout(() => { const r = DELIV[posting]; if (OMAP && r) OMAP.flyTo({center: [+r.lon, +r.lat], zoom: 14}); }, 200); return; }
+  t.disabled = true;
+  try {
+    if (ds.retmake) { if (await makeReturn(posting)) { closeSheet(); showReturn(posting + RETURN_SUFFIX); } }
+    else {
+      const r = DELIV[posting];
+      if (!r || !isReturnRow(r)) throw new Error("Это не возврат");
+      if (ds.retremind) { await sheetApi({action: "remind", key: ADMIN(), posting, text: `Возврат ${r.cb}: ${returnOf(r).note || RETURN_NOTE}`, jwts: await signedJwts()}); toast("Напоминание ушло Рашаду"); }
+      else if (ds.retaccept) {
+        const ask = returnOf(r).asked;
+        if (!ask || !confirm(`Принять цену Рашада за возврат ${r.cb}: ${money(+ask)} ₽? Сумма пойдёт в выплаты.`)) { t.disabled = false; return; }
+        DELIV[posting] = await sheetApi({action: "update", key: ADMIN(), posting, data: {delivery: ask, lift: "0"}});
+        toast("Цена принята ✓");
+      } else if (ds.retcancel) {
+        if (!confirm(`Отменить возврат ${r.cb}?`)) { t.disabled = false; return; }
+        DELIV[posting] = await sheetApi({action: "update", key: ADMIN(), posting, data: {status: "Отменён"}});
+        notifyCourier(posting, `Возврат ${r.cb} отменён. Забирать не нужно.`);
+        toast("Возврат отменён");
+      }
+      drawOrders();
+    }
+  } catch (err) { toast(err.message, true); }
+  t.disabled = false;
+}, true);
 function dangerBlock(p, d) {
   if (!d || !ADMIN() || !SCRIPT_URL) return "";
   const cancelled = d.status === "Отменён", delivered = d.status === "Доставлен";
   if (p.status === "cancelled") return "";
   return `<section class="o-danger">
     ${cancelled ? `<button type="button" class="o-dbtn" data-restore="${e(p.posting_number)}">${ic("undo")}<span><b>Вернуть в работу</b><small>Заказ снова появится у Рашада</small></span></button>`
-      : delivered ? "" : `<button type="button" class="o-dbtn" data-replace="${e(p.posting_number)}">${ic("swap")}<span><b>Заменить на другой заказ</b><small>Этот отменится, Рашаду уйдёт другой с тем же ЦБ и датой</small></span></button>
+      : delivered ? retMakeBtn(d) : `<button type="button" class="o-dbtn" data-replace="${e(p.posting_number)}">${ic("swap")}<span><b>Заменить на другой заказ</b><small>Этот отменится, Рашаду уйдёт другой с тем же ЦБ и датой</small></span></button>
       <button type="button" class="o-dbtn red" data-cancelorder="${e(p.posting_number)}">${ic("ban")}<span><b>Отменить заказ</b><small>Рашаду придёт уведомление «Везти не нужно»</small></span></button>`}
   </section>`;
 }
@@ -1422,6 +1519,7 @@ async function markDelivered(posting, needOzon) {
   const order = ORDERS.find(x => x.posting_number === posting);
   assertRashadPath(order, DELIV[posting]);
   let d = DELIV[posting];
+  if (isReturnPosting(posting) || isReturnRow(d)) throw new Error("Возврат не отмечается в Ozon");
   if (needOzon && !courierDelivered(d)) throw new Error(OZ_LOCK_HINT);
   const where = [needOzon && "в Ozon", d.status !== "Доставлен" && "в таблице"].filter(Boolean).join(" и ");
   if (!confirm(`Отметить ${d.cb} доставленным ${where}?`)) return false;

@@ -44,7 +44,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 @media(prefers-reduced-motion:reduce){.sp-logo,.sp-logo::before,.sp-logo::after,.sp-road::before,.sp-truck,.sp-truck svg{animation:none}
 .sp-logo::before,.sp-logo::after{display:none}.sp-truck{transform:translateX(69px)}#splash,.sp-in{transition:none}}
 </style>
-<link rel="stylesheet" href="style.css?v=44">
+<link rel="stylesheet" href="style.css?v=45">
 <link rel="icon" href="icons/courier.svg?v=39" type="image/svg+xml">
 <link rel="icon" href="icons/courier-32.png?v=39" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/courier-180.png?v=39" sizes="180x180">
@@ -71,7 +71,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 <div id="mapbox" hidden>
 <div id="map" role="region" aria-label="Карта доставок"></div>
 <div class="map-load" id="mapLoad" role="status"><i></i><span>Загружаем карту…</span></div>
-<div class="mtop"><div class="mleg" aria-label="Цвета меток"><span><i class="st-n"></i>Новый</span><span><i class="st-g"></i>Согласован</span></div>
+<div class="mtop"><div class="mleg" aria-label="Цвета меток"><span><i class="st-n"></i>Новый</span><span><i class="st-g"></i>Согласован</span><span id="mlegRet" hidden><i class="st-r"></i>Возврат</span></div>
 <div class="mctl"><button type="button" class="mbtn" data-mfit aria-label="Показать все точки" title="Все точки"><span data-ico="fit"></span></button><button type="button" class="mbtn" data-mme aria-label="Где я" title="Где я"><span data-ico="locate"></span></button></div></div>
 <div class="mcard" id="mcard" aria-live="polite"></div>
 <section class="msheet" id="msheet" data-state="peek" aria-label="Остановки маршрута">
@@ -106,7 +106,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 <button role="tab" aria-selected="false" data-tab="done"><span data-ico="checkc"></span>История</button>
 </div></nav>
 
-<script src="config.js?v=42"></script>
+<script src="config.js?v=43"></script>
 <script src="fbs.js?v=40"></script>
 <script src="push.js?v=39"></script>
 <script src="alarm.js?v=39"></script>
@@ -161,8 +161,33 @@ function stepsHtml(r) {
   return `<div class="steptrack" style="--p:${p}" aria-hidden="true"><i></i></div><div class="steps" role="group" aria-label="Этап доставки">${labels.map(([k, lab], i) =>
     `<button type="button" class="${flags[i] ? "on" : ""}" data-step="${k}" aria-pressed="${flags[i]}" ${closed ? "disabled" : ""}>${lab}</button>`).join("")}</div>`;
 }
+// Возврат: забрать плитку у клиента. Сначала звонок клиенту, цена — по договорённости (курьер пишет свою).
+function retPriceHtml(r, ret) {
+  if (ret.agreed) return `<div class="ret-price ok">${ic("checkc")}<span>Цена согласована<b class="num">${rub(ret.agreed)}</b></span></div>`;
+  const done = ret.state === "picked" || ret.state === "cancel";
+  return `<div class="ret-price"><span class="ret-pl">Цена за забор<b>по договорённости</b>${ret.asked ? `<small>Вы указали ${rub(ret.asked)} · ждёт подтверждения</small>` : `<small>Впишите, сколько хотите за этот заказ</small>`}</span>
+${done ? "" : `<form class="ret-pf" data-retprice="${e(r.posting)}"><label class="ret-in"><input name="price" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="Сумма" value="${e(ret.asked)}" aria-label="Ваша цена за забор возврата, ₽"><span>₽</span></label><button class="tint">${ret.asked ? "Изменить" : "Сохранить"}</button></form>`}</div>`;
+}
+function retCard(r) {
+  const ret = returnOf(r), {tel} = telOf(r), done = ret.state === "picked" || ret.state === "cancel";
+  if (done) return `<button class="crow ret-row" data-row="${e(r.posting)}"><span class="n ret">${ic("ret", "s")}</span><span class="crow-main"><b>${e(r.cb)} · ${e(ret.label)}</b><span class="mut">${e(r.address)}${r.delivered_at ? " · " + e(r.delivered_at) : ""}</span></span><span class="crow-pay num">${ret.agreed ? rub(ret.agreed) : "—"}</span></button>`;
+  const warned = !!ret.warned || ret.state === "warned";
+  return `<div class="card order open pt ret-card${r.posting === FOCUS ? " hl" : ""}" data-posting="${e(r.posting)}">
+<div class="ph"><div class="r"><span class="badge ret">${ic("ret")}Забрать возврат</span><span class="ret-st ml">${e(ret.label)}</span></div>
+<div class="addr">${e(r.address)}</div><div class="pn" style="margin-top:4px">${e(r.cb)} · ${e(r.packs || "—")}${r.unload && r.unload !== "Нет" ? " · " + e(r.unload) : ""}</div></div>
+<div class="ret-warn${warned ? " ok" : ""}">${ic(warned ? "checkc" : "phone")}<span><b>${warned ? "Клиент предупреждён" + (ret.warned ? " · " + e(ret.warned.at) : "") : "Сначала позвоните клиенту и предупредите, что заберёте плитку"}</b>${ret.note && ret.note !== RETURN_NOTE ? `<small>${e(ret.note)}</small>` : ""}</span></div>
+<div class="pa ret-pa">
+${tel ? `<a class="btn ${warned ? "ghost" : "ret-call"} full" href="${e(tel)}" aria-label="Позвонить клиенту">${ic("phone")}Позвонить клиенту</a>` : ""}
+${warned ? "" : `<button type="button" class="soft full" data-retwarn="${e(r.posting)}">${ic("check")}Клиент предупреждён</button>`}
+</div>
+${retPriceHtml(r, ret)}
+<div class="pa"><a class="btn ghost" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">${ic("nav")}Маршрут</a>
+<button type="button" class="ok" data-retpicked="${e(r.posting)}">${ic("check")}Возврат забран</button></div>
+</div>`;
+}
 function card(r, next) {
   if (isPpz(r)) return "";
+  if (isReturnRow(r)) return retCard(r);
   const done = r.status === "Доставлен" || r.status === "Отменён";
   const {kg} = parsePacksKg(r.packs, deliveryDetails(r.comment));
   const a = agreementOf(r);
@@ -409,8 +434,8 @@ async function mapStyle(name) {
   return STYLES[name] = s;
 }
 const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-const stCls = r => r.status === "Согласован" || agreementOf(r) ? "st-g" : "st-n";
-const stText = r => agreementOf(r) ? agreedLabel(agreementOf(r)) : r.status === "Согласован" ? "Согласован" : "Не согласован";
+const stCls = r => isReturnRow(r) ? "st-r" : r.status === "Согласован" || agreementOf(r) ? "st-g" : "st-n";
+const stText = r => isReturnRow(r) ? "Возврат" : agreementOf(r) ? agreedLabel(agreementOf(r)) : r.status === "Согласован" ? "Согласован" : "Не согласован";
 const kmText = m => m >= 10000 ? Math.round(m / 1000) + " км" : (m / 1000).toFixed(1).replace(".", ",") + " км";
 const durText = s => { const m = Math.max(1, Math.round(s / 60)); return m < 60 ? m + " мин" : `${Math.floor(m / 60)} ч${m % 60 ? " " + (m % 60) + " мин" : ""}`; };
 
@@ -503,10 +528,11 @@ function pinEl(cls, html, title) {
   return el;
 }
 function drawPins(order) {
+  if ($("mlegRet")) $("mlegRet").hidden = !order.some(({r}) => isReturnRow(r));
   PINS.forEach(m => m.remove());
   PINS = order.map(({r, ll}, i) => {
     const on = r.posting === SEL;
-    const el = pinEl("pin-w", `<div class="pin ${stCls(r)}${on ? " on" : ""}"><i class="pin-pulse"></i><div class="pin-h"><b>${i + 1}</b></div><i class="pin-s"></i></div>`, `${i + 1}. ${r.cb} · ${r.address}`);
+    const el = pinEl("pin-w", `<div class="pin ${stCls(r)}${on ? " on" : ""}"><i class="pin-pulse"></i><div class="pin-h"><b>${isReturnRow(r) ? "↩" : i + 1}</b></div><i class="pin-s"></i></div>`, `${i + 1}. ${r.cb} · ${r.address}`);
     el.style.zIndex = on ? 1000 : 100 - i;
     el.addEventListener("click", ev => { ev.stopPropagation(); pickStop(r.posting); });
     el.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pickStop(r.posting); } });
@@ -554,6 +580,9 @@ function pickStop(posting) {
 
 function mcardHtml(r, n) {
   if (isPpz(r)) return "";
+  if (isReturnRow(r)) return `<div class="order mc ret-mc" data-posting="${e(r.posting)}"><div class="mc-h"><span class="mc-n ret">${ic("ret", "s")}</span><div class="grow"><div class="mc-k"><span class="mc-st">Забрать возврат</span></div>
+<div class="mc-a">${e(r.address || "Адрес уточняется")}</div><div class="pn">${e(r.cb)} · ${e(r.packs || "—")}</div></div>
+<button type="button" class="mc-x" data-mclose aria-label="Закрыть карточку">${ic("x")}</button></div>${retCard(r).replace(/^<div class="card order open pt ret-card[^"]*" data-posting="[^"]*">/, '<div class="ret-in-mc">')}</div>`;
   const info = deliveryDetails(r.comment), {kg} = parsePacksKg(r.packs, info), {tel} = telOf(r), a = agreementOf(r);
   let foreman = "";
   try { foreman = foremanPhone(info.foreman); } catch {}
@@ -830,6 +859,42 @@ if ($("modal-c-confirm")) {
 if ($("modal-c-close")) $("modal-c-close").onclick = closeDoneModal;
 if ($("modal-c-cancel")) $("modal-c-cancel").onclick = closeDoneModal;
 
+// Возврат: «Клиент предупреждён», своя цена, «Возврат забран» (статус «Доставлен» — Ozon возврат не трогает)
+document.addEventListener("click", async ev => {
+  const w = ev.target.closest("[data-retwarn]"), pk = ev.target.closest("[data-retpicked]");
+  if (!w && !pk) return;
+  ev.preventDefault(); ev.stopPropagation();
+  const posting = (w || pk).dataset[w ? "retwarn" : "retpicked"], r = ROWS.find(x => x.posting === posting);
+  if (!r || !isReturnRow(r)) return;
+  const btn = w || pk;
+  if (w) {
+    btn.disabled = true;
+    const notes = courierNotes(r.courier_comment);
+    notes.warned = {at: agreedNow()};
+    if (!notes.ack) notes.ack = {at: agreedNow()};
+    const data = {courier_comment: courierComment(notes)};
+    if (r.status === "Новый") data.status = "Согласован";
+    if (await save(posting, data, btn)) toast("Отмечено: клиент предупреждён");
+    return;
+  }
+  if (!confirm(`Возврат ${r.cb} забран у клиента?`)) return;
+  btn.disabled = true;
+  const notes = courierNotes(r.courier_comment);
+  if (!notes.ack) notes.ack = {at: agreedNow()};
+  if (await save(posting, {status: "Доставлен", courier_comment: courierComment(notes)}, btn)) toast("Возврат забран ✓ Владелец получит уведомление");
+}, true);
+document.addEventListener("submit", async ev => {
+  const f = ev.target.closest("[data-retprice]");
+  if (!f) return;
+  ev.preventDefault();
+  const posting = f.dataset.retprice, r = ROWS.find(x => x.posting === posting);
+  const price = String(f.elements.price.value || "").replace(/\D/g, "").replace(/^0+/, "");
+  if (!r || !isReturnRow(r)) return;
+  if (!price) { toast("Впишите сумму в рублях", true); return; }
+  const btn = f.querySelector("button");
+  btn.disabled = true;
+  if (await save(posting, {courier_comment: courierComment({...courierNotes(r.courier_comment), price})}, btn)) toast(`Цена ${rub(price)} отправлена владельцу`);
+}, true);
 async function setTrip(posting, kind) {
   const r = ROWS.find(x => x.posting === posting);
   if (!r || isPpz(r) || r.status === "Доставлен" || r.status === "Отменён") return;

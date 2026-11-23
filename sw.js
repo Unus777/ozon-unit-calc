@@ -1,8 +1,8 @@
 // Service worker курьера: принимает пуш без содержимого и сам собирает текст из таблицы.
 // Ключ курьера приходит в адресе регистрации: sw.js?k=…
 // Версия меняется вместе с дизайном и config.js — браузер видит новый sw.js и обновляет его (офлайн-кэша здесь нет).
-const SW_VERSION = "v42-blue";
-importScripts("config.js?v=42", "fbs.js?v=40");
+const SW_VERSION = "v43-return";
+importScripts("config.js?v=43", "fbs.js?v=40");
 const KEY = new URL(self.location).searchParams.get("k");
 const PAGE = `courier.html?k=${encodeURIComponent(KEY || "")}`;
 
@@ -26,6 +26,12 @@ function courierNote(n, row, night = isNight()) {
   const alert = n.type === "new" || n.type === "repeat" || !n.type;
   const id = n.posting ? encodeURIComponent(n.posting) : "";
   const url = `${PAGE}${id ? `&o=${id}` : ""}${alert && id ? `#alert=${id}` : ""}`;
+  if (n.posting && typeof isReturnPosting === "function" && isReturnPosting(n.posting)) {  // возврат: заметно, без «Принял»
+    const info = [n.address, n.packs].filter(Boolean).join(" · ");
+    return [`↩️ ВОЗВРАТ${n.cb ? " · " + n.cb : ""}: забрать плитку`, {body: [n.text || RETURN_NOTE, info].filter(Boolean).join("\n"),
+      tag: `order-${n.posting}`, renotify: true, requireInteraction: true, vibrate: ALERT_VIBRATE, icon: ICON, badge: BADGE,
+      data: {url: `${PAGE}&o=${id}`, posting: n.posting}}];
+  }
   if (!alert) {  // напоминание владельца — обычное уведомление
     const info = [n.packs, n.unload && n.unload !== "Нет" ? `разгрузка: ${n.unload}` : "", n.address].filter(Boolean).join(" · ");
     return [`🔔 Напоминание${n.cb ? ": " + n.cb : ""}`, {body: n.text ? `${n.text}\n${info}` : info, tag: `order-${n.posting || "remind"}`,
