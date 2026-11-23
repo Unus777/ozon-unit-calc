@@ -44,7 +44,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 @media(prefers-reduced-motion:reduce){.sp-logo,.sp-logo::before,.sp-logo::after,.sp-road::before,.sp-truck,.sp-truck svg{animation:none}
 .sp-logo::before,.sp-logo::after{display:none}.sp-truck{transform:translateX(69px)}#splash,.sp-in{transition:none}}
 </style>
-<link rel="stylesheet" href="style.css?v=45">
+<link rel="stylesheet" href="style.css?v=46">
 <link rel="icon" href="icons/courier.svg?v=39" type="image/svg+xml">
 <link rel="icon" href="icons/courier-32.png?v=39" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/courier-180.png?v=39" sizes="180x180">
@@ -163,26 +163,28 @@ function stepsHtml(r) {
 }
 // Возврат: забрать плитку у клиента. Сначала звонок клиенту, цена — по договорённости (курьер пишет свою).
 function retPriceHtml(r, ret) {
-  if (ret.agreed) return `<div class="ret-price ok">${ic("checkc")}<span>Цена согласована<b class="num">${rub(ret.agreed)}</b></span></div>`;
+  if (ret.agreed) return `<div class="ret-price ok">${ic("checkc")}<span class="ret-pl">Цена согласована</span><b class="num">${rub(ret.agreed)}</b></div>`;
   const done = ret.state === "picked" || ret.state === "cancel";
-  return `<div class="ret-price"><span class="ret-pl">Цена за забор<b>по договорённости</b>${ret.asked ? `<small>Вы указали ${rub(ret.asked)} · ждёт подтверждения</small>` : `<small>Впишите, сколько хотите за этот заказ</small>`}</span>
+  return `<div class="ret-price"><div class="ret-pl"><span>Цена за забор</span><b>по договорённости</b><small>${ret.asked ? `Вы указали ${rub(ret.asked)} · ждёт подтверждения` : "Впишите, сколько хотите за этот заказ"}</small></div>
 ${done ? "" : `<form class="ret-pf" data-retprice="${e(r.posting)}"><label class="ret-in"><input name="price" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="Сумма" value="${e(ret.asked)}" aria-label="Ваша цена за забор возврата, ₽"><span>₽</span></label><button class="tint">${ret.asked ? "Изменить" : "Сохранить"}</button></form>`}</div>`;
 }
+// Тело карточки возврата: одинаково в списке и в карточке на карте — все блоки по одной линии
+function retBody(r, ret) {
+  const {tel} = telOf(r), warned = !!ret.warned || ret.state === "warned";
+  return `<div class="ret-body">
+<div class="ret-warn${warned ? " ok" : ""}">${ic(warned ? "checkc" : "phone")}<span><b>${warned ? "Клиент предупреждён" + (ret.warned ? " · " + e(ret.warned.at) : "") : "Сначала позвоните клиенту и предупредите, что заберёте плитку"}</b>${ret.note && ret.note !== RETURN_NOTE ? `<small>${e(ret.note)}</small>` : ""}</span></div>
+${tel || !warned ? `<div class="ret-stack">${tel ? `<a class="btn ${warned ? "ghost" : "ret-call"}" href="${e(tel)}" aria-label="Позвонить клиенту">${ic("phone")}Позвонить клиенту</a>` : ""}${warned ? "" : `<button type="button" class="soft" data-retwarn="${e(r.posting)}">${ic("check")}Клиент предупреждён</button>`}</div>` : ""}
+${retPriceHtml(r, ret)}
+<div class="ret-row2"><a class="btn ghost" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">${ic("nav")}Маршрут</a><button type="button" class="ok" data-retpicked="${e(r.posting)}">${ic("check")}Возврат забран</button></div>
+</div>`;
+}
 function retCard(r) {
-  const ret = returnOf(r), {tel} = telOf(r), done = ret.state === "picked" || ret.state === "cancel";
+  const ret = returnOf(r), done = ret.state === "picked" || ret.state === "cancel";
   if (done) return `<button class="crow ret-row" data-row="${e(r.posting)}"><span class="n ret">${ic("ret", "s")}</span><span class="crow-main"><b>${e(r.cb)} · ${e(ret.label)}</b><span class="mut">${e(r.address)}${r.delivered_at ? " · " + e(r.delivered_at) : ""}</span></span><span class="crow-pay num">${ret.agreed ? rub(ret.agreed) : "—"}</span></button>`;
-  const warned = !!ret.warned || ret.state === "warned";
   return `<div class="card order open pt ret-card${r.posting === FOCUS ? " hl" : ""}" data-posting="${e(r.posting)}">
 <div class="ph"><div class="r"><span class="badge ret">${ic("ret")}Забрать возврат</span><span class="ret-st ml">${e(ret.label)}</span></div>
 <div class="addr">${e(r.address)}</div><div class="pn" style="margin-top:4px">${e(r.cb)} · ${e(r.packs || "—")}${r.unload && r.unload !== "Нет" ? " · " + e(r.unload) : ""}</div></div>
-<div class="ret-warn${warned ? " ok" : ""}">${ic(warned ? "checkc" : "phone")}<span><b>${warned ? "Клиент предупреждён" + (ret.warned ? " · " + e(ret.warned.at) : "") : "Сначала позвоните клиенту и предупредите, что заберёте плитку"}</b>${ret.note && ret.note !== RETURN_NOTE ? `<small>${e(ret.note)}</small>` : ""}</span></div>
-<div class="pa ret-pa">
-${tel ? `<a class="btn ${warned ? "ghost" : "ret-call"} full" href="${e(tel)}" aria-label="Позвонить клиенту">${ic("phone")}Позвонить клиенту</a>` : ""}
-${warned ? "" : `<button type="button" class="soft full" data-retwarn="${e(r.posting)}">${ic("check")}Клиент предупреждён</button>`}
-</div>
-${retPriceHtml(r, ret)}
-<div class="pa"><a class="btn ghost" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">${ic("nav")}Маршрут</a>
-<button type="button" class="ok" data-retpicked="${e(r.posting)}">${ic("check")}Возврат забран</button></div>
+${retBody(r, ret)}
 </div>`;
 }
 function card(r, next) {
@@ -580,9 +582,9 @@ function pickStop(posting) {
 
 function mcardHtml(r, n) {
   if (isPpz(r)) return "";
-  if (isReturnRow(r)) return `<div class="order mc ret-mc" data-posting="${e(r.posting)}"><div class="mc-h"><span class="mc-n ret">${ic("ret", "s")}</span><div class="grow"><div class="mc-k"><span class="mc-st">Забрать возврат</span></div>
+  if (isReturnRow(r)) { const ret = returnOf(r); return `<div class="order mc ret-mc" data-posting="${e(r.posting)}"><div class="mc-h"><span class="mc-n ret">${ic("ret", "s")}</span><div class="grow"><div class="mc-k"><span class="mc-st">Забрать возврат</span><span>${e(ret.label)}</span></div>
 <div class="mc-a">${e(r.address || "Адрес уточняется")}</div><div class="pn">${e(r.cb)} · ${e(r.packs || "—")}</div></div>
-<button type="button" class="mc-x" data-mclose aria-label="Закрыть карточку">${ic("x")}</button></div>${retCard(r).replace(/^<div class="card order open pt ret-card[^"]*" data-posting="[^"]*">/, '<div class="ret-in-mc">')}</div>`;
+<button type="button" class="mc-x" data-mclose aria-label="Закрыть карточку">${ic("x")}</button></div>${ret.state === "picked" || ret.state === "cancel" ? "" : retBody(r, ret)}</div>`; }
   const info = deliveryDetails(r.comment), {kg} = parsePacksKg(r.packs, info), {tel} = telOf(r), a = agreementOf(r);
   let foreman = "";
   try { foreman = foremanPhone(info.foreman); } catch {}

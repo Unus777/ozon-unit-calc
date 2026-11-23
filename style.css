@@ -736,35 +736,41 @@ body.fbs-preview main { max-width: 1120px; }
 .sitem>b{margin-left:auto;text-align:right;max-width:62%;overflow-wrap:anywhere}
 #export,#reload{margin:4px}
 
-/* Возврат: забрать плитку у клиента — оранжевый, отдельно от доставок */
+/* Возврат: забрать плитку у клиента — оранжевый, отдельно от доставок.
+   Все блоки внутри .ret-body на одной линии: отступы задаёт только контейнер. */
 :root{--ret:#EA580C;--ret-bg:#FFF1E7}
 :root[data-theme="dark"]{--ret:#FB923C;--ret-bg:rgba(251,146,60,.14)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--ret:#FB923C;--ret-bg:rgba(251,146,60,.14)}}
 .ret-card{box-shadow:var(--sh2),inset 4px 0 0 var(--ret)}
 .badge.ret{background:var(--ret);color:#fff}
-.ret-st{font-size:13px;font-weight:650;color:var(--ret)}
-.ret-warn{display:flex;gap:10px;align-items:flex-start;margin:14px 16px 0;padding:12px 14px;border-radius:14px;background:var(--ret-bg);color:var(--ret);font-size:15px;line-height:1.3}
-.ret-warn .ic{width:20px;height:20px;flex:0 0 auto;margin-top:1px}
-.ret-warn span{display:grid;gap:3px}.ret-warn small{color:var(--ink2);font-weight:500;font-size:13px}
-.ret-warn.ok{background:var(--green-bg);color:var(--green)}
-.ret-pa{margin-top:10px}
-a.btn.ret-call{background:var(--ret);color:#fff}
-.ret-price{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:12px 16px 0;padding:12px 14px;border-radius:14px;background:var(--soft)}
-.ret-price.ok{background:var(--green-bg);color:var(--green);font-weight:600}
-.ret-price.ok span{display:flex;gap:8px;align-items:baseline;flex:1}.ret-price.ok b{margin-left:auto;font-size:17px}
-.ret-pl{display:grid;gap:2px;flex:1 1 150px;font-size:13px;color:var(--mut)}
-.ret-pl b{font-size:16px;color:var(--fg)}.ret-pl small{font-size:12px}
-.ret-pf{display:flex;gap:8px;flex:1 1 200px}
-.ret-in{position:relative;flex:1;min-width:0}
-.ret-in input{width:100%;height:44px;border-radius:12px;border:1px solid var(--line2,rgba(0,0,0,.12));background:var(--card);color:var(--fg);padding:0 30px 0 12px;font-size:17px;font-weight:650}
-.ret-in span{position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--mut);font-weight:600}
-.ret-pf button{height:44px;padding:0 14px}
-.crow .n.ret,.mc-n.ret{background:var(--ret-bg);color:var(--ret)}
-.pin.st-r{--c:var(--ret)}
-.mstop.st-r{--c:var(--ret)}
-.ret-in-mc .ph{display:none}
 .badge.ret::before{display:none}
-.ret-card .ret-pa{padding:12px 16px 0}
-.ret-card .pa:last-child{padding-top:12px}
+.ret-st{font-size:13px;font-weight:650;color:var(--ret)}
+.ret-body{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;padding:14px 16px 16px}
+.ret-mc .ret-body{padding:14px 0 0}
+.ret-body>*{margin:0;min-width:0}
+.ret-warn{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:14px;background:var(--ret-bg);color:var(--ret);font-size:15px;line-height:1.3}
+.ret-warn .ic{width:20px;height:20px;flex:0 0 auto;margin-top:1px}
+.ret-warn span{display:grid;gap:3px;min-width:0}.ret-warn small{color:var(--ink2);font-weight:500;font-size:13px}
+.ret-warn.ok{background:var(--green-bg);color:var(--green)}
+.ret-stack{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+.ret-stack>*,.ret-row2>*{width:100%;min-width:0;margin:0;min-height:48px;box-sizing:border-box}
+a.btn.ret-call{background:var(--ret);color:#fff}
+.ret-row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.ret-row2>*{padding:0 10px;white-space:nowrap}
+.ret-price{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;padding:12px 14px;border-radius:14px;background:var(--soft)}
+.ret-price.ok{grid-template-columns:auto minmax(0,1fr) auto;align-items:center;background:var(--green-bg);color:var(--green);font-weight:600}
+.ret-price.ok .ic{width:20px;height:20px}.ret-price.ok b{font-size:17px}
+.ret-pl{display:grid;gap:2px;font-size:13px;color:var(--mut);min-width:0}
+.ret-pl b{font-size:16px;color:var(--fg)}.ret-pl small{font-size:12px}
+.ret-price.ok .ret-pl{color:inherit;font-size:14px}
+.ret-pf{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin:0}
+.ret-in{position:relative;display:block;min-width:0;margin:0}
+.ret-in input{display:block;width:100%;height:48px;margin:0;box-sizing:border-box;border-radius:12px;border:1px solid var(--line2,rgba(0,0,0,.12));background:var(--card);color:var(--fg);padding:0 34px 0 14px;font-size:17px;font-weight:650}
+.ret-in span{position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--mut);font-weight:600;pointer-events:none}
+.ret-pf button{min-height:48px;height:48px;padding:0 18px;margin:0;white-space:nowrap}
+.crow .n.ret,.mc-n.ret{background:var(--ret-bg);color:var(--ret)}
 .pin.st-r,.mstop.st-r{--c:#C2410C}
 .mleg i.st-r{background:#C2410C}
+.mc.ret-mc{--c:var(--ret)}
+.ret-price .ret-in input{background:var(--card);border:0;box-shadow:inset 0 0 0 1.5px var(--line2,rgba(0,0,0,.14));outline:none}
+.ret-price .ret-in input:focus{box-shadow:inset 0 0 0 2px var(--ret)}
