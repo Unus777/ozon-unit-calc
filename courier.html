@@ -44,7 +44,7 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 @media(prefers-reduced-motion:reduce){.sp-logo,.sp-logo::before,.sp-logo::after,.sp-road::before,.sp-truck,.sp-truck svg{animation:none}
 .sp-logo::before,.sp-logo::after{display:none}.sp-truck{transform:translateX(69px)}#splash,.sp-in{transition:none}}
 </style>
-<link rel="stylesheet" href="style.css?v=46">
+<link rel="stylesheet" href="style.css?v=47">
 <link rel="icon" href="icons/courier.svg?v=39" type="image/svg+xml">
 <link rel="icon" href="icons/courier-32.png?v=39" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/courier-180.png?v=39" sizes="180x180">
@@ -59,8 +59,9 @@ background:repeating-linear-gradient(90deg,rgba(124,129,139,.45) 0 10px,transpar
 <header class="hdr"><div class="bar">
 <div class="logo" aria-hidden="true">А</div>
 <div class="grow"><div class="brand">Доставки <span id="subtitle">Алмалы</span></div></div>
-<button class="ibtn" id="themeBtn" aria-label="Сменить тему"></button><button class="ibtn" id="reload" aria-label="Обновить"></button>
+<button class="ibtn" id="themeBtn" aria-label="Сменить тему"></button><button class="ibtn" id="pendingBtn" hidden aria-label="Повторить неотправленные"></button><button class="ibtn" id="reload" aria-label="Обновить"></button>
 </div></header>
+<div id="netbar" class="netbar" hidden></div>
 <main style="padding-top:8px">
 <div class="card" id="nokey" hidden><h3>Нет доступа</h3><p class="mut">Откройте ссылку, которую прислал владелец магазина.</p></div>
 
@@ -133,6 +134,9 @@ const dest = r => r.lat && r.lon ? `${r.lat},${r.lon}` : r.address;
 // маршрут от текущего места сразу построен, «Поехали» включает ведение
 const yandexMaps = r => `https://yandex.ru/maps/?rtext=~${encodeURIComponent(dest(r))}&rtt=auto`;
 const appleMaps = r => `https://maps.apple.com/?daddr=${encodeURIComponent(dest(r))}&dirflg=d`;
+const yandexNavi = r => r.lat && r.lon && isFinite(+r.lat) && isFinite(+r.lon)
+  ? `yandexnavi://build_route_on_map?lat_to=${encodeURIComponent(r.lat)}&lon_to=${encodeURIComponent(r.lon)}`
+  : `yandexnavi://map_search?text=${encodeURIComponent(r.address || "")}`;
 
 function telOf(r) {
   // Таблица портит «+»: бывает «7980…» или «=+7980…» — оставляем только цифры
@@ -178,29 +182,34 @@ ${retPriceHtml(r, ret)}
 <div class="ret-row2"><a class="btn ghost" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">${ic("nav")}Маршрут</a><button type="button" class="ok" data-retpicked="${e(r.posting)}">${ic("check")}Возврат забран</button></div>
 </div>`;
 }
-function retCard(r) {
+function retCard(r, n) {
   const ret = returnOf(r), done = ret.state === "picked" || ret.state === "cancel";
-  if (done) return `<button class="crow ret-row" data-row="${e(r.posting)}"><span class="n ret">${ic("ret", "s")}</span><span class="crow-main"><b>${e(r.cb)} · ${e(ret.label)}</b><span class="mut">${e(r.address)}${r.delivered_at ? " · " + e(r.delivered_at) : ""}</span></span><span class="crow-pay num">${ret.agreed ? rub(ret.agreed) : "—"}</span></button>`;
+  const num = n ? `<span class="n st-r">${n}</span>` : `<span class="n ret">${ic("ret", "s")}</span>`;
+  if (done) return `<button class="crow ret-row" data-row="${e(r.posting)}">${num}<span class="crow-main"><b>${e(r.cb)} · ${e(ret.label)}</b><span class="mut">${e(r.address)}${r.delivered_at ? " · " + e(r.delivered_at) : ""}</span></span><span class="crow-pay num">${ret.agreed ? rub(ret.agreed) : "—"}</span></button>`;
   return `<div class="card order open pt ret-card${r.posting === FOCUS ? " hl" : ""}" data-posting="${e(r.posting)}">
-<div class="ph"><div class="r"><span class="badge ret">${ic("ret")}Забрать возврат</span><span class="ret-st ml">${e(ret.label)}</span></div>
+<div class="ph"><div class="r">${n ? `<span class="next-n st-r">${n}</span>` : ""}<span class="badge ret">${ic("ret")}Забрать возврат</span><span class="ret-st ml">${e(ret.label)}</span></div>
 <div class="addr">${e(r.address)}</div><div class="pn" style="margin-top:4px">${e(r.cb)} · ${e(r.packs || "—")}${r.unload && r.unload !== "Нет" ? " · " + e(r.unload) : ""}</div></div>
 ${retBody(r, ret)}
 </div>`;
 }
-function card(r, next) {
+function card(r, next, n) {
   if (isPpz(r)) return "";
-  if (isReturnRow(r)) return retCard(r);
+  if (isReturnRow(r)) return retCard(r, n);
   const done = r.status === "Доставлен" || r.status === "Отменён";
   const {kg} = parsePacksKg(r.packs, deliveryDetails(r.comment));
   const a = agreementOf(r);
-  if (r.posting !== OPEN) {  // свёрнутая строка: нажатие раскрывает
-    const mark = done ? `<span class="n g">${ic("check", "s")}</span>`
+  const pinCls = r.status === "Согласован" || a ? "st-g" : "st-n";
+  if (r.posting !== OPEN) {  // свёрнутая строка: нажатие раскрывает; звонок и маршрут — сразу
+    const mark = n ? `<span class="n ${pinCls}">${n}</span>`
+      : done ? `<span class="n g">${ic("check", "s")}</span>`
       : a ? `<span class="n g">${ic("calcheck", "s")}</span>` : `<span class="n a">${ic("clock", "s")}</span>`;
     const state = done ? r.status.toLowerCase() : a ? agreedLabel(a).toLowerCase() : "не согласовано";
-    return `<button class="crow${r.posting === FOCUS ? " hl" : ""}" data-row="${e(r.posting)}">${mark}` +
-      `<span class="crow-main"><b>${e(r.cb)} · ${e(r.packs || "—")}</b>` +
-      `<span class="mut">${e(r.address)} · ${e(state)}</span></span>` +
-      `<span class="crow-pay num">${rub(r.pay)}</span></button>`;
+    const {tel} = telOf(r);
+    const acts = done ? "" : `<span class="crow-act">${tel ? `<a class="crow-btn" href="${e(tel)}" aria-label="Позвонить клиенту">${ic("phone")}</a>` : ""}<a class="crow-btn" href="${e(yandexMaps(r))}" data-route="${e(r.posting)}" target="_blank" rel="noopener" aria-label="Маршрут">${ic("nav")}</a></span>`;
+    return `<div class="crow${r.posting === FOCUS ? " hl" : ""}" data-row="${e(r.posting)}">${mark}` +
+      `<button type="button" class="crow-hit" data-row="${e(r.posting)}"><span class="crow-main"><b>${e(r.address || r.cb)}</b>` +
+      `<span class="mut">${e(r.cb)} · ${e(r.packs || "—")} · ${e(whenText(r) || state)}</span></span>` +
+      `<span class="crow-pay num">${rub(r.pay)}</span></button>${acts}</div>`;
   }
   const info = deliveryDetails(r.comment), {tel} = telOf(r);
   let foreman = "";
@@ -210,23 +219,21 @@ function card(r, next) {
   const agreeRow = done ? "" : a
     ? `<div class="agree">${ic("checkc")}<span class="tx">Согласовано с ${e(a.who)}ом<small>${a.slot ? "интервал " + e(slotLabel(a.slot)) + " · " : ""}${e(a.day === todayStr().slice(0, 5) ? "сегодня в " + a.time : a.day + " в " + a.time)}</small></span></div>`
     : `<div class="agree no"><span class="dot a"></span>Не согласовано<small>до выезда</small></div>`;
-  const calls = [foreman ? `<a class="btn ghost" href="tel:${e(foreman)}" aria-label="Позвонить прорабу">${ic("user")}Прорабу</a>` : "",
-    tel ? `<a class="btn ghost" href="${e(tel)}" aria-label="Позвонить клиенту">${ic("phone")}Клиенту</a>` : ""].filter(Boolean);
-  if (calls.length === 1) calls[0] = calls[0].replace('class="btn ghost"', 'class="btn ghost full"');
-  return `<div class="card order open pt${r.posting === FOCUS ? " hl" : ""}" data-posting="${e(r.posting)}" data-card tabindex="0" aria-haspopup="dialog">
-<div class="ph"><div class="r"><span class="badge ${done ? "done" : "way plain"}">${done ? ic("check") : ic("clock")}${e(badgeTxt)}</span><span class="pay ml">${rub(r.pay)}</span></div>
-<div class="addr">${e(r.address)}</div><div class="pn" style="margin-top:4px">${e(r.cb)} · ${e(r.posting)}</div></div>
-${next && !done ? `<div class="nextk">Следующая точка</div>` : ""}
+  const calls = [foreman ? `<a class="btn ghost btn-call" href="tel:${e(foreman)}" aria-label="Позвонить прорабу">${ic("user")}Прорабу</a>` : "",
+    tel ? `<a class="btn ghost btn-call" href="${e(tel)}" aria-label="Позвонить клиенту">${ic("phone")}Клиенту</a>` : ""].filter(Boolean);
+  return `<div class="card order open pt${next && !done ? " is-next" : ""}${r.posting === FOCUS ? " hl" : ""}" data-posting="${e(r.posting)}">
+<div class="ph"><div class="r next-head">${n ? `<span class="next-n ${pinCls}">${n}</span>` : ""}<div class="grow">${next && !done ? `<span class="nextk">Следующий заказ</span>` : `<span class="badge ${done ? "done" : "way plain"}">${done ? ic("check") : ic("clock")}${e(badgeTxt)}</span>`}</div><span class="pay">${rub(r.pay)}</span><button type="button" class="more-btn" data-mmore="${e(r.posting)}" aria-label="Все действия с заказом">${ic("more")}</button></div>
+<div class="addr">${e(r.address)}</div><div class="pn" style="margin-top:4px">${next && !done ? `${e(badgeTxt)} · ` : ""}${e(r.cb)} · ${e(r.packs || "—")}${kg ? " · ~" + kg + " кг" : ""}</div></div>
 ${stepsHtml(r)}
 ${agreeRow}
 <div class="facts"><div><span>Везти</span><b>${e(r.packs || "—")}</b></div><div><span>Вес</span><b>${kg ? `~${kg} кг` : "—"}</b></div>
 <div class="${r.unload && r.unload !== "Нет" ? "warn" : ""}"><span>Разгрузка</span><b>${e(unloadText(r))}</b></div></div>
 ${note ? `<div class="note">${ic("note")}<span>${e(note)}</span></div>` : ""}
-${done ? `<div class="done-line">${ic("checkc")}Доставлен${r.delivered_at ? " " + e(r.delivered_at) : ""}</div>` : `<div class="pa">
+${done ? `<div class="done-line">${ic("checkc")}Доставлен${r.delivered_at ? " " + e(r.delivered_at) : ""}</div>` : `<div class="pa calls-${calls.length}">
 ${calls.join("")}
-<button type="button" class="${a ? "soft" : "tint"} full" data-agree="${e(r.posting)}">${ic("calcheck")}${a ? "Изменить согласование" : "Согласовал доставку"}</button>
-<a class="btn ghost" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">${ic("nav")}Маршрут</a>
-<button type="button" class="ok" data-done="${e(r.posting)}">${ic("check")}Доставлено</button></div>`}
+<button type="button" class="${a ? "soft" : "tint"} full btn-agree" data-agree="${e(r.posting)}">${ic("calcheck")}${a ? "Изменить согласование" : "Согласовал доставку"}</button>
+<a class="btn ghost btn-route" href="${e(yandexMaps(r))}" data-route="${e(r.posting)}" target="_blank" rel="noopener">${ic("nav")}Маршрут</a>
+<button type="button" class="ok btn-done" data-done="${e(r.posting)}">${ic("check")}Доставлено</button></div>`}
 </div>`;
 }
 
@@ -339,56 +346,78 @@ async function saveEdit(form) {
   await save(r.posting, data);
 }
 
+function payOf(r) { return Number(String(r && r.pay || 0).replace(/\D/g, "")) || 0; }
+function isDoneRow(r) { return r.status === "Доставлен" || r.status === "Отменён"; }
+function isTodayish(r) {
+  const t = todayStr(), iso = toIso(r.date);
+  return !r.date || r.date === t || !!(iso && iso < toIso(t));
+}
+function workRows() { return ROWS.filter(r => !isPpz(r) && !isDoneRow(r)); }
+function routeRows(list) {
+  const pts = [], rest = [];
+  for (const r of list) {
+    if (r.lat && r.lon && isFinite(+r.lat) && isFinite(+r.lon)) pts.push({r, ll: [+r.lat, +r.lon]});
+    else rest.push(r);
+  }
+  return (pts.length ? routeOrder(pts, ME) : []).map(p => p.r).concat(rest);
+}
+function doneTodayRows() {
+  const day = todayStr().slice(0, 5);
+  return ROWS.filter(r => !isPpz(r) && r.status === "Доставлен" && String(r.delivered_at || "").includes(day));
+}
+
 function draw(anim) {
   $("mapbox").hidden = TAB !== "map";
   $("list").hidden = TAB === "map";
   document.body.classList.toggle("maptab", TAB === "map");
   if (TAB === "map") { drawMap(); return; }
-  const isDone = r => r.status === "Доставлен" || r.status === "Отменён";
-  const active = ROWS.filter(r => !isDone(r));
+  const active = workRows();
+  const work = routeRows(active);
+  const numOf = posting => { const i = work.findIndex(r => r.posting === posting); return i >= 0 ? i + 1 : 0; };
   $("subtitle").textContent = `${IS_ADMIN ? "режим владельца · " : ""}${plural(active.length, "заказ", "заказа", "заказов")} в работе`;
   const rep = deliveryReport(ROWS, PAYS);
-  $("owed").innerHTML = "";  // сумма — в карточке вверху
+  $("owed").innerHTML = "";
 
+  const todayDone = doneTodayRows();
+  const earnedToday = todayDone.reduce((s, r) => s + payOf(r), 0);
   const heroEl = $("driverHero");
   if (heroEl) {
-    let leftPacks = 0, leftKg = 0, activePay = 0;
+    let leftPacks = 0, leftKg = 0;
     for (const r of active) {
       const {packs, kg} = parsePacksKg(r.packs, deliveryDetails(r.comment));
       leftPacks += packs;
       leftKg += kg;
-      activePay += Number(String(r.pay || 0).replace(/\D/g, "")) || 0;
     }
     const isOver = leftKg > 1500;
     const owed = PAYS_ERR ? 0 : (rep.hasPayments ? rep.left : rep.done.pay);
-    const label = PAYS_ERR ? "Не удалось загрузить выплаты" : (IS_ADMIN ? (owed < 0 ? "Переплата курьеру" : "Курьеру осталось") : (owed < 0 ? "Выплачено авансом" : "Вам должны"));
-    const cap = Math.min(100, Math.round(leftKg / 1500 * 100));
-    const today = todayStr();
-    const doneToday = ROWS.filter(r => r.status === "Доставлен" && String(r.delivered_at || "").includes(today.slice(0, 5))).length;
-    const ahead = active.filter(r => !r.date || r.date === today).length;
-    heroEl.innerHTML = `<div class="hero" style="padding:16px 20px">
-      <div class="r"><span class="lbl">${label}</span><span class="hchip ml"><span class="dot sm"></span>${IS_ADMIN ? "Владелец" : "Рашад"} · на смене</span></div>
-      ${PAYS_ERR ? `<button type="button" class="soft" data-pay-retry style="margin-top:8px">Повторить</button>` : `<div class="big money" data-count="${Math.round(Math.abs(owed))}"><span>${Math.round(Math.abs(owed)).toLocaleString("ru-RU").replace(/\u00a0/g, " ")}</span><small>₽</small></div>`}
-      ${activePay ? `<div class="lbl" style="margin-top:2px">+ ${rub(activePay)} за точки в работе</div>` : ""}
-      <div class="hstats" style="margin-top:12px;padding-top:12px">
-        <div><span>Осталось</span><b>${plural(active.length, "точка", "точки", "точек")}</b></div>
-        <div><span>Упаковок</span><b>${leftPacks} уп</b></div>
-        <div><span>${isOver ? "Перегруз!" : "Вес · до 1,5 т"}</span><b class="${isOver ? "am" : ""}">${leftKg} кг</b></div>
-      </div>
-      <div class="load"><div class="loadbar"><span style="width:${cap}%"></span></div><small>${leftKg} / 1 500 кг${isOver ? " · перегруз" : ""}</small></div>
-      <div class="dayprog">${doneToday} сдано сегодня · ${ahead} впереди</div>
-    </div>`;
-    tickCount(heroEl);
+    const label = PAYS_ERR ? "Не удалось загрузить выплаты" : (IS_ADMIN ? (owed < 0 ? "Переплата" : "Курьеру осталось") : (owed < 0 ? "Выплачено авансом" : "Вам должны"));
+    if (TAB === "done") {
+      heroEl.innerHTML = `<div class="today-sum"><div><div class="k">Сдано сегодня</div><div class="v">${todayDone.length ? plural(todayDone.length, "заказ", "заказа", "заказов") : "пока нет"}</div></div><div class="v">${todayDone.length ? rub(earnedToday) : ""}</div></div>`;
+    } else {
+      heroEl.innerHTML = `<div class="daybar">
+        <div><div class="db-k">${plural(active.length, "точка в работе", "точки в работе", "точек в работе")}</div><div class="db-v">${todayDone.length} сдано сегодня · ${rub(earnedToday)}</div></div>
+        <div class="db-pay"><div class="db-k">${PAYS_ERR ? "Выплаты" : label}</div>${PAYS_ERR ? `<button type="button" class="soft" data-pay-retry>Повторить</button>` : `<div class="db-v">${rub(Math.abs(owed))}</div>`}</div>
+        ${isOver ? `<div class="db-warn">Перегруз: ${leftKg} кг из 1 500 · ${leftPacks} уп</div>` : `<div class="db-meta">${leftPacks} уп · ${leftKg} кг</div>`}
+      </div>`;
+    }
   }
 
-  let rows = TAB === "done" ? ROWS.filter(isDone).reverse()
-    : active.filter(r => TAB === "active" || !r.date || r.date === todayStr());
-  if (TAB !== "done") rows.sort((a, b) => (toIso(a.date) || "9999").localeCompare(toIso(b.date) || "9999"));
-  if (TAB !== "done" && !rows.some(r => r.posting === OPEN)) OPEN = (rows.find(r => r.posting === FOCUS) || rows[0] || {}).posting || null;
+  const next = work[0];
+  let rows, later = [];
+  if (TAB === "done") rows = ROWS.filter(isDoneRow).reverse();
+  else if (TAB === "active") rows = work;
+  else {
+    rows = next ? [next, ...work.filter(r => r !== next && isTodayish(r))] : work.filter(isTodayish);
+    later = work.filter(r => r !== next && !isTodayish(r));
+  }
+  if (TAB !== "done" && !rows.some(r => r.posting === OPEN)) OPEN = (rows.find(r => r.posting === FOCUS) || (next && rows.some(r => r.posting === next.posting) ? next : rows[0]) || {}).posting || null;
   const head = TAB === "done" ? reportHtml(rep, Object.assign(IS_ADMIN ? {title: rep.left < 0 ? "Переплата курьеру" : "Курьеру осталось выплатить", leftLabel: ""} : {title: rep.left < 0 ? "Выплачено авансом" : "Вам должны", leftLabel: ""}, {paysError: PAYS_ERR})) : "";
+  const empty = `<div class="card empty">${ic("checkc")}${TAB === "done" ? "Пока нет доставленных" : TAB === "today" ? "На сегодня заказов нет — смотрите вкладку «Все»" : "Заказов в работе нет"}</div>`;
+  const listHtml = rows.length ? rows.map((r, i) => (TAB !== "done" && i === 1 ? '<div class="sec"><b>Дальше</b></div>' : "") + card(r, TAB !== "done" && i === 0, numOf(r.posting))).join("") : (TAB === "today" && later.length ? "" : empty);
+  const laterHtml = TAB === "today" && later.length ? '<div class="sec"><b>Позже</b></div>' + later.map(r => card(r, false, numOf(r.posting))).join("") : "";
+  const doneHtml = TAB === "today" && todayDone.length ? `<div class="sec"><b>Сдано сегодня</b><span>${rub(earnedToday)}</span></div>` + todayDone.map(r => card(r, false, 0)).join("") : "";
   $("list").classList.toggle("anim", !!anim);
-  $("list").innerHTML = head + (rows.length ? rows.map((r, i) => (TAB !== "done" && i === 1 ? '<div class="sec"><b>Дальше</b></div>' : "") + card(r, TAB !== "done" && i === 0)).join("")
-    : `<div class="card empty">${ic("checkc")}${TAB === "done" ? "Пока нет доставленных" : TAB === "today" ? "На сегодня заказов нет — смотрите вкладку «Все»" : "Заказов в работе нет"}</div>`);
+  $("list").innerHTML = head + listHtml + laterHtml + doneHtml;
   if (FOCUS) document.querySelector(".order.hl")?.scrollIntoView({block: "center"});
 }
 
@@ -478,8 +507,10 @@ function locate(fly) {
   if (!navigator.geolocation) { if (fly) toast("Геопозиция недоступна в этом браузере", true); return; }
   GEO_ASKED = true;
   navigator.geolocation.getCurrentPosition(p => {
+    const first = !ME;
     ME = [p.coords.latitude, p.coords.longitude]; ME_ACC = p.coords.accuracy || 0;
     if (TAB === "map") drawMap();
+    else if (first || fly) draw();
     if (fly && MAP) MAP.flyTo({center: [ME[1], ME[0]], zoom: Math.max(MAP.getZoom(), 14), duration: 600});
   }, () => { if (fly) toast("Нет доступа к геопозиции — разрешите её в настройках телефона", true); },
   {enableHighAccuracy: true, timeout: 10000, maximumAge: 30000});
@@ -595,16 +626,16 @@ function mcardHtml(r, n) {
     : `<button type="button" class="${a ? "soft" : "tint"}" data-agree="${e(r.posting)}">${ic("calcheck")}${a ? "Изменить" : "Согласовал"}</button>`;
   return `<div class="order mc ${stCls(r)}" data-posting="${e(r.posting)}">
 <div class="mc-h"><span class="mc-n">${n}</span><div class="grow"><div class="mc-k"><span class="mc-st">${e(stText(r))}</span><span class="num">${e(shortDate(whenText(r)))}</span></div>
-<div class="mc-a">${e(r.address || "Адрес уточняется")}</div><div class="pn">${e(r.cb)} · ${e(r.posting)}</div></div>
+<div class="mc-a">${e(r.address || "Адрес уточняется")}</div><div class="pn">${e(r.cb)} · ${e(r.packs || "—")}${kg ? " · ~" + kg + " кг" : ""}</div></div>
+<button type="button" class="ghost sq" data-mmore="${e(r.posting)}" aria-label="Все действия с заказом">${ic("more")}</button>
 <button type="button" class="mc-x" data-mclose aria-label="Закрыть карточку">${ic("x")}</button></div>
 <div class="facts"><div><span>Везти</span><b>${e(r.packs || "—")}</b></div><div><span>Вес</span><b>${kg ? `~${kg} кг` : "—"}</b></div>
 <div class="${r.unload && r.unload !== "Нет" ? "warn" : ""}"><span>Разгрузка</span><b>${e(unloadText(r))}</b></div></div>
 ${note ? `<div class="mc-note">${ic("note")}<span>${e(note)}</span></div>` : ""}
 <div class="mc-pay"><span>Оплата за точку</span><b class="num">${rub(r.pay)}</b></div>
 ${stepsHtml(r)}
-<div class="mc-a1"><a class="btn mc-go" href="${e(yandexMaps(r))}" target="_blank" rel="noopener">${ic("nav")}Поехать</a>
-${call ? `<a class="btn ghost sq" href="${e(call)}" aria-label="${tel ? "Позвонить клиенту" : "Позвонить прорабу"}">${ic("phone")}</a>` : ""}
-<button type="button" class="ghost sq" data-mmore="${e(r.posting)}" aria-label="Все действия с заказом">${ic("more")}</button></div>
+<div class="mc-a1${call ? "" : " one"}">${call ? `<a class="btn ghost mc-call" href="${e(call)}">${ic("phone")}${tel ? "Позвонить" : "Прорабу"}</a>` : ""}
+<a class="btn mc-go" href="${e(yandexMaps(r))}" data-route="${e(r.posting)}" target="_blank" rel="noopener">${ic("nav")}Поехать</a></div>
 <div class="mc-a2${second ? "" : " one"}">${second}<button type="button" class="${fresh ? "soft" : "ok"}" data-done="${e(r.posting)}">${ic("check")}Доставлено</button></div>
 </div>`;
 }
@@ -630,8 +661,9 @@ function drawMap() {
   const off = ME ? 0 : -1;  // legs[0] — от курьера до первой точки, без геопозиции — от первой точки до второй
   const legOf = i => d && d.legs[i + off] != null ? "+" + kmText(d.legs[i + off]) : "";
   const all = `https://yandex.ru/maps/?rtext=~${order.map(p => p.ll.join(",")).join("~")}&rtt=auto`;
+  const next = order[0];
   $("msum").innerHTML = `<div class="ms-t"><b>${order.length ? plural(order.length, "точка", "точки", "точек") : "Нет точек"}</b>${d ? ` · ~${kmText(d.m)} · ~${durText(d.s)}` : ""}</div>
-<div class="ms-s">${!order.length ? (noCoords.length ? "У заказов в работе нет точки на карте" : "Нет активных заказов") : !d ? "Один адрес" : info.data && info.data.road ? "По дорогам, без учёта пробок" : info.data ? "По прямой — маршрут по дорогам недоступен" : "Считаю маршрут по дорогам…"}${ME ? " · от вас" : ""}</div>`;
+<div class="ms-s">${!order.length ? (noCoords.length ? "У заказов в работе нет точки на карте" : "Нет активных заказов") : next ? `Дальше: ${e(next.r.cb)} · ${e(next.r.address || "")}` : ""}${!order.length ? "" : !d ? "" : info.data && info.data.road ? " · по дорогам" : info.data ? " · по прямой" : " · считаю маршрут…"}${ME && order.length ? " · от вас" : ""}</div>`;
   $("mnav").hidden = !order.length;
   $("mnav").href = all;
   const body = $("mlist"), st = body.scrollTop;
@@ -685,7 +717,8 @@ function setSheet(s) { MS_STATE = s; $("msheet").dataset.state = s; $("msheet").
 matchMedia("(min-width: 1100px)").addEventListener("change", () => { if (TAB === "map") drawMap(); });
 
 $("mapbox").addEventListener("click", ev => {
-  if (ev.target.closest("a")) return;  // «Поехать», «Позвонить», Яндекс Карты — обычные ссылки
+  if (ev.target.closest("[data-route]")) return;  // обработает #app: выбор Навигатор / Карты
+  if (ev.target.closest("a")) return;  // «Позвонить» — обычная ссылка
   const t = ev.target.closest("[data-mpick], [data-mmore], [data-mclose], [data-mtoggle], [data-mfit], [data-mme], [data-maccept]");
   if (!t) return;
   if (t.dataset.mpick) { pickStop(t.dataset.mpick); return; }
@@ -703,19 +736,110 @@ $("mapbox").addEventListener("click", ev => {
   }
 });
 
+function openRouteSheet(posting) {
+  const r = ROWS.find(x => x.posting === posting);
+  if (!r) return;
+  const last = (() => { try { return localStorage.getItem("dlv_nav") || ""; } catch { return ""; } })();
+  const item = (href, key, label, sub) => `<a class="sitem${last === key ? " on" : ""}" href="${e(href)}" data-navapp="${key}" ${key === "navi" ? "" : 'target="_blank" rel="noopener"'}>${ic(key === "apple" ? "map" : "nav")}${label}${sub ? `<span class="mut">${sub}</span>` : ""}${last === key ? '<span class="mut">в прошлый раз</span>' : ""}</a>`;
+  $("sheetPanel").innerHTML = `<div class="order" data-posting="${e(r.posting)}"><div class="grab"></div>
+<div class="shead"><div><h2>Построить маршрут</h2><div class="mut trunc">${e(r.cb)} · ${e(r.address)}</div></div></div>
+<div class="sgroup">Открыть в приложении</div>
+${item(yandexNavi(r), "navi", "Яндекс Навигатор", "ведение по дороге")}
+${item(yandexMaps(r), "maps", "Яндекс Карты", "сайт или приложение")}
+${item(appleMaps(r), "apple", "Apple Карты", "")}
+<button class="text wide" data-close>Закрыть</button></div>`;
+  sheetShow();
+}
+
+const CACHE_KEY = "dlv_cache_v1", PENDING_KEY = "dlv_pending_v1";
+let OFFLINE = false;
+const pendingGet = () => { try { return JSON.parse(localStorage.getItem(PENDING_KEY) || "[]"); } catch { return []; } };
+const pendingSet = v => { try { localStorage.setItem(PENDING_KEY, JSON.stringify(v)); } catch {} showPending(); };
+const cacheGet = () => { try { return JSON.parse(localStorage.getItem(CACHE_KEY) || "null"); } catch { return null; } };
+const cachePut = () => { try { localStorage.setItem(CACHE_KEY, JSON.stringify({ts: Date.now(), rows: ROWS, pays: PAYS, paysErr: PAYS_ERR})); } catch {} };
+function applyPending(rows) {
+  const q = pendingGet();
+  return (rows || []).map(r => {
+    let n = r;
+    for (const p of q) if (p.posting === r.posting) n = Object.assign({}, n, p.data);
+    return n;
+  });
+}
+function queuePending(posting, data) {
+  const prev = pendingGet().find(p => p.posting === posting);
+  pendingSet(pendingGet().filter(p => p.posting !== posting).concat([{posting, data: Object.assign({}, prev && prev.data, data), ts: Date.now()}]));
+}
+const dropPending = posting => pendingSet(pendingGet().filter(p => p.posting !== posting));
+function showPending() {
+  const n = pendingGet().length, el = $("pendingBtn");
+  if (!el) return;
+  el.hidden = !n;
+  el.innerHTML = n ? `<span class="pend-n">${n}</span>${ic("refresh")}` : "";
+  el.title = el.ariaLabel = n ? `Не отправлено: ${n}. Нажмите, чтобы повторить` : "Нет очереди";
+  document.body.classList.toggle("has-pending", n > 0);
+}
+function netbar(text, off) {
+  const b = $("netbar");
+  if (!b) return;
+  if (!text) { b.hidden = true; b.innerHTML = ""; return; }
+  b.hidden = false;
+  b.className = "netbar" + (off ? " off" : "");
+  b.innerHTML = text;
+}
+function applyLocal(posting, data) {
+  ROWS = ROWS.map(x => {
+    if (x.posting !== posting) return x;
+    const n = Object.assign({}, x, data);
+    if (data.status === "Доставлен" && x.status !== "Доставлен") n.delivered_at = n.delivered_at || (todayStr() + " " + agreedNow().split(" ").pop());
+    return n;
+  });
+}
+async function flushPending() {
+  const q = pendingGet();
+  if (!q.length || !KEY) return true;
+  const left = [];
+  for (const p of q) {
+    try {
+      const r = await api({action: "update", posting: p.posting, data: p.data});
+      ROWS = ROWS.map(x => x.posting === p.posting ? r : x);
+    } catch { left.push(p); }
+  }
+  pendingSet(left);
+  if (left.length < q.length) { cachePut(); draw(); }
+  if (q.length && !left.length) toast("Отложенные изменения отправлены");
+  return !left.length;
+}
+
 async function load() {
   try {
-    ROWS = rashadDeliveries(await api({action: "list"}));
+    const rows = rashadDeliveries(await api({action: "list"}));
+    ROWS = applyPending(rows);
     PAYS_ERR = "";
     try { PAYS = await api({action: "payments"}); }
     catch (err) { PAYS = null; if (!/Неизвестное действие/.test(err.message || "")) PAYS_ERR = "Не удалось загрузить выплаты"; }
+    OFFLINE = false;
+    cachePut();
+    netbar("");
     draw(true);
     splashHide();
     checkAlerts();
+    flushPending().catch(() => {});
   } catch (err) {
-    if ($("driverHero").querySelector(".sk-hero")) $("driverHero").innerHTML = "";
-    $("list").innerHTML = `<div class="card err">${e(err.message)}</div>`;
-    splashHide();
+    const c = cacheGet();
+    if (c && Array.isArray(c.rows) && c.rows.length) {
+      ROWS = applyPending(c.rows);
+      PAYS = c.pays;
+      PAYS_ERR = c.paysErr || "";
+      OFFLINE = true;
+      const when = new Date(c.ts).toLocaleTimeString("ru-RU", {hour: "2-digit", minute: "2-digit"});
+      netbar(`${ic("refresh")}Нет сети · данные с ${e(when)}`, true);
+      draw(true);
+      splashHide();
+    } else {
+      if ($("driverHero").querySelector(".sk-hero")) $("driverHero").innerHTML = "";
+      $("list").innerHTML = `<div class="card err">${e(err.message)}</div>`;
+      splashHide();
+    }
   }
 }
 
@@ -780,19 +904,43 @@ function checkAlerts() {
 }
 addEventListener("hashchange", () => { if (Alarm.hashId()) load(); });
 
+let UNDO = null;
+function toastUndo(msg, undo) {
+  let t = document.getElementById("toast");
+  if (!t) { t = document.createElement("div"); t.id = "toast"; t.setAttribute("aria-live", "polite"); document.body.append(t); }
+  t.className = "toast show undo";
+  t.innerHTML = `<span>${e(msg)}</span><button type="button" class="toast-undo">Отменить</button>`;
+  t.querySelector("button").onclick = () => { t.classList.remove("show"); undo(); };
+  buzz(15);
+  clearTimeout(t.timer);
+  t.timer = setTimeout(() => { t.classList.remove("show"); t.innerHTML = ""; }, 8000);
+}
 async function save(posting, data, el) {
   try {
-    const r = await api({action: "update", posting, data});
+    if (pendingGet().length) await flushPending();
+    const merged = Object.assign({}, (pendingGet().find(p => p.posting === posting) || {}).data, data);
+    const r = await api({action: "update", posting, data: merged});
+    dropPending(posting);
     ROWS = ROWS.map(x => x.posting === posting ? r : x);
+    cachePut();
     draw();
     if (SHEET === posting) data.status ? closeCSheet() : openCSheet(posting);
     if (data.status === "Доставлен" || data.status === "Согласован") heartbeat();
-    if (data.status === "Доставлен") toast("Доставлено ✓ Владелец получит уведомление");  // меню «⋯» показывает свежие данные
+    if (data.status === "Доставлен") {
+      const u = UNDO && UNDO.posting === posting ? UNDO : null;
+      UNDO = null;
+      if (u) toastUndo("Доставлено ✓", () => save(posting, {status: u.status}));
+      else toast("Доставлено ✓ Владелец получит уведомление");
+    }
     return true;
   } catch (err) {
-    toast(err.message, true);
+    queuePending(posting, data);
+    applyLocal(posting, data);
+    cachePut();
+    draw();
     if (el) el.disabled = false;
-    return false;
+    toast("Нет сети — отправим, когда появится", true);
+    return true;
   }
 }
 
@@ -852,6 +1000,8 @@ function closeDoneModal() {
 if ($("modal-c-confirm")) {
   $("modal-c-confirm").onclick = () => {
     const post = CURRENT_DONE_POST, btn = CURRENT_DONE_BTN;
+    const row = ROWS.find(x => x.posting === post);
+    if (row) UNDO = {posting: post, status: row.status};
     closeDoneModal();
     if (!post) return;
     if (btn) btn.disabled = true;
@@ -883,7 +1033,10 @@ document.addEventListener("click", async ev => {
   btn.disabled = true;
   const notes = courierNotes(r.courier_comment);
   if (!notes.ack) notes.ack = {at: agreedNow()};
-  if (await save(posting, {status: "Доставлен", courier_comment: courierComment(notes)}, btn)) toast("Возврат забран ✓ Владелец получит уведомление");
+  UNDO = {posting, status: r.status};
+  if (await save(posting, {status: "Доставлен", courier_comment: courierComment(notes)}, btn)) {
+    /* toastUndo из save, если отмена не сработала — запасное */
+  }
 }, true);
 document.addEventListener("submit", async ev => {
   const f = ev.target.closest("[data-retprice]");
@@ -912,6 +1065,8 @@ async function setTrip(posting, kind) {
   toast(kind === "here" ? "Отмечено: на месте" : "Отмечено: в пути");
 }
 $("app").addEventListener("click", ev => {
+  const nav = ev.target.closest("[data-navapp]");
+  if (nav) { try { localStorage.setItem("dlv_nav", nav.dataset.navapp); } catch {} closeCSheet(); return; }
   if (ev.target.closest("[data-pay-retry]")) { load().catch(err => toast(err.message, true)); return; }
   const step = ev.target.closest("[data-step]");
   if (step && !step.disabled) {
@@ -932,12 +1087,13 @@ $("app").addEventListener("click", ev => {
     if (pick.dataset.aslot) f.elements.slot.value = pick.dataset.aslot;
     return;
   }
+  const rt = ev.target.closest("[data-route]");
+  if (rt) { ev.preventDefault(); openRouteSheet(rt.dataset.route); return; }
+  const more = ev.target.closest("[data-mmore]");
+  if (more) { openCSheet(more.dataset.mmore); return; }
   const row = ev.target.closest("[data-row]");
-  if (row) { OPEN = row.dataset.row; draw(); document.querySelector("#list .order.open")?.classList.add("pop"); return; }
+  if (row && !ev.target.closest("a, [data-route]")) { OPEN = row.dataset.row; draw(); document.querySelector("#list .order.open")?.classList.add("pop"); return; }
   if (ev.target.closest("[data-close]")) { closeCSheet(); return; }
-  // нажатие на раскрытую карточку (не на кнопку) открывает меню действий
-  const c = ev.target.closest("[data-card]");
-  if (c && !ev.target.closest("a, button, input, textarea, select, label, summary, form, details")) { openCSheet(c.dataset.posting); return; }
   const ed = ev.target.closest("[data-edit], [data-cancel]");
   if (ed) { const f = ed.closest(".order").querySelector("[data-editform]"); f.hidden = !f.hidden; return; }
   const rm = ev.target.closest("[data-remind]");
@@ -1000,9 +1156,10 @@ async function setupNotif() {
     subscribe().catch(() => {});  // подписка могла обновиться — тихо отправляем заново
     return;
   }
+  try { if (sessionStorage.getItem("dlv_hide_notif")) return; } catch {}
   box.hidden = false;
-  box.innerHTML = `<h3>${ic("bell")}Уведомления о новых заказах</h3>
-<p class="mut">Включите, чтобы новый заказ сразу приходил на телефон.</p><button id="enable">Включить уведомления</button>`;
+  box.innerHTML = `<div class="notif-mini">${ic("bell")}<span>Включите уведомления о новых заказах</span><button type="button" id="enable">Включить</button><button type="button" class="ghost sq" id="notif-x" aria-label="Скрыть">${ic("x")}</button></div>`;
+  $("notif-x").onclick = () => { box.hidden = true; try { sessionStorage.setItem("dlv_hide_notif", "1"); } catch {} };
   $("enable").onclick = async () => {
     $("enable").disabled = true;
     try {
@@ -1035,13 +1192,17 @@ if (KEY) {
   $("app").hidden = false;
   $("driverHero").innerHTML = skelHero();  // пока грузятся данные — скелетоны вместо пустого экрана
   $("list").innerHTML = skelCards(3);
+  showPending();
   load();
+  locate(false);
   if (IS_ADMIN) document.querySelector(".brand span").textContent = "режим владельца";
   else setupNotif();
   heartbeat();
   setInterval(() => { if (!document.hidden) heartbeat(); }, 90000);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) heartbeat(); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { heartbeat(); flushPending().catch(() => {}); } });
   setInterval(() => { if (!document.hidden) load(); }, 60000);
+  addEventListener("online", () => { flushPending().then(ok => { if (ok) load(); }); });
+  $("pendingBtn").onclick = () => busyBtn($("pendingBtn"), async () => { const ok = await flushPending(); if (ok) await load(); });
 } else {
   $("nokey").hidden = false;
   splashHide();
